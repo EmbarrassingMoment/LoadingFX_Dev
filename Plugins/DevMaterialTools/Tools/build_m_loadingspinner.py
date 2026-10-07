@@ -4,9 +4,9 @@ Dot-ring loading spinner (user's own Shadertoy) -> M_LoadingSpinner (Material Do
 円周の 3/4 に 8 個の丸を並べ、先頭(最大)から末尾(最小)へ半径を小さくしながら時計回りに回すロードアイコン。
 角度を扇形セルに分け、ピクセルが属するセルの丸だけを評価するのでループ不要。
 
-  p     = (2*TexCoord0 - 1) * (1,-1)                ((2*fragCoord - iResolution.xy) / iResolution.y。
-                                                     Shadertoy は y 上向き。正方形ウィジェット前提)
-  rot   = Time * Speed
+  p     = MF_SpinnerCoords.P                        (中心 (0,0)、y 上向き、短辺が -1..1。非正方形でも中央に収まる)
+  aa    = MF_SpinnerCoords.PixelSize                (1 ピクセルを p 単位で)
+  rot   = Time * Speed * TAU                        (Speed は回転数/秒)
   stepA = TAU * Arc / Count                         (丸 1 個あたりの角度)
   a     = mod(atan(p.y, p.x) + rot, TAU)            (回転座標系でのピクセル角度 0..TAU。mod は MF_GLSLMod)
   id    = floor(a / stepA)                          (扇形セルの番号。0 = 先頭の丸)
@@ -14,16 +14,15 @@ Dot-ring loading spinner (user's own Shadertoy) -> M_LoadingSpinner (Material Do
   c     = Ring * vec2(cos(ca), sin(ca))
   r     = mix(RMax, RMin, id / (Count - 1))
   d     = length(p - c) - r
-  aa    = fwidth(p.y)                               (2 / iResolution.y。p.y はウィジェット高さで 2.0 進むので
-                                                     fwidth(p.y) = 1 ピクセル。fwidth は DDX/DDY で展開)
   mask  = (1 - smoothstep(-aa, aa, d)) * step(id, Count - 0.5)   (id >= Count のセル = 残り 1 - Arc は描かない)
 
-  出力: FinalColor(Emissive) = DotColor、Opacity = mask。
-  背景(bg)は不要なので mix(bg, fg, m) は DotColor + アルファに置き換え。
+  出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
+        Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
+  背景(bg)は不要なので mix(bg, fg, m) は PrimaryColor + アルファに置き換え。
 
   const -> ScalarParameter / VectorParameter(グループ "LoadingSpinner"、並びは GLSL の宣言順)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
-  TAU(2 箇所)と Count(3 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
+  TAU(3 箇所)と Count(3 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
 実行例:
   UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingspinner.py"
@@ -38,6 +37,7 @@ ASSET_PATH = "/LoadingFX/Materials"
 ASSET_NAME = "M_LoadingSpinner"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_MOD_PATH = "/LoadingFX/MaterialFunctions/MF_GLSLMod"
+MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 TAU = 6.28318530718
 PARAM_GROUP = "LoadingSpinner"
 
@@ -54,6 +54,8 @@ C_COL = unreal.LinearColor(1.0, 1.0, 1.0, 1.0)   # coverage / output = white
 
 mf_mod = unreal.load_asset(MF_MOD_PATH)
 assert mf_mod, f"required Material Function not found: {MF_MOD_PATH}"
+mf_coords = unreal.load_asset(MF_COORDS_PATH)
+assert mf_coords, f"required Material Function not found: {MF_COORDS_PATH}"
 
 if lib.does_asset_exist(FULL_PATH):
     lib.delete_asset(FULL_PATH)
@@ -78,9 +80,9 @@ def _connect(frm, out_name, to, in_name):
     return ok
 
 decls = {}
-def make_decl(name, src, x, y, color):
+def make_decl(name, src, x, y, color, out_name=""):
     dcl = expr(unreal.MaterialExpressionNamedRerouteDeclaration, x, y, name=name, node_color=color)
-    _connect(src, "", dcl, "")
+    _connect(src, out_name, dcl, "")
     decls[name] = dcl
     return dcl
 
@@ -106,28 +108,25 @@ make_decl("TAU", tau_c, -4050, -1000, C_SC)
 count_p = scalar_param("Count", 8.0, 0, "Number of dots (integer, 2 or more)", -4250, -720)
 make_decl("Count", count_p, -4000, -720, C_SC)
 
-# ---- p = (2*TexCoord0 - 1) * (1,-1)  (Shadertoy is y-up; square widget assumed) ----
-texc = expr(unreal.MaterialExpressionTextureCoordinate, -4250, -400)
-mul2 = expr(unreal.MaterialExpressionMultiply, -4100, -400, const_b=2.0)
-_connect(texc, "", mul2, "A")
-sub1 = expr(unreal.MaterialExpressionSubtract, -3950, -400, const_b=1.0)
-_connect(mul2, "", sub1, "A")
-yflip_c = expr(unreal.MaterialExpressionConstant2Vector, -3950, -280, r=1.0, g=-1.0)
-p_v = expr(unreal.MaterialExpressionMultiply, -3800, -350)
-_connect(sub1, "", p_v, "A")
-_connect(yflip_c, "", p_v, "B")
-make_decl("p", p_v, -3650, -350, C_UV)
+# ---- p = MF_SpinnerCoords.P, aa = MF_SpinnerCoords.PixelSize  (centered, y-up, shorter side = -1..1) ----
+coords = expr(unreal.MaterialExpressionMaterialFunctionCall, -4100, -350, material_function=mf_coords)
+make_decl("p", coords, -3800, -400, C_UV, "P")
+make_decl("aa", coords, -3800, -280, C_SDF, "PixelSize")
 
-# ---- rot = Time * Speed  (rotation angle in radians) ----
+# ---- rot = Time * Speed * TAU  (rotation angle in radians; Speed in revolutions per second) ----
 time_n = expr(unreal.MaterialExpressionTime, -4250, 50)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 4.0, 5, "Rotation speed (rad/s). Positive = clockwise", -4250, 150)
-rot_v = expr(unreal.MaterialExpressionMultiply, -4000, 100)
-_connect(time_n, "", rot_v, "A")
-_connect(speed_p, "", rot_v, "B")
-make_decl("rot", rot_v, -3850, 100, C_TM)
+speed_p = scalar_param("Speed", 0.64, 5, "Revolutions per second. Positive = clockwise", -4250, 150)
+rev_v = expr(unreal.MaterialExpressionMultiply, -4000, 100)
+_connect(time_n, "", rev_v, "A")
+_connect(speed_p, "", rev_v, "B")
+tau_u3 = use("TAU", -4000, 220)
+rot_v = expr(unreal.MaterialExpressionMultiply, -3850, 150)
+_connect(rev_v, "", rot_v, "A")
+_connect(tau_u3, "", rot_v, "B")
+make_decl("rot", rot_v, -3700, 150, C_TM)
 
 # ---- stepA = TAU * Arc / Count  (angle taken by one dot) ----
 tau_u1 = use("TAU", -3150, -950)
@@ -141,23 +140,6 @@ step_div = expr(unreal.MaterialExpressionDivide, -2750, -850)
 _connect(tau_arc, "", step_div, "A")
 _connect(count_u1, "", step_div, "B")
 make_decl("stepA", step_div, -2600, -850, C_SC)
-
-# ---- aa = 2 / iResolution.y = fwidth(p.y)  (fwidth expanded with DDX/DDY) ----
-p_u1 = use("p", -3150, -380)
-p_y1 = mask_y(-3000, -380)
-_connect(p_u1, "", p_y1, "")
-p_ddx = expr(unreal.MaterialExpressionDDX, -2850, -440)
-p_ddy = expr(unreal.MaterialExpressionDDY, -2850, -320)
-_connect(p_y1, "", p_ddx, "")
-_connect(p_y1, "", p_ddy, "")
-abs_dx = expr(unreal.MaterialExpressionAbs, -2700, -440)
-abs_dy = expr(unreal.MaterialExpressionAbs, -2700, -320)
-_connect(p_ddx, "", abs_dx, "")
-_connect(p_ddy, "", abs_dy, "")
-aa_v = expr(unreal.MaterialExpressionAdd, -2550, -380)
-_connect(abs_dx, "", aa_v, "A")
-_connect(abs_dy, "", aa_v, "B")
-make_decl("aa", aa_v, -2400, -380, C_SDF)
 
 # ---- a = mod(atan(p.y, p.x) + rot, TAU)  (pixel angle in the rotating frame, 0..TAU) ----
 p_u2 = use("p", -3150, 80)
@@ -215,7 +197,7 @@ dir_v = expr(unreal.MaterialExpressionAppendVector, 150, 180)
 _connect(ca_cos, "", dir_v, "A")
 _connect(ca_sin, "", dir_v, "B")
 ring_p = scalar_param("Ring", 0.55, 2,
-                      "Radius of the circle the dots sit on (widget half height = 1.0)", 100, 330)
+                      "Radius of the circle the dots sit on (half the shorter widget side = 1.0)", 100, 330)
 c_v = expr(unreal.MaterialExpressionMultiply, 350, 230)
 _connect(ring_p, "", c_v, "A")
 _connect(dir_v, "", c_v, "B")
@@ -277,36 +259,43 @@ _connect(dot_cov, "", m_v, "A")
 _connect(drawn, "", m_v, "B")
 make_decl("mask", m_v, 2750, 250, C_COL)
 
-# ---- Output: FinalColor = DotColor, Opacity = mask  (bg dropped) ----
-dotcolor_p = expr(unreal.MaterialExpressionVectorParameter, 3150, 0,
-                  parameter_name="DotColor", default_value=unreal.LinearColor(0.95, 0.95, 0.95, 1.0),
-                  group=PARAM_GROUP, sort_priority=6, desc="Dot color")
-results.append(mel.connect_material_property(dotcolor_p, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
-mask_u1 = use("mask", 3150, 300)
-results.append(mel.connect_material_property(mask_u1, "", unreal.MaterialProperty.MP_OPACITY))
+# ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
+primary_p = expr(unreal.MaterialExpressionVectorParameter, 3150, 0,
+                 parameter_name="PrimaryColor", default_value=unreal.LinearColor(0.95, 0.95, 0.95, 1.0),
+                 group=PARAM_GROUP, sort_priority=6, desc="Dot color (alpha scales the opacity)")
+vcolor = expr(unreal.MaterialExpressionVertexColor, 3150, 250)
+emissive = expr(unreal.MaterialExpressionMultiply, 3400, 50)
+_connect(primary_p, "", emissive, "A")
+_connect(vcolor, "", emissive, "B")
+results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
+mask_u1 = use("mask", 3150, 450)
+mask_a = expr(unreal.MaterialExpressionMultiply, 3400, 350)
+_connect(mask_u1, "", mask_a, "A")
+_connect(primary_p, "A", mask_a, "B")
+opacity = expr(unreal.MaterialExpressionMultiply, 3550, 400)
+_connect(mask_a, "", opacity, "A")
+_connect(vcolor, "A", opacity, "B")
+results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "const TAU = 2*PI   (used twice -> Named Reroute)",
+    mat, "const TAU = 2*PI   (used three times -> Named Reroute)",
     -4300, -1100, 550, 230, C_SC)
 smt.create_comment_in_material(
     mat, "const COUNT -> ScalarParameter (used three times -> Named Reroute).\n"
-         "Arc / Ring / RMax / RMin / Speed / DotColor are wired directly at their single use site",
+         "Arc / Ring / RMax / RMin / Speed / PrimaryColor are wired directly at their single use site",
     -4300, -840, 650, 260, C_SC)
 smt.create_comment_in_material(
-    mat, "p = (2*TexCoord0 - 1) * (1,-1)   (= (2*fragCoord - iResolution.xy) / iResolution.y)\n"
-         "Y flipped (Shadertoy is y-up). Square widget assumed: widget half height = 1.0",
+    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
+         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
     -4300, -520, 900, 400, C_UV)
 smt.create_comment_in_material(
-    mat, "rot = Time * Speed   (rotation angle in radians)",
-    -4300, -60, 700, 360, C_TM)
+    mat, "rot = Time * Speed * TAU   (rotation angle in radians; Speed in revolutions per second)\n"
+         "Time ignores pause (real time), so the spinner keeps turning while the game thread is blocked",
+    -4300, -60, 800, 400, C_TM)
 smt.create_comment_in_material(
     mat, "stepA = TAU * Arc / Count   (angle taken by one dot)",
     -3200, -1060, 850, 420, C_SC)
-smt.create_comment_in_material(
-    mat, "aa = 2 / iResolution.y = fwidth(p.y)\n"
-         "p.y spans 2.0 over the widget height, so fwidth(p.y) is one pixel (DDX/DDY expansion)",
-    -3200, -560, 1050, 400, C_SDF)
 smt.create_comment_in_material(
     mat, "a = mod(atan(p.y, p.x) + rot, TAU)\n"
          "Pixel angle in the rotating frame, normalized to 0..TAU (mod via MF_GLSLMod)",
@@ -335,9 +324,10 @@ smt.create_comment_in_material(
          "Anti-aliased dot. Cells with id >= Count (the remaining 1 - Arc of the circle) are not drawn",
     1950, -120, 1050, 760, C_COL)
 smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = DotColor, Opacity = mask\n"
-         "Background dropped: mix(bg, fg, m) becomes DotColor with alpha = mask",
-    3100, -120, 600, 560, C_COL)
+    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
+         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)\n"
+         "Background dropped: mix(bg, fg, m) becomes PrimaryColor with alpha",
+    3100, -120, 650, 700, C_COL)
 
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
@@ -362,14 +352,14 @@ print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
 expected_decls = sorted(["TAU", "Count", "p", "rot", "stepA", "aa", "a", "id", "ca", "c", "r", "d", "mask"])
-expected_usages = {"TAU": 2, "Count": 3, "p": 4, "rot": 2, "stepA": 2, "aa": 1, "a": 1, "id": 3,
+expected_usages = {"TAU": 3, "Count": 3, "p": 3, "rot": 2, "stepA": 2, "aa": 1, "a": 1, "id": 3,
                    "ca": 2, "c": 1, "r": 1, "d": 1, "mask": 1}
-expected_params = sorted(["Count", "Arc", "Ring", "RMax", "RMin", "Speed", "DotColor"])
+expected_params = sorted(["Count", "Arc", "Ring", "RMax", "RMin", "Speed", "PrimaryColor"])
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
-mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 14
+mf_ok = mf_calls == 2
+comments_ok = len(smt.get_material_comment_texts(mat)) == 13
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

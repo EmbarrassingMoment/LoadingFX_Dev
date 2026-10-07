@@ -2,6 +2,7 @@
 
 #include "LoadingFXProtoSubsystem.h"
 
+#include "SLoadingFXProtoGallery.h"
 #include "SLoadingFXProtoOverlay.h"
 
 #include "Engine/Engine.h"
@@ -12,7 +13,9 @@
 #include "HAL/PlatformProcess.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/Paths.h"
 #include "MoviePlayer.h"
+#include "UnrealClient.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 #include "Widgets/Layout/SBox.h"
@@ -111,6 +114,17 @@ namespace LoadingFXProto
 				Subsystem->RunAll(Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs GalleryCommand(
+		TEXT("LFXProto.Gallery"),
+		TEXT("Verification prototype: toggle the material contract gallery. Pass 'shot' to save screenshots, 'quit' to exit afterwards."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunGallery(Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -163,6 +177,7 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 	FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapHandle);
 
 	HideViewportOverlay();
+	HideGallery();
 	LoadingScreenOverlay.Reset();
 
 	Super::Deinitialize();
@@ -252,6 +267,49 @@ void ULoadingFXProtoSubsystem::RunAll(bool bQuitWhenDone)
 		}
 	} });
 
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::RunGallery(bool bTakeScreenshots, bool bQuitWhenDone)
+{
+	if (GalleryRoot.IsValid() && !bTakeScreenshots && !bQuitWhenDone)
+	{
+		HideGallery();
+		return;
+	}
+
+	ShowGallery();
+	if (!bTakeScreenshots && !bQuitWhenDone)
+	{
+		return;
+	}
+
+	// Two shots a moment apart: the animated materials should differ between them.
+	auto RequestShot = [](const TCHAR* Name)
+	{
+		const FString Filename = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots") / Name);
+		FScreenshotRequest::RequestScreenshot(Filename, /*bInShowUI*/ true, /*bAddUniqueSuffix*/ false);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Gallery] screenshot requested: %s"), *Filename);
+	};
+
+	SequenceSteps.Reset();
+	if (bTakeScreenshots)
+	{
+		// The first delay leaves time for the materials' shaders to finish compiling.
+		SequenceSteps.Add({ 4.0f, [RequestShot]() { RequestShot(TEXT("LFXProto_Gallery_A.png")); } });
+		// The first capture can hitch for seconds; this empty step restarts the clock once it is through.
+		SequenceSteps.Add({ 0.1f, []() {} });
+		SequenceSteps.Add({ 0.5f, [RequestShot]() { RequestShot(TEXT("LFXProto_Gallery_B.png")); } });
+	}
+	if (bQuitWhenDone)
+	{
+		SequenceSteps.Add({ 1.0f, []() { FPlatformMisc::RequestExit(false, TEXT("LFXProto.Gallery")); } });
+	}
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::StartSequence()
+{
 	NextSequenceStep = 0;
 	NextSequenceStepTime = FPlatformTime::Seconds() + SequenceSteps[0].DelayBefore;
 	if (!SequenceTickerHandle.IsValid())
@@ -309,6 +367,49 @@ void ULoadingFXProtoSubsystem::HideViewportOverlay()
 	}
 	ViewportOverlayRoot.Reset();
 	ViewportOverlay.Reset();
+}
+
+void ULoadingFXProtoSubsystem::ShowGallery()
+{
+	if (GalleryRoot.IsValid())
+	{
+		return;
+	}
+
+	UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+	if (!ViewportClient)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("No game viewport: cannot show the gallery"));
+		return;
+	}
+
+	TArray<SLoadingFXProtoGallery::FRow> Rows;
+	for (int32 Index = 0; Index < Materials.Num(); ++Index)
+	{
+		Rows.Add({ Materials[Index], MaterialCaptions[Index] });
+	}
+
+	GalleryRoot = SNew(SBox)
+		.HAlign(HAlign_Left)
+		.VAlign(VAlign_Top)
+		.Padding(24.0f)
+		.Visibility(EVisibility::HitTestInvisible)
+		[
+			SNew(SLoadingFXProtoGallery).Rows(Rows)
+		];
+	ViewportClient->AddViewportWidgetContent(GalleryRoot.ToSharedRef(), LoadingFXProto::ViewportOverlayZOrder + 1);
+}
+
+void ULoadingFXProtoSubsystem::HideGallery()
+{
+	if (GalleryRoot.IsValid())
+	{
+		if (UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient())
+		{
+			ViewportClient->RemoveViewportWidgetContent(GalleryRoot.ToSharedRef());
+		}
+	}
+	GalleryRoot.Reset();
 }
 
 void ULoadingFXProtoSubsystem::SimulateBlockingWork(float Seconds, bool bCollectGarbage) const

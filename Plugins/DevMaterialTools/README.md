@@ -16,6 +16,7 @@ Local-only editor plugin for developing LoadingFX. It is **not** part of the Loa
 | Script | Output |
 |--------|--------|
 | `build_mf_glslmod.py` | `/LoadingFX/MaterialFunctions/MF_GLSLMod` |
+| `build_mf_spinnercoords.py` | `/LoadingFX/MaterialFunctions/MF_SpinnerCoords` (shared centered, aspect-corrected coordinates) |
 | `build_m_loadingspinner.py` | `/LoadingFX/Materials/M_LoadingSpinner` |
 | `build_m_loadingicon.py` | `/LoadingFX/Materials/M_LoadingIcon` |
 | `build_m_loadingboxes.py` | `/LoadingFX/MaterialFunctions/MF_SdRoundBox2D`, `/LoadingFX/Materials/M_LoadingBoxes` |

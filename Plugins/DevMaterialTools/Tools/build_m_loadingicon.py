@@ -8,7 +8,8 @@ Loading Icon (Shadertoy, loop-free) -> M_LoadingIcon (Material Domain = UI, Tran
 ゆっくり縮む(余韻)。元の Shadertoy は abs 距離の対称パルス(Width)だったが、2026-10-02 ユーザー指示で
 「静止時の球を小さく + 余韻」に変更。
 
-  uv       = (2*TexCoord0 - 1) * (1,-1)            (Shadertoy は y 上向き。正方形ウィジェット前提)
+  uv       = MF_SpinnerCoords.P                     (中心 (0,0)、y 上向き、短辺が -1..1。非正方形でも中央に収まる)
+  aa       = MF_SpinnerCoords.PixelSize             (1 ピクセルを uv 単位で)
   cell     = clamp(round(uv / Spacing), -1, 1)
   isCenter = step(dot(cell, cell), 0.5)
   a        = atan(cell.x, cell.y + isCenter)         (Arctangent2: Y = cell.x, X = cell.y + isCenter)
@@ -21,13 +22,14 @@ Loading Icon (Shadertoy, loop-free) -> M_LoadingIcon (Material Domain = UI, Tran
   r        = RBase + RGrow * pulse
   d        = length(uv - cell*Spacing) - r           (sdCircle をインライン展開)
   d       += isCenter * 1e5                          (中央セルは描画しない)
-  fw       = abs(ddx(uv)) + abs(ddy(uv))             (fwidth を DDX/DDY で展開)
-  aa       = max(fw.x, fw.y)
   mask     = clamp(0.5 - d/aa, 0, 1)
 
-  出力: FinalColor(Emissive) = (1,1,1)、Opacity = mask。背景(BG)は不要なので mix は省略。
+  出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
+        Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
+  背景(BG)は不要なので mix は省略。
 
   const  -> ScalarParameter (Spacing/RBase/RGrow/Speed/Attack/Trail、グループ "LoadingIcon")
+  色     -> VectorParameter PrimaryColor(元の Shadertoy は白固定)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   Spacing(2 箇所)と Attack(3 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -44,6 +46,7 @@ ASSET_PATH = "/LoadingFX/Materials"
 ASSET_NAME = "M_LoadingIcon"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_MOD_PATH = "/LoadingFX/MaterialFunctions/MF_GLSLMod"
+MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 PI = 3.14159265
 PARAM_GROUP = "LoadingIcon"
 
@@ -60,6 +63,8 @@ C_COL = unreal.LinearColor(1.0, 1.0, 1.0, 1.0)   # coverage / output = white
 
 mf_mod = unreal.load_asset(MF_MOD_PATH)
 assert mf_mod, f"required Material Function not found: {MF_MOD_PATH}"
+mf_coords = unreal.load_asset(MF_COORDS_PATH)
+assert mf_coords, f"required Material Function not found: {MF_COORDS_PATH}"
 
 if lib.does_asset_exist(FULL_PATH):
     lib.delete_asset(FULL_PATH)
@@ -81,11 +86,11 @@ def _connect(frm, out_name, to, in_name):
     return ok
 
 decls = {}
-def make_decl(name, src, x, y, color):
+def make_decl(name, src, x, y, color, out_name=""):
     dcl = expr(unreal.MaterialExpressionNamedRerouteDeclaration, x, y)
     dcl.set_editor_property("name", name)
     dcl.set_editor_property("node_color", color)
-    _connect(src, "", dcl, "")
+    _connect(src, out_name, dcl, "")
     decls[name] = dcl
     return dcl
 
@@ -129,20 +134,11 @@ def glsl_mod(x_src, y_value, x, y):
 spacing_p = scalar_param("Spacing", 0.35, -4300, -300)
 make_decl("Spacing", spacing_p, -4100, -300, C_SC)
 
-# ---- uv = (2*TexCoord0 - 1) * (1,-1)  (Shadertoy is y-up; square widget assumed) ----
-texc = expr(unreal.MaterialExpressionTextureCoordinate, -4300, 0)
-mul2 = expr(unreal.MaterialExpressionMultiply, -4150, 0)
-mul2.set_editor_property("const_b", 2.0)
-_connect(texc, "", mul2, "A")
-sub1 = expr(unreal.MaterialExpressionSubtract, -4000, 0)
-sub1.set_editor_property("const_b", 1.0)
-_connect(mul2, "", sub1, "A")
-yflip_c = expr(unreal.MaterialExpressionConstant2Vector, -4000, 150)
-yflip_c.set_editor_property("r", 1.0); yflip_c.set_editor_property("g", -1.0)
-uv_v = expr(unreal.MaterialExpressionMultiply, -3850, 50)
-_connect(sub1, "", uv_v, "A")
-_connect(yflip_c, "", uv_v, "B")
-make_decl("uv", uv_v, -3700, 50, C_UV)
+# ---- uv = MF_SpinnerCoords.P, aa = MF_SpinnerCoords.PixelSize  (centered, y-up, shorter side = -1..1) ----
+coords = expr(unreal.MaterialExpressionMaterialFunctionCall, -4150, 50)
+coords.set_editor_property("material_function", mf_coords)
+make_decl("uv", coords, -3850, 0, C_UV, "P")
+make_decl("aa", coords, -3850, 120, C_SDF, "PixelSize")
 
 # ---- 1. cell = clamp(round(uv / Spacing), -1, 1)  (3x3 grid cell, clamped to the outer ring) ----
 uv_u1 = use("uv", -3500, 0)
@@ -292,33 +288,6 @@ _connect(d_circle, "", d_v, "A")
 _connect(center_big, "", d_v, "B")
 make_decl("d", d_v, 1650, 450, C_SDF)
 
-# ---- 5. fw = fwidth(uv) = abs(ddx(uv)) + abs(ddy(uv)); aa = max(fw.x, fw.y) ----
-uv_u3 = use("uv", 600, -300)
-uv_u4 = use("uv", 600, -150)
-uv_ddx = expr(unreal.MaterialExpressionDDX, 750, -300)
-uv_ddy = expr(unreal.MaterialExpressionDDY, 750, -150)
-_connect(uv_u3, "", uv_ddx, "")
-_connect(uv_u4, "", uv_ddy, "")
-abs_x = expr(unreal.MaterialExpressionAbs, 900, -300)
-abs_y = expr(unreal.MaterialExpressionAbs, 900, -150)
-_connect(uv_ddx, "", abs_x, "")
-_connect(uv_ddy, "", abs_y, "")
-fw_v = expr(unreal.MaterialExpressionAdd, 1050, -220)
-_connect(abs_x, "", fw_v, "A")
-_connect(abs_y, "", fw_v, "B")
-make_decl("fw", fw_v, 1200, -220, C_SDF)
-
-fw_u1 = use("fw", 1350, -280)
-fw_x = mask_x(1500, -280)
-_connect(fw_u1, "", fw_x, "")
-fw_u2 = use("fw", 1350, -160)
-fw_y = mask_y(1500, -160)
-_connect(fw_u2, "", fw_y, "")
-aa_v = expr(unreal.MaterialExpressionMax, 1650, -220)
-_connect(fw_x, "", aa_v, "A")
-_connect(fw_y, "", aa_v, "B")
-make_decl("aa", aa_v, 1800, -220, C_SDF)
-
 # ---- mask = clamp(0.5 - d/aa, 0, 1)  (1px-wide coverage approximation around the edge) ----
 d_u1 = use("d", 1900, 300)
 aa_u1 = use("aa", 1900, 400)
@@ -334,21 +303,34 @@ mask_clamp.set_editor_property("max_default", 1.0)
 _connect(half_minus, "", mask_clamp, "")
 make_decl("mask", mask_clamp, 2500, 350, C_COL)
 
-# ---- Output: FinalColor = (1,1,1), Opacity = mask  (no background: mix(BG, white, mask) dropped) ----
-white_c = expr(unreal.MaterialExpressionConstant3Vector, 2700, 200)
-white_c.set_editor_property("constant", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
-results.append(mel.connect_material_property(white_c, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
-mask_u1 = use("mask", 2700, 400)
-results.append(mel.connect_material_property(mask_u1, "", unreal.MaterialProperty.MP_OPACITY))
+# ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
+primary_p = expr(unreal.MaterialExpressionVectorParameter, 2700, 100)
+primary_p.set_editor_property("parameter_name", "PrimaryColor")
+primary_p.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+primary_p.set_editor_property("group", PARAM_GROUP)
+primary_p.set_editor_property("desc", "Ball color (alpha scales the opacity)")
+vcolor = expr(unreal.MaterialExpressionVertexColor, 2700, 350)
+emissive = expr(unreal.MaterialExpressionMultiply, 2950, 150)
+_connect(primary_p, "", emissive, "A")
+_connect(vcolor, "", emissive, "B")
+results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
+mask_u1 = use("mask", 2700, 550)
+mask_a = expr(unreal.MaterialExpressionMultiply, 2950, 450)
+_connect(mask_u1, "", mask_a, "A")
+_connect(primary_p, "A", mask_a, "B")
+opacity = expr(unreal.MaterialExpressionMultiply, 3100, 500)
+_connect(mask_a, "", opacity, "A")
+_connect(vcolor, "A", opacity, "B")
+results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
 # ---- Comments (English) ----
 smt.create_comment_in_material(
     mat, "const SPACING -> ScalarParameter (used twice -> Named Reroute; ATTACK likewise, three uses).\n"
-         "RBase / RGrow / Speed / Trail are wired directly at their single use site",
+         "RBase / RGrow / Speed / Trail / PrimaryColor are wired directly at their single use site",
     -4350, -400, 650, 250, C_SC)
 smt.create_comment_in_material(
-    mat, "uv = (2*TexCoord0 - 1) * (1,-1)\n"
-         "Y flipped (Shadertoy is y-up). Square widget assumed (no iResolution aspect)",
+    mat, "uv = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
+         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in uv units)",
     -4350, -100, 850, 400, C_UV)
 smt.create_comment_in_material(
     mat, "1. cell = clamp(round(uv / Spacing), -1, 1)\n"
@@ -381,17 +363,15 @@ smt.create_comment_in_material(
          "d += isCenter * 1e5   (center cell is never drawn)",
     550, 180, 1250, 480, C_SDF)
 smt.create_comment_in_material(
-    mat, "5. fw = fwidth(uv) = abs(ddx(uv)) + abs(ddy(uv)); aa = max(fw.x, fw.y)\n"
-         "fwidth(d) is NOT used: d is discontinuous at cell borders (would draw seams).\n"
+    mat, "mask = clamp(0.5 - d/aa, 0, 1)   (1px-wide coverage approximation at the edge)\n"
+         "aa is the pixel size of uv, not fwidth(d): d is discontinuous at cell borders (would draw seams).\n"
          "The circle SDF has unit gradient, so the pixel size of uv equals the pixel size of d",
-    550, -400, 1400, 400, C_SDF)
+    1850, 200, 800, 300, C_COL)
 smt.create_comment_in_material(
-    mat, "mask = clamp(0.5 - d/aa, 0, 1)   (1px-wide coverage approximation at the edge)",
-    1850, 250, 800, 250, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = (1,1,1), Opacity = mask\n"
-         "Background dropped: mix(BG, white, mask) becomes white with alpha = mask",
-    2650, 100, 500, 400, C_COL)
+    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
+         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)\n"
+         "Background dropped: mix(BG, color, mask) becomes PrimaryColor with alpha",
+    2650, 0, 600, 700, C_COL)
 
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
@@ -405,7 +385,8 @@ for e in smt.get_material_expressions(mat):
     elif isinstance(e, unreal.MaterialExpressionNamedRerouteUsage):
         nm = smt.get_named_reroute_usage_display_name(e)
         usage_count[nm] = usage_count.get(nm, 0) + 1
-    elif isinstance(e, unreal.MaterialExpressionScalarParameter):
+    elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
+                        unreal.MaterialExpressionVectorParameter)):
         param_names.append(str(e.get_editor_property("parameter_name")))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
@@ -415,14 +396,14 @@ print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
 expected_decls = sorted(["Spacing", "Attack", "uv", "cell", "isCenter", "a", "idx", "head", "age",
-                         "pulse", "r", "d", "fw", "aa", "mask"])
-expected_usages = {"Spacing": 2, "Attack": 3, "uv": 4, "cell": 4, "isCenter": 2, "a": 1, "idx": 1,
-                   "head": 1, "age": 2, "pulse": 1, "r": 1, "d": 1, "fw": 2, "aa": 1, "mask": 1}
+                         "pulse", "r", "d", "aa", "mask"])
+expected_usages = {"Spacing": 2, "Attack": 3, "uv": 2, "cell": 4, "isCenter": 2, "a": 1, "idx": 1,
+                   "head": 1, "age": 2, "pulse": 1, "r": 1, "d": 1, "aa": 1, "mask": 1}
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
-params_ok = sorted(param_names) == ["Attack", "RBase", "RGrow", "Spacing", "Speed", "Trail"]
-mf_ok = mf_calls == 2
-comments_ok = len(smt.get_material_comment_texts(mat)) == 13
+params_ok = sorted(param_names) == ["Attack", "PrimaryColor", "RBase", "RGrow", "Spacing", "Speed", "Trail"]
+mf_ok = mf_calls == 3
+comments_ok = len(smt.get_material_comment_texts(mat)) == 12
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

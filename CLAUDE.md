@@ -35,7 +35,7 @@ Command-line build (UE 5.5):
 
 `Plugins/DevMaterialTools/` is a local editor plugin (not distributed, excluded from the release zip, not listed in the `.uproject`). It exposes Named Reroute / comment helpers to Python (`unreal.DevMaterialTools`). Its `Tools/` scripts build the material assets from scratch. Always run them with UE 5.5 (see its README); `build_all.py` rebuilds everything in dependency order. To change a material, edit its builder script and regenerate. Don't hand-edit the generated asset.
 
-The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) were ported from the sandbox project for the prototype. They do **not** follow the material contract below yet: they don't multiply by `VertexColor`, use their own parameter names, and assume a square widget.
+The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) were ported from the sandbox project and follow the material contract below.
 
 ## Confirmed Design Decisions
 
@@ -51,9 +51,9 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 ### Material contract
 
 - The time source is the `Time` node with **Ignore Pause enabled** (real time), so spinners keep animating while the game thread is blocked (confirmed, see Verification Prototype). No external time path is needed.
-- Multiply the final output by `VertexColor` (UMG `ColorAndOpacity`, `RenderOpacity` and fades arrive through it).
-- Use common parameter names across all spinners (e.g. `PrimaryColor`, `SecondaryColor`, `Speed`, `Thickness`).
-- A spinner must look complete with default parameters and must not break when drawn at a non-square size.
+- Multiply the final output by `VertexColor` (UMG `ColorAndOpacity`, `RenderOpacity` and fades arrive through it): Emissive = `PrimaryColor.rgb * VertexColor.rgb`, Opacity = `coverage * PrimaryColor.a * VertexColor.a`.
+- Use common parameter names across all spinners (e.g. `PrimaryColor`, `SecondaryColor`, `Speed`, `Thickness`). `Speed` is in cycles per second (revolutions per second for rotating spinners); positive turns clockwise.
+- A spinner must look complete with default parameters and must not break when drawn at a non-square size. Build coordinates with `MF_SpinnerCoords`: `P` is centered and y-up, and the shorter side spans -1..1, so the shape stays round and centered. `PixelSize` is one screen pixel in `P` units, for anti-aliasing. It derives the widget size from UV screen derivatives, so no size parameter is needed.
 
 ### Asset loader (secondary feature)
 
@@ -68,7 +68,9 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 <UE_5.5>\Engine\Binaries\Win64\UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=720 -ExecCmds="LFXProto.RunAll"
 ```
 
-`/Game/Prototype/M_LoadingSpinner_GameTime` (built by `build_proto_gametime_variant.py`) is the spinner with Ignore Pause off, for an A/B comparison.
+`/Game/Prototype/M_LoadingSpinner_GameTime` (built by `build_proto_gametime_variant.py`) is the spinner with Ignore Pause off, for an A/B comparison. Rebuild it after rebuilding `M_LoadingSpinner`.
+
+`LFXProto.Gallery shot quit` draws every material square, wide, tall, tinted and small (`SLoadingFXProtoGallery`) and saves two screenshots to `Saved/Screenshots/LFXProto_Gallery_{A,B}.png`, to check the material contract visually.
 
 ### Findings (UE 5.5 `-game`, packaged builds on 5.5 and 5.8; engine code read for 5.5 and 5.8)
 

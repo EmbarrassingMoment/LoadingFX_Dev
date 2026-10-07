@@ -16,6 +16,7 @@ TOOLS_DIR = os.path.join(
 
 SCRIPTS = [
     "build_mf_glslmod.py",
+    "build_mf_spinnercoords.py",
     "build_m_loadingspinner.py",
     "build_m_loadingicon.py",
     "build_m_loadingboxes.py",

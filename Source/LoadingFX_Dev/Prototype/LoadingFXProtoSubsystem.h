@@ -20,6 +20,8 @@ class UMaterialInterface;
  *                                 MoviePlayer. GC=1 runs a garbage collection halfway through.
  *   LFXProto.Travel Map [Sec]     OpenLevel with the overlay as loading screen. Sec adds simulated load time.
  *   LFXProto.RunAll [quit]        Run every case in order (e.g. -ExecCmds="LFXProto.RunAll quit").
+ *   LFXProto.Gallery [shot] [quit]  Toggle the material contract gallery (non-square sizes, tint). 'shot' saves two
+ *                                 screenshots to Saved/Screenshots/LFXProto_Gallery_*.png, 'quit' exits afterwards.
  *
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
  */
@@ -37,6 +39,7 @@ public:
 	void RunBlockTest(float Seconds, bool bCollectGarbage);
 	void RunTravelTest(const FString& MapName, float ExtraLoadSeconds);
 	void RunAll(bool bQuitWhenDone);
+	void RunGallery(bool bTakeScreenshots, bool bQuitWhenDone);
 
 private:
 	struct FSequenceStep
@@ -48,6 +51,9 @@ private:
 	TSharedRef<SLoadingFXProtoOverlay> MakeOverlay(const FString& Label) const;
 	void ShowViewportOverlay();
 	void HideViewportOverlay();
+	void ShowGallery();
+	void HideGallery();
+	void StartSequence();
 	void SimulateBlockingWork(float Seconds, bool bCollectGarbage) const;
 	void OpenLevel(const FString& MapName);
 	void LogOverlayStats(const TCHAR* Context, double ElapsedSeconds) const;
@@ -64,6 +70,7 @@ private:
 
 	TSharedPtr<SWidget> ViewportOverlayRoot;
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;
+	TSharedPtr<SWidget> GalleryRoot;
 
 	/** The overlay handed to MoviePlayer for the current / last test. Only replaced while MoviePlayer is idle. */
 	TSharedPtr<SLoadingFXProtoOverlay> LoadingScreenOverlay;
