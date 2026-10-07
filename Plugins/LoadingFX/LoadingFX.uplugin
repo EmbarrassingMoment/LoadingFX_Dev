@@ -1,0 +1,41 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "LoadingFX",
+	"Description": "Material-based loading spinners for Unreal Engine 5, with a loading icon subsystem that keeps animating during blocking loads and a lightweight asset loader.",
+	"Category": "User Interface",
+	"CreatedBy": "Kurorekishi",
+	"CreatedByURL": "https://github.com/EmbarrassingMoment",
+	"DocsURL": "https://github.com/EmbarrassingMoment/LoadingFX_Dev",
+	"MarketplaceURL": "",
+	"FabURL": "",
+	"SupportURL": "https://github.com/EmbarrassingMoment/LoadingFX_Dev/issues",
+	"EngineVersion": "5.5",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "LoadingFX",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ],
+			"TargetDenyList": [ "Server" ]
+		},
+		{
+			"Name": "LoadingFXLoader",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
+		},
+		{
+			"Name": "LoadingFXBridge",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ],
+			"TargetDenyList": [ "Server" ]
+		}
+	]
+}
