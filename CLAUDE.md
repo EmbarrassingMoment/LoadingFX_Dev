@@ -81,9 +81,20 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 - **GC:** materials held by a `UPROPERTY` survived a `CollectGarbage` run in the middle of the blocked section, and LoadMap's own GC.
 - **Packaged builds:** `LFXProto.RunAll` gives the same results in packaged Development builds on 5.5 and 5.8 (the 5.8 build was made from a copy of the project, so this project's content was never saved with 5.8). Plugin assets loaded only by path are not cooked on their own; this project lists `/LoadingFX` in `DirectoriesToAlwaysCook` (`DefaultGame.ini`).
 
+### Cooking the default material (UE 5.5 `-run=Cook`; engine source read for 5.5)
+
+Verified 2026-10-08 with a throwaway probe (a `UDeveloperSettings` class holding two `TSoftObjectPtr<UMaterialInterface>` properties, plus a `FGameDelegates::GetModifyCookDelegate()` handler in the game module) while `/LoadingFX` was removed from `DirectoriesToAlwaysCook`. The probe was reverted; the log is `Saved/Logs/CookProbe_Cook.log` (local only). Instigators are printed with `-dpcvars=cook.displaymode=6`.
+
+- **Soft references read from an ini are cooked automatically.** `FSoftObjectPath::ImportTextItem` reports the value to `GRedirectCollector` ("Consider this a load, so Config string references get cooked"), and `StartCookByTheBook` requests those packages with instigator `StartupSoftObjectPath`. Confirmed: `M_LoadingIcon`, referenced only by a `DefaultGame.ini` line, was cooked. So a material the user picks in Project Settings is cooked with no extra setup.
+- **A C++ constructor default is not cooked.** Only ini text is collected; the CDO holding `M_LoadingSpinner` as its constructor default did not get it cooked (negative control). This is exactly the untouched-default case.
+- **`FGameDelegates::Get().GetModifyCookDelegate()` is the official plugin hook.** Multicast, listed by `-helpcookusage` ("Subscribe to this delegate during your module startup"), called from `UCookOnTheFlyServer::CollectFilesToCook` right after `UAssetManager::ModifyCook`. Confirmed: `M_LoadingBoxes` added by the handler was cooked with instigator `ModifyCookDelegate`; its material functions followed as `HardDependency`.
+- **Implemented:** `ULoadingFXSettings::LoadingIconMaterial` (`Config=Game`, `DefaultConfig`, constructor default `M_LoadingSpinner`; Project Settings > Plugins > LoadingFX) and `FLoadingFXModule::OnModifyCook`, bound to `GetModifyCookDelegate()` in `StartupModule` under `WITH_EDITOR` and removed in `ShutdownModule`. It adds the package of the effective material (default or user override) to `PackagesToCook`, so user projects need no `DirectoriesToAlwaysCook` entry.
+- **Alternatives considered.** A plugin-shipped `Config/Game.ini` with `+DirectoriesToAlwaysCook=(Path="/LoadingFX")` works and has Epic precedent (`Engine/Plugins/NNE/NNEDenoiser/Config/Game.ini`), but cooks every bundled spinner. Plugin ini files are dynamic config layers applied *after* the project's `Default*.ini` (`FConfigBranch::AddDynamicLayersToHierarchy`), so never put a scalar default such as the material path in one: it would override the user's choice. `UPrimaryAssetLabel` needs project-side `PrimaryAssetTypesToScan` edits (the default type is `bIsEditorOnly=True`, `CookRule=Unknown`, scans `/Game` only, and only one entry per type is allowed). Loading the material at startup (hard reference in a native CDO) is cooked as `StartupPackage` but forces an eager load in every process. `GetCookModificationDelegate` is deprecated since 5.0.
+- `SkipOnlyEditorOnly=true` is the 5.5 default (`BaseEditor.ini`), so packages merely loaded during the cook are not cooked unless a cooked package references them.
+- This project keeps `+DirectoriesToAlwaysCook=(Path="/LoadingFX")` because the prototype loads every spinner by path at runtime.
+
 ### Still open
 
-- How the project-wide default spinner material gets cooked in user projects without `DirectoriesToAlwaysCook`.
 - Decide whether sample content ships inside the plugin (for Fab users) or only in this project.
 
 ## Conventions
