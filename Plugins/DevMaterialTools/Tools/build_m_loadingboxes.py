@@ -314,6 +314,9 @@ make_decl("mask", inside, -900, -800, C_COL)
 
 # ---- phase = fract(Time * FadeSpeed + idx * 0.25)  (quarter-cycle offset per box) ----
 time_n = expr(unreal.MaterialExpressionTime, -1250, 250)
+# Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
+# which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
+time_n.set_editor_property("ignore_pause", True)
 fadespeed_p = scalar_param("FadeSpeed", 1.0, 3, "Brightness cycles per second", -1300, 350)
 t_speed = expr(unreal.MaterialExpressionMultiply, -1050, 300)
 _connect(time_n, "", t_speed, "A")

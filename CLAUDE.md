@@ -35,7 +35,7 @@ Command-line build (UE 5.5):
 
 `Plugins/DevMaterialTools/` is a local editor plugin (not distributed, excluded from the release zip, not listed in the `.uproject`). It exposes Named Reroute / comment helpers to Python (`unreal.DevMaterialTools`). Its `Tools/` scripts build the material assets from scratch. Always run them with UE 5.5 (see its README); `build_all.py` rebuilds everything in dependency order. To change a material, edit its builder script and regenerate. Don't hand-edit the generated asset.
 
-The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) were ported from the sandbox project for the prototype. They do **not** follow the material contract below yet: they don't multiply by `VertexColor`, use their own parameter names, read `Time` directly, and assume a square widget.
+The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) were ported from the sandbox project for the prototype. They do **not** follow the material contract below yet: they don't multiply by `VertexColor`, use their own parameter names, and assume a square widget.
 
 ## Confirmed Design Decisions
 
@@ -50,7 +50,7 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 
 ### Material contract
 
-- The default time source is the `Time` node. An optional external time can be passed via vertex data by the LoadingFX widget. The switch goes through a shared time Material Function and a scalar `UseExternalTime` (default 0); a static switch won't work because a MID cannot change static switches. This path is only needed if `Time` turns out not to advance under MoviePlayer.
+- The time source is the `Time` node with **Ignore Pause enabled** (real time), so spinners keep animating while the game thread is blocked (confirmed, see Verification Prototype). No external time path is needed.
 - Multiply the final output by `VertexColor` (UMG `ColorAndOpacity`, `RenderOpacity` and fades arrive through it).
 - Use common parameter names across all spinners (e.g. `PrimaryColor`, `SecondaryColor`, `Speed`, `Thickness`).
 - A spinner must look complete with default parameters and must not break when drawn at a non-square size.
@@ -60,13 +60,28 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 - It handles generic async and sync asset loading only.
 - Sync loads broadcast begin/end events so the Bridge can switch the icon to blocking rendering.
 
-## Next Steps / Open Items
+## Verification Prototype
 
-- **Prototype first.** Verify in a packaged build on UE 5.5 and 5.8:
-  - whether a UI material brush renders inside the MoviePlayer widget, and whether `Time` advances there
-  - whether MoviePlayer can be started and stopped manually around arbitrary sync loads
-  - what is drawn behind the icon while the game thread is blocked
-  - whether the material survives the GC that runs during LoadMap
+`Source/LoadingFX_Dev/Prototype/` (throwaway, not part of the plugin): `ULoadingFXProtoSubsystem` + `SLoadingFXProtoOverlay`, driven by the `LFXProto.*` console commands (see the header). Run it outside the editor, because MoviePlayer is disabled when `GIsEditor`, in commandlets, and with `-NoLoadingScreen`:
+
+```
+<UE_5.5>\Engine\Binaries\Win64\UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=720 -ExecCmds="LFXProto.RunAll"
+```
+
+`/Game/Prototype/M_LoadingSpinner_GameTime` (built by `build_proto_gametime_variant.py`) is the spinner with Ignore Pause off, for an A/B comparison.
+
+### Findings (UE 5.5 `-game`, packaged builds on 5.5 and 5.8; engine code read for 5.5 and 5.8)
+
+- **Material time:** Slate gives UI materials `View.RealTime = FPlatformTime::Seconds()` at draw time and `View.GameTime = FApp::CurrentTime`, which only the game thread advances (`SlateRHIRenderer.cpp`, same in 5.8). The `Time` node uses GameTime unless **Ignore Pause** is on, so spinner materials must enable Ignore Pause. Confirmed visually (5.5 `-game`, 30 s block): the RealTime spinners animate under MoviePlayer and the GameTime variant freezes.
+- **Manual MoviePlayer around a sync load works:** `SetupLoadingScreen` → `PlayMovie()` → blocking work → `WaitForMovieToFinish()`. The widget was painted about 60 times per second, all off the game thread. The engine loop also calls `WaitForMovieToFinish(true)` right after `GEngine->Tick()` every frame, which restores the game viewport afterwards.
+- **LoadMap:** MoviePlayer hooks `PreLoadMap` itself and calls `PlayMovie()`, which broadcasts `OnPrepareLoadingScreen` when nothing is set up. Binding that event (not `PreLoadMap`, whose call order is not guaranteed) gives the v1 behavior: take over only when the icon is visible. Loading screen attributes are cleared after every playback.
+- **Background:** the MoviePlayer root is `SDefaultMovieBorder` with `BlackBrush`, so the screen behind the icon is black while blocked. The last game frame is not shown.
+- **GC:** materials held by a `UPROPERTY` survived a `CollectGarbage` run in the middle of the blocked section, and LoadMap's own GC.
+- **Packaged builds:** `LFXProto.RunAll` gives the same results in packaged Development builds on 5.5 and 5.8 (the 5.8 build was made from a copy of the project, so this project's content was never saved with 5.8). Plugin assets loaded only by path are not cooked on their own; this project lists `/LoadingFX` in `DirectoriesToAlwaysCook` (`DefaultGame.ini`).
+
+### Still open
+
+- How the project-wide default spinner material gets cooked in user projects without `DirectoriesToAlwaysCook`.
 - Decide whether sample content ships inside the plugin (for Fab users) or only in this project.
 
 ## Conventions

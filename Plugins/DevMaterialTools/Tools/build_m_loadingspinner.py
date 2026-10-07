@@ -120,6 +120,9 @@ make_decl("p", p_v, -3650, -350, C_UV)
 
 # ---- rot = Time * Speed  (rotation angle in radians) ----
 time_n = expr(unreal.MaterialExpressionTime, -4250, 50)
+# Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
+# which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
+time_n.set_editor_property("ignore_pause", True)
 speed_p = scalar_param("Speed", 4.0, 5, "Rotation speed (rad/s). Positive = clockwise", -4250, 150)
 rot_v = expr(unreal.MaterialExpressionMultiply, -4000, 100)
 _connect(time_n, "", rot_v, "A")

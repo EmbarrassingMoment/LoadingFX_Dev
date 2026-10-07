@@ -198,6 +198,9 @@ make_decl("idx", idx_mod, -1300, 600, C_SC)
 
 # ---- 3. head = fract(Time * Speed) * 8  (pulse position, 0..8) ----
 time_n = expr(unreal.MaterialExpressionTime, -1900, 900)
+# Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
+# which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
+time_n.set_editor_property("ignore_pause", True)
 speed_p = scalar_param("Speed", 0.8, -1900, 1000)
 t_speed = expr(unreal.MaterialExpressionMultiply, -1750, 950)
 _connect(time_n, "", t_speed, "A")
