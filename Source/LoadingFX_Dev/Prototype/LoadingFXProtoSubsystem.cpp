@@ -5,20 +5,29 @@
 #include "SLoadingFXProtoGallery.h"
 #include "SLoadingFXProtoOverlay.h"
 
+#include "LoadingFXIconSubsystem.h"
+#include "LoadingFXSpinner.h"
+
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/Paths.h"
 #include "MoviePlayer.h"
 #include "UnrealClient.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
+#include "Styling/CoreStyle.h"
+#include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLoadingFXProto, Log, All);
 
@@ -125,6 +134,28 @@ namespace LoadingFXProto
 				Subsystem->RunGallery(Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs IconTravelCommand(
+		TEXT("LFXProto.IconTravel"),
+		TEXT("Verification prototype: exercise ULoadingFXIconSubsystem (acquire, owner auto-release, OpenLevel under the icon, release). Args: [Map=/Engine/Maps/Entry] [ExtraSeconds=4] [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunIconTravelTest(Args.IsValidIndex(0) ? Args[0] : FString(TravelTestMap), ParseFloatArg(Args, 1, 4.0f), Args.Contains(TEXT("quit")));
+			}
+		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs UmgSpinnerCommand(
+		TEXT("LFXProto.UmgSpinner"),
+		TEXT("Verification prototype: toggle a row of ULoadingFXSpinner UMG widgets (project default, explicit material + tint, dynamic parameters, opacity, non-square). 'shot' saves a screenshot, 'quit' exits afterwards."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunUmgSpinnerTest(Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -178,6 +209,7 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 
 	HideViewportOverlay();
 	HideGallery();
+	HideUmgSpinners();
 	LoadingScreenOverlay.Reset();
 
 	Super::Deinitialize();
@@ -306,6 +338,215 @@ void ULoadingFXProtoSubsystem::RunGallery(bool bTakeScreenshots, bool bQuitWhenD
 		SequenceSteps.Add({ 1.0f, []() { FPlatformMisc::RequestExit(false, TEXT("LFXProto.Gallery")); } });
 	}
 	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bQuitWhenDone)
+{
+	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	if (!IconSubsystem)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[IconTravel] ULoadingFXIconSubsystem not found"));
+		return;
+	}
+
+	auto RequestShot = [](const TCHAR* Name)
+	{
+		const FString Filename = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots") / Name);
+		FScreenshotRequest::RequestScreenshot(Filename, /*bInShowUI*/ true, /*bAddUniqueSuffix*/ false);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] screenshot requested: %s"), *Filename);
+	};
+
+	// Exercises the real subsystem instead of the prototype overlay: the prototype's own loading screen stays out
+	// of the way (bTravelPending is false and the overlay is hidden).
+	SequenceSteps.Reset();
+	SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 1/5 acquire twice: a plain request and one owned by a throwaway actor"));
+		IconTravelHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel"));
+		AActor* Owner = GetWorld()->SpawnActor<AActor>();
+		IconTravelOwner = Owner;
+		const FLoadingFXIconHandle OwnedHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel (owned)"), Owner);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] visible=%d requests=%d (expect 1, 2); handles active: %d %d (expect 1, 1)"),
+			IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(),
+			IconSubsystem->IsHandleActive(IconTravelHandle) ? 1 : 0, IconSubsystem->IsHandleActive(OwnedHandle) ? 1 : 0);
+	} });
+	SequenceSteps.Add({ 3.0f, [this, RequestShot]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 2/5 screenshot of the viewport icon, then Destroy() the owner actor (expect auto-release next tick)"));
+		RequestShot(TEXT("LFXProto_Icon_Viewport.png"));
+		if (AActor* Owner = Cast<AActor>(IconTravelOwner.Get()))
+		{
+			Owner->Destroy();
+		}
+	} });
+	SequenceSteps.Add({ 1.0f, [this, IconSubsystem, MapName, ExtraLoadSeconds]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 3/5 requests=%d (expect 1); OpenLevel %s with +%.1fs simulated load, expecting the icon as loading screen"),
+			IconSubsystem->GetRequestCount(), *MapName, ExtraLoadSeconds);
+		IconSubsystem->DumpRequests();
+		bIconTravelPending = true;
+		TravelExtraLoadSeconds = ExtraLoadSeconds;
+		TravelStartSeconds = FPlatformTime::Seconds();
+		OpenLevel(MapName);
+	} });
+	SequenceSteps.Add({ ExtraLoadSeconds + 3.0f, [this, IconSubsystem, RequestShot]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 4/5 after travel: visible=%d requests=%d (expect 1, 1: viewport content survives LoadMap)"),
+			IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount());
+		RequestShot(TEXT("LFXProto_Icon_AfterTravel.png"));
+	} });
+	SequenceSteps.Add({ 1.0f, [this, IconSubsystem]()
+	{
+		const bool bReleased = IconSubsystem->Release(IconTravelHandle);
+		const bool bReleasedAgain = IconSubsystem->Release(IconTravelHandle);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 5/5 release=%d, release again=%d, visible=%d (expect 1, 0, 0)"),
+			bReleased ? 1 : 0, bReleasedAgain ? 1 : 0, IconSubsystem->IsIconVisible() ? 1 : 0);
+	} });
+	SequenceSteps.Add({ 1.0f, [bQuitWhenDone]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] finished"));
+		if (bQuitWhenDone)
+		{
+			FPlatformMisc::RequestExit(false, TEXT("LFXProto.IconTravel"));
+		}
+	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone)
+{
+	if (UmgRoot.IsValid() && !bTakeScreenshot && !bQuitWhenDone)
+	{
+		HideUmgSpinners();
+		return;
+	}
+
+	UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+	if (!ViewportClient)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("No game viewport: cannot show the UMG spinners"));
+		return;
+	}
+
+	if (!UmgRoot.IsValid())
+	{
+		TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
+
+		// Each case is a ULoadingFXSpinner created at runtime (no widget blueprint needed) and hosted as Slate.
+		auto AddSpinner = [this, &Row](const TCHAR* Caption, TFunctionRef<void(ULoadingFXSpinner*)> Setup)
+		{
+			ULoadingFXSpinner* Spinner = NewObject<ULoadingFXSpinner>(this);
+			Setup(Spinner);
+			UmgSpinners.Add(Spinner);
+
+			Row->AddSlot()
+			.AutoWidth()
+			.Padding(8.0f)
+			.VAlign(VAlign_Top)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.HAlign(HAlign_Center)
+				[
+					Spinner->TakeWidget()
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.HAlign(HAlign_Center)
+				.Padding(0.0f, 4.0f, 0.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.Text(FText::FromString(Caption))
+					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 10))
+				]
+			];
+
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[UmgSpinner] %s: material=%s size=%s desired=%s"), Caption,
+				Spinner->GetMaterial() ? *Spinner->GetMaterial()->GetName() : TEXT("<project default>"),
+				*Spinner->GetSize().ToString(), *Spinner->GetCachedWidget()->GetDesiredSize().ToString());
+		};
+
+		AddSpinner(TEXT("default (project material)"), [](ULoadingFXSpinner*) {});
+		AddSpinner(TEXT("M_LoadingBoxes, 96px, orange"), [](ULoadingFXSpinner* Spinner)
+		{
+			Spinner->SetMaterial(LoadObject<UMaterialInterface>(nullptr, TEXT("/LoadingFX/Materials/M_LoadingBoxes.M_LoadingBoxes")));
+			Spinner->SetSize(FVector2D(96.0, 96.0));
+			Spinner->SetColorAndOpacity(FLinearColor(1.0f, 0.5f, 0.1f));
+		});
+		AddSpinner(TEXT("dynamic: PrimaryColor green, Speed 2"), [](ULoadingFXSpinner* Spinner)
+		{
+			UMaterialInstanceDynamic* Dynamic = Spinner->GetDynamicMaterial();
+			if (Dynamic)
+			{
+				Dynamic->SetVectorParameterValue(TEXT("PrimaryColor"), FLinearColor(0.2f, 1.0f, 0.3f));
+				Dynamic->SetScalarParameterValue(TEXT("Speed"), 2.0f);
+			}
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[UmgSpinner] dynamic material: %s, parent=%s, second call returns the same: %d (expect 1)"),
+				Dynamic ? *Dynamic->GetName() : TEXT("<null>"), Dynamic && Dynamic->Parent ? *Dynamic->Parent->GetName() : TEXT("<null>"),
+				Spinner->GetDynamicMaterial() == Dynamic ? 1 : 0);
+		});
+		AddSpinner(TEXT("opacity 0.3"), [](ULoadingFXSpinner* Spinner) { Spinner->SetOpacity(0.3f); });
+		AddSpinner(TEXT("wide 160x64"), [](ULoadingFXSpinner* Spinner) { Spinner->SetSize(FVector2D(160.0, 64.0)); });
+
+		UmgRoot = SNew(SBox)
+			.HAlign(HAlign_Center)
+			.VAlign(VAlign_Center)
+			.Visibility(EVisibility::HitTestInvisible)
+			[
+				SNew(SBorder)
+				.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+				.BorderBackgroundColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.6f))
+				.Padding(12.0f)
+				[
+					Row
+				]
+			];
+		ViewportClient->AddViewportWidgetContent(UmgRoot.ToSharedRef(), LoadingFXProto::ViewportOverlayZOrder + 2);
+	}
+
+	if (!bTakeScreenshot && !bQuitWhenDone)
+	{
+		return;
+	}
+
+	SequenceSteps.Reset();
+	if (bTakeScreenshot)
+	{
+		SequenceSteps.Add({ 4.0f, []()
+		{
+			const FString Filename = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("LFXProto_UmgSpinner.png"));
+			FScreenshotRequest::RequestScreenshot(Filename, /*bInShowUI*/ true, /*bAddUniqueSuffix*/ false);
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[UmgSpinner] screenshot requested: %s"), *Filename);
+		} });
+	}
+	if (bQuitWhenDone)
+	{
+		SequenceSteps.Add({ 1.5f, []() { FPlatformMisc::RequestExit(false, TEXT("LFXProto.UmgSpinner")); } });
+	}
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::HideUmgSpinners()
+{
+	if (UmgRoot.IsValid())
+	{
+		if (UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient())
+		{
+			ViewportClient->RemoveViewportWidgetContent(UmgRoot.ToSharedRef());
+		}
+	}
+	UmgRoot.Reset();
+
+	for (UWidget* Spinner : UmgSpinners)
+	{
+		if (Spinner)
+		{
+			Spinner->ReleaseSlateResources(true);
+		}
+	}
+	UmgSpinners.Reset();
 }
 
 void ULoadingFXProtoSubsystem::StartSequence()
@@ -472,9 +713,10 @@ void ULoadingFXProtoSubsystem::HandlePrepareLoadingScreen()
 void ULoadingFXProtoSubsystem::HandleMoviePlaybackStarted()
 {
 	// Runs inside PlayMovie(), i.e. inside LoadMap for travel: sleeping here lengthens the blocked section.
-	if (bTravelPending && TravelExtraLoadSeconds > 0.0f)
+	if ((bTravelPending || bIconTravelPending) && TravelExtraLoadSeconds > 0.0f)
 	{
-		UE_LOG(LogLoadingFXProto, Display, TEXT("Simulating +%.1fs of map loading"), TravelExtraLoadSeconds);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("Simulating +%.1fs of map loading%s"), TravelExtraLoadSeconds,
+			bIconTravelPending ? TEXT(" (MoviePlayer started, so a loading screen was prepared: see LogLoadingFX)") : TEXT(""));
 		SimulateBlockingWork(TravelExtraLoadSeconds, false);
 	}
 }
@@ -487,9 +729,17 @@ void ULoadingFXProtoSubsystem::HandlePostLoadMap(UWorld* LoadedWorld)
 	}
 
 	const FString MapName = LoadedWorld ? LoadedWorld->GetPackage()->GetName() : FString(TEXT("<none>"));
-	LogOverlayStats(*FString::Printf(TEXT("LoadMap %s"), *MapName), FPlatformTime::Seconds() - TravelStartSeconds);
+	if (bIconTravelPending)
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] LoadMap %s done in %.2fs"), *MapName, FPlatformTime::Seconds() - TravelStartSeconds);
+	}
+	else
+	{
+		LogOverlayStats(*FString::Printf(TEXT("LoadMap %s"), *MapName), FPlatformTime::Seconds() - TravelStartSeconds);
+	}
 
 	bTravelPending = false;
+	bIconTravelPending = false;
 	TravelStartSeconds = 0.0;
 }
 

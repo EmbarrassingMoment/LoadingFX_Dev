@@ -4,11 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
+#include "LoadingFXIconSubsystem.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "LoadingFXProtoSubsystem.generated.h"
 
 class SLoadingFXProtoOverlay;
 class SWidget;
+class UWidget;
 class UMaterialInterface;
 
 /**
@@ -22,6 +24,8 @@ class UMaterialInterface;
  *   LFXProto.RunAll [quit]        Run every case in order (e.g. -ExecCmds="LFXProto.RunAll quit").
  *   LFXProto.Gallery [shot] [quit]  Toggle the material contract gallery (non-square sizes, tint). 'shot' saves two
  *                                 screenshots to Saved/Screenshots/LFXProto_Gallery_*.png, 'quit' exits afterwards.
+ *   LFXProto.IconTravel [Map] [Sec] [quit]  Exercise ULoadingFXIconSubsystem: acquire, owner auto-release, OpenLevel under the icon, release.
+ *   LFXProto.UmgSpinner [shot] [quit]  Show a row of ULoadingFXSpinner UMG widgets (project default, tint, dynamic parameters, opacity, non-square).
  *
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
  */
@@ -40,6 +44,8 @@ public:
 	void RunTravelTest(const FString& MapName, float ExtraLoadSeconds);
 	void RunAll(bool bQuitWhenDone);
 	void RunGallery(bool bTakeScreenshots, bool bQuitWhenDone);
+	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bQuitWhenDone);
+	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
 
 private:
 	struct FSequenceStep
@@ -53,6 +59,7 @@ private:
 	void HideViewportOverlay();
 	void ShowGallery();
 	void HideGallery();
+	void HideUmgSpinners();
 	void StartSequence();
 	void SimulateBlockingWork(float Seconds, bool bCollectGarbage) const;
 	void OpenLevel(const FString& MapName);
@@ -72,10 +79,18 @@ private:
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;
 	TSharedPtr<SWidget> GalleryRoot;
 
+	/** UMG spinners created by LFXProto.UmgSpinner, kept alive here. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWidget>> UmgSpinners;
+	TSharedPtr<SWidget> UmgRoot;
+
 	/** The overlay handed to MoviePlayer for the current / last test. Only replaced while MoviePlayer is idle. */
 	TSharedPtr<SLoadingFXProtoOverlay> LoadingScreenOverlay;
 
 	bool bTravelPending = false;
+	bool bIconTravelPending = false;
+	FLoadingFXIconHandle IconTravelHandle;
+	TWeakObjectPtr<UObject> IconTravelOwner;
 	float TravelExtraLoadSeconds = 0.0f;
 	double TravelStartSeconds = 0.0;
 

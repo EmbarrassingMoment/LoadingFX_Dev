@@ -47,6 +47,8 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 - The icon must keep animating during blocking loads, which requires MoviePlayer. MoviePlayer is unavailable in PIE, so the icon freezes there; document this behavior.
 - **v1 scope:** if the icon is visible when LoadMap starts, automatically switch to blocking rendering (`PreLoadMap` / `PostLoadMapWithWorld`). It does **not** auto-show the icon or decide when travel is complete. Map transition management is postponed; users build it with show/hide.
 - The spinner is also provided as a standalone UMG widget, and the materials must work on their own on a plain UMG `Image`. Only the subsystem's icon keeps spinning during blocking loads; spinners placed in user widgets do not.
+- **Implemented:** `ULoadingFXIconSubsystem` (`Acquire` / `Release` / `ReleaseAll`, `IsHandleActive`, `OnVisibilityChanged`; owner auto-release is polled by a core ticker that runs only while owned requests exist; the viewport widget is created lazily and also on `UGameViewportClient::OnViewportCreated`, because the game viewport is created after the game instance) and `SLoadingFXSpinner` (leaf Slate widget drawing a material brush, to be reused by the UMG widget). The MoviePlayer takeover is `HandlePrepareLoadingScreen`; it checks `LoadingScreenIsPrepared()` first, so a loading screen set up by someone else wins. Console: `LoadingFX.Icon.Show` / `Hide` / `Dump`.
+- **Implemented (UMG):** `ULoadingFXSpinner` wraps `SLoadingFXSpinner`. Properties use `BlueprintGetter` / `BlueprintSetter` so Blueprint sees one Get/Set pair each. `Material` empty means the project's loading icon material, resolved in `ResolveMaterial` (the result is held in the transient `DrawnMaterial` so the fallback stays referenced). `GetDynamicMaterial` follows `UImage`: the dynamic instance replaces `Material` on that widget. Verified at runtime with `LFXProto.UmgSpinner shot quit` (no widget blueprint; the widgets are created with `NewObject` and hosted through `TakeWidget`).
 
 ### Material contract
 
@@ -71,6 +73,10 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 `/Game/Prototype/M_LoadingSpinner_GameTime` (built by `build_proto_gametime_variant.py`) is the spinner with Ignore Pause off, for an A/B comparison. Rebuild it after rebuilding `M_LoadingSpinner`.
 
 `LFXProto.Gallery shot quit` draws every material square, wide, tall, tinted and small (`SLoadingFXProtoGallery`) and saves two screenshots to `Saved/Screenshots/LFXProto_Gallery_{A,B}.png`, to check the material contract visually.
+
+`LFXProto.IconTravel [Map] [Sec] [quit]` exercises the real `ULoadingFXIconSubsystem`: acquire (one plain request, one owned by a throwaway object that is then marked garbage), OpenLevel with `Sec` seconds of simulated load (expect the icon as loading screen), release. Saves `Saved/Screenshots/LFXProto_Icon_{Viewport,AfterTravel}.png`.
+
+`LFXProto.UmgSpinner [shot] [quit]` shows a row of runtime-created `ULoadingFXSpinner` widgets (project default, `M_LoadingBoxes` tinted at 96 px, dynamic material with `PrimaryColor` / `Speed` changed, opacity 0.3, wide 160x64) and saves `Saved/Screenshots/LFXProto_UmgSpinner.png`.
 
 ### Findings (UE 5.5 `-game`, packaged builds on 5.5 and 5.8; engine code read for 5.5 and 5.8)
 
