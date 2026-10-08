@@ -16,6 +16,7 @@
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * bright * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   背景(BG_COLOR)は不要なので mix(BG, BOX, mask*bright) は PrimaryColor + アルファに置き換え(黒背景上では同一)。
+  デフォルト値は BoxSize + BoxGap/2 = 0.36(p 単位。P 単位では 0.72 = 材質契約の基準正方形の半幅)に合わせてある。
 
   const -> ScalarParameter / VectorParameter(グループ "LoadingBoxes"、並びは GLSL の宣言順)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
@@ -212,7 +213,8 @@ def scalar_param(name, default, sort, desc, x, y):
                 sort_priority=sort, desc=desc)
 
 # ---- const BOX_SIZE (used twice -> Named Reroute) ----
-boxsize_p = scalar_param("BoxSize", 0.14, 0, "Box edge length (shorter widget side = 1.0)", -3450, -700)
+# Footprint (material contract): BoxSize + BoxGap / 2 = 0.36 in p (= 0.72 in P), the reference square (grid layout).
+boxsize_p = scalar_param("BoxSize", 0.315, 0, "Box edge length (shorter widget side = 1.0)", -3450, -700)
 make_decl("BoxSize", boxsize_p, -3200, -700, C_SC)
 
 # ---- p = MF_SpinnerCoords.P * 0.5, aa = 1.5 * 0.5 * MF_SpinnerCoords.PixelSize  (shorter side = -0.5..0.5) ----
@@ -260,7 +262,7 @@ p_u2 = use("p", -2750, -450)
 p_abs = expr(unreal.MaterialExpressionAbs, -2600, -450)
 _connect(p_u2, "", p_abs, "")
 boxsize_u1 = use("BoxSize", -2750, -330)
-boxgap_p = scalar_param("BoxGap", 0.04, 1, "Gap between boxes", -2800, -230)
+boxgap_p = scalar_param("BoxGap", 0.09, 1, "Gap between boxes", -2800, -230)
 pitch = expr(unreal.MaterialExpressionAdd, -2550, -300)
 _connect(boxsize_u1, "", pitch, "A")
 _connect(boxgap_p, "", pitch, "B")
@@ -275,7 +277,7 @@ _connect(boxsize_u2, "", half, "A")
 half2 = expr(unreal.MaterialExpressionAppendVector, -2250, -120)   # vec2(0.5 * BOX_SIZE)
 _connect(half, "", half2, "A")
 _connect(half, "", half2, "B")
-boxround_p = scalar_param("BoxRound", 0.015, 2, "Corner radius (0 = sharp corners)", -2300, 0)
+boxround_p = scalar_param("BoxRound", 0.035, 2, "Corner radius (0 = sharp corners)", -2300, 0)
 sd_call = expr(unreal.MaterialExpressionMaterialFunctionCall, -2000, -300, material_function=fn)
 _connect(p_box, "", sd_call, "P")
 _connect(half2, "", sd_call, "B")

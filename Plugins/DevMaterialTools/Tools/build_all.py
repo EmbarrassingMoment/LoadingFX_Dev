@@ -20,6 +20,7 @@ SCRIPTS = [
     "build_m_loadingspinner.py",
     "build_m_loadingicon.py",
     "build_m_loadingboxes.py",
+    "build_m_loadingbars.py",
 ]
 
 for name in SCRIPTS:

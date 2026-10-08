@@ -19,6 +19,7 @@ Dot-ring loading spinner (user's own Shadertoy) -> M_LoadingSpinner (Material Do
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   背景(bg)は不要なので mix(bg, fg, m) は PrimaryColor + アルファに置き換え。
+  デフォルト値は Ring + RMax = 0.8(材質契約の基準円。1.0 = 短辺の端)に合わせてある。
 
   const -> ScalarParameter / VectorParameter(グループ "LoadingSpinner"、並びは GLSL の宣言順)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
@@ -196,7 +197,8 @@ _connect(ca_u2, "", ca_sin, "")
 dir_v = expr(unreal.MaterialExpressionAppendVector, 150, 180)
 _connect(ca_cos, "", dir_v, "A")
 _connect(ca_sin, "", dir_v, "B")
-ring_p = scalar_param("Ring", 0.55, 2,
+# Footprint (material contract): Ring + RMax = 0.8, the reference circle.
+ring_p = scalar_param("Ring", 0.64, 2,
                       "Radius of the circle the dots sit on (half the shorter widget side = 1.0)", 100, 330)
 c_v = expr(unreal.MaterialExpressionMultiply, 350, 230)
 _connect(ring_p, "", c_v, "A")
@@ -211,9 +213,9 @@ _connect(count_u2, "", count_m1, "A")
 id_t = expr(unreal.MaterialExpressionDivide, -750, 850)
 _connect(id_u2, "", id_t, "A")
 _connect(count_m1, "", id_t, "B")
-rmax_p = scalar_param("RMax", 0.14, 3,
+rmax_p = scalar_param("RMax", 0.16, 3,
                       "Radius of the leading (largest) dot. Keep below Ring * sin(PI * Arc / Count)", -650, 580)
-rmin_p = scalar_param("RMin", 0.03, 4, "Radius of the trailing (smallest) dot", -650, 680)
+rmin_p = scalar_param("RMin", 0.035, 4, "Radius of the trailing (smallest) dot", -650, 680)
 r_v = expr(unreal.MaterialExpressionLinearInterpolate, -400, 700)
 _connect(rmax_p, "", r_v, "A")
 _connect(rmin_p, "", r_v, "B")

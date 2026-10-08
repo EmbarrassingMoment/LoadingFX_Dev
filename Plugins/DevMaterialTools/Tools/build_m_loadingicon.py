@@ -27,6 +27,7 @@ Loading Icon (Shadertoy, loop-free) -> M_LoadingIcon (Material Domain = UI, Tran
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   背景(BG)は不要なので mix は省略。
+  デフォルト値は Spacing + RBase + RGrow = 0.72(材質契約の基準正方形の半幅、パルスのピーク時)に合わせてある。
 
   const  -> ScalarParameter (Spacing/RBase/RGrow/Speed/Attack/Trail、グループ "LoadingIcon")
   色     -> VectorParameter PrimaryColor(元の Shadertoy は白固定)
@@ -131,7 +132,8 @@ def glsl_mod(x_src, y_value, x, y):
     return call
 
 # ---- const SPACING (used twice -> Named Reroute) ----
-spacing_p = scalar_param("Spacing", 0.35, -4300, -300)
+# Footprint (material contract): Spacing + RBase + RGrow = 0.72, the reference square (grid layout, at the pulse peak).
+spacing_p = scalar_param("Spacing", 0.54, -4300, -300)
 make_decl("Spacing", spacing_p, -4100, -300, C_SC)
 
 # ---- uv = MF_SpinnerCoords.P, aa = MF_SpinnerCoords.PixelSize  (centered, y-up, shorter side = -1..1) ----
@@ -251,11 +253,11 @@ make_decl("pulse", pulse_v, 450, 930, C_TM)
 
 # ---- r = RBase + RGrow * pulse ----
 pulse_u1 = use("pulse", 600, 830)
-rgrow_p = scalar_param("RGrow", 0.08, 600, 930)
+rgrow_p = scalar_param("RGrow", 0.12, 600, 930)
 r_grow = expr(unreal.MaterialExpressionMultiply, 750, 880)
 _connect(rgrow_p, "", r_grow, "A")
 _connect(pulse_u1, "", r_grow, "B")
-rbase_p = scalar_param("RBase", 0.04, 750, 780)
+rbase_p = scalar_param("RBase", 0.06, 750, 780)
 r_v = expr(unreal.MaterialExpressionAdd, 900, 830)
 _connect(rbase_p, "", r_v, "A")
 _connect(r_grow, "", r_v, "B")

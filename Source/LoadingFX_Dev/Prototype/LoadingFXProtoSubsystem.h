@@ -26,6 +26,9 @@ class UMaterialInterface;
  *                                 screenshots to Saved/Screenshots/LFXProto_Gallery_*.png, 'quit' exits afterwards.
  *   LFXProto.IconTravel [Map] [Sec] [quit]  Exercise ULoadingFXIconSubsystem: acquire, owner auto-release, OpenLevel under the icon, release.
  *   LFXProto.UmgSpinner [shot] [quit]  Show a row of ULoadingFXSpinner UMG widgets (project default, tint, dynamic parameters, opacity, non-square).
+ *   LFXProto.Showcase [Size] [ref] [shot] [quit]  Toggle a full-screen showcase of every bundled spinner material on black, Size px
+ *                                 each (default 256). 'ref' overlays the material contract's reference circle and square,
+ *                                 'shot' saves Saved/Screenshots/LFXProto_Showcase.png, 'quit' exits afterwards.
  *
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
  */
@@ -46,6 +49,7 @@ public:
 	void RunGallery(bool bTakeScreenshots, bool bQuitWhenDone);
 	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bQuitWhenDone);
 	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
+	void RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone);
 
 private:
 	struct FSequenceStep
@@ -60,6 +64,8 @@ private:
 	void ShowGallery();
 	void HideGallery();
 	void HideUmgSpinners();
+	void ShowShowcase(float TileSize, bool bShowReference);
+	void HideShowcase();
 	void StartSequence();
 	void SimulateBlockingWork(float Seconds, bool bCollectGarbage) const;
 	void OpenLevel(const FString& MapName);
@@ -83,6 +89,7 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UWidget>> UmgSpinners;
 	TSharedPtr<SWidget> UmgRoot;
+	TSharedPtr<SWidget> ShowcaseRoot;
 
 	/** The overlay handed to MoviePlayer for the current / last test. Only replaced while MoviePlayer is idle. */
 	TSharedPtr<SLoadingFXProtoOverlay> LoadingScreenOverlay;

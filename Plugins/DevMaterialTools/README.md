@@ -20,6 +20,7 @@ Local-only editor plugin for developing LoadingFX. It is **not** part of the Loa
 | `build_m_loadingspinner.py` | `/LoadingFX/Materials/M_LoadingSpinner` |
 | `build_m_loadingicon.py` | `/LoadingFX/Materials/M_LoadingIcon` |
 | `build_m_loadingboxes.py` | `/LoadingFX/MaterialFunctions/MF_SdRoundBox2D`, `/LoadingFX/Materials/M_LoadingBoxes` |
+| `build_m_loadingbars.py` | `/LoadingFX/Materials/M_LoadingBars` (radial bars, AA width from `fwidth(d)`) |
 | `build_all.py` | Runs all of the above in dependency order |
 
 Run them with **UE 5.5** so the saved assets stay loadable in 5.5:

@@ -4,6 +4,7 @@
 
 #include "SLoadingFXProtoGallery.h"
 #include "SLoadingFXProtoOverlay.h"
+#include "SLoadingFXProtoShowcase.h"
 
 #include "LoadingFXIconSubsystem.h"
 #include "LoadingFXSpinner.h"
@@ -46,6 +47,7 @@ namespace LoadingFXProto
 		{ TEXT("/Game/Prototype/M_LoadingSpinner_GameTime.M_LoadingSpinner_GameTime"), TEXT("Spinner (GameTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingIcon.M_LoadingIcon"), TEXT("Icon (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingBoxes.M_LoadingBoxes"), TEXT("Boxes (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingBars.M_LoadingBars"), TEXT("Bars (RealTime)") },
 	};
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
@@ -156,6 +158,26 @@ namespace LoadingFXProto
 				Subsystem->RunUmgSpinnerTest(Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs ShowcaseCommand(
+		TEXT("LFXProto.Showcase"),
+		TEXT("Verification prototype: toggle a full-screen showcase of every bundled spinner material on black. Args: [Size=256] [ref] [shot] [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				// The size is the only numeric argument; 'shot' and 'quit' can come in any order.
+				float TileSize = 256.0f;
+				for (const FString& Arg : Args)
+				{
+					if (Arg.IsNumeric())
+					{
+						TileSize = FCString::Atof(*Arg);
+					}
+				}
+				Subsystem->RunShowcase(TileSize, Args.Contains(TEXT("ref")), Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -210,6 +232,7 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 	HideViewportOverlay();
 	HideGallery();
 	HideUmgSpinners();
+	HideShowcase();
 	LoadingScreenOverlay.Reset();
 
 	Super::Deinitialize();
@@ -651,6 +674,84 @@ void ULoadingFXProtoSubsystem::HideGallery()
 		}
 	}
 	GalleryRoot.Reset();
+}
+
+void ULoadingFXProtoSubsystem::RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone)
+{
+	if (ShowcaseRoot.IsValid() && !bTakeScreenshot && !bQuitWhenDone)
+	{
+		HideShowcase();
+		return;
+	}
+
+	HideShowcase();
+	ShowShowcase(TileSize, bShowReference);
+	if (!bTakeScreenshot && !bQuitWhenDone)
+	{
+		return;
+	}
+
+	SequenceSteps.Reset();
+	if (bTakeScreenshot)
+	{
+		// The delay leaves time for the materials' shaders to finish compiling.
+		SequenceSteps.Add({ 4.0f, []()
+		{
+			const FString Filename = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("LFXProto_Showcase.png"));
+			FScreenshotRequest::RequestScreenshot(Filename, /*bInShowUI*/ true, /*bAddUniqueSuffix*/ false);
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Showcase] screenshot requested: %s"), *Filename);
+		} });
+	}
+	if (bQuitWhenDone)
+	{
+		SequenceSteps.Add({ 1.0f, []() { FPlatformMisc::RequestExit(false, TEXT("LFXProto.Showcase")); } });
+	}
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::ShowShowcase(float TileSize, bool bShowReference)
+{
+	if (ShowcaseRoot.IsValid())
+	{
+		return;
+	}
+
+	UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+	if (!ViewportClient)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("No game viewport: cannot show the showcase"));
+		return;
+	}
+
+	// Only the plugin's bundled materials: the prototype's own test variants under /Game look the same as their originals.
+	TArray<SLoadingFXProtoShowcase::FTile> Tiles;
+	for (UMaterialInterface* Material : Materials)
+	{
+		if (Material && Material->GetPathName().StartsWith(TEXT("/LoadingFX/")))
+		{
+			Tiles.Add({ Material, Material->GetName() });
+		}
+	}
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Showcase] %d materials at %.0f px, reference shapes=%d"), Tiles.Num(), TileSize, bShowReference ? 1 : 0);
+
+	ShowcaseRoot = SNew(SLoadingFXProtoShowcase)
+		.Tiles(Tiles)
+		.TileSize(TileSize)
+		.ShowReference(bShowReference)
+		.Visibility(EVisibility::HitTestInvisible);
+	ViewportClient->AddViewportWidgetContent(ShowcaseRoot.ToSharedRef(), LoadingFXProto::ViewportOverlayZOrder + 2);
+}
+
+void ULoadingFXProtoSubsystem::HideShowcase()
+{
+	if (ShowcaseRoot.IsValid())
+	{
+		if (UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient())
+		{
+			ViewportClient->RemoveViewportWidgetContent(ShowcaseRoot.ToSharedRef());
+		}
+	}
+	ShowcaseRoot.Reset();
 }
 
 void ULoadingFXProtoSubsystem::SimulateBlockingWork(float Seconds, bool bCollectGarbage) const

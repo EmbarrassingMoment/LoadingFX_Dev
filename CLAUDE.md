@@ -35,7 +35,7 @@ Command-line build (UE 5.5):
 
 `Plugins/DevMaterialTools/` is a local editor plugin (not distributed, excluded from the release zip, not listed in the `.uproject`). It exposes Named Reroute / comment helpers to Python (`unreal.DevMaterialTools`). Its `Tools/` scripts build the material assets from scratch. Always run them with UE 5.5 (see its README); `build_all.py` rebuilds everything in dependency order. To change a material, edit its builder script and regenerate. Don't hand-edit the generated asset.
 
-The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) were ported from the sandbox project and follow the material contract below.
+The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`, `M_LoadingBars`) follow the material contract below. The first three were ported from the sandbox project; `M_LoadingBars` was ported from the user's Shadertoy with the AA width taken from `fwidth(d)` (DDX/DDY of the distance field) instead of `PixelSize`, which is only valid when `d` is continuous across cells (every bar has the same shape).
 
 ## Confirmed Design Decisions
 
@@ -55,6 +55,7 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 - The time source is the `Time` node with **Ignore Pause enabled** (real time), so spinners keep animating while the game thread is blocked (confirmed, see Verification Prototype). No external time path is needed.
 - Multiply the final output by `VertexColor` (UMG `ColorAndOpacity`, `RenderOpacity` and fades arrive through it): Emissive = `PrimaryColor.rgb * VertexColor.rgb`, Opacity = `coverage * PrimaryColor.a * VertexColor.a`.
 - Use common parameter names across all spinners (e.g. `PrimaryColor`, `SecondaryColor`, `Speed`, `Thickness`). `Speed` is in cycles per second (revolutions per second for rotating spinners); positive turns clockwise.
+- **Default footprint:** with default parameters a ring layout touches the reference circle of radius 0.8 (`P` units: 1.0 = the widget edge on the shorter side) and a grid layout touches the reference square of half-width 0.72 (keyline, 0.9 × 0.8, so circles and squares look the same size), measured at the largest moment of any pulse. The margin keeps pulses and the anti-aliased edge off the widget border. Per material: Spinner `Ring + RMax = 0.8`, Bars `OuterRadius + Thickness / 2 = 0.8`, Icon `Spacing + RBase + RGrow = 0.72`, Boxes `BoxSize + BoxGap / 2 = 0.36` in its half-scale `p`. Check with `LFXProto.Showcase ref`.
 - A spinner must look complete with default parameters and must not break when drawn at a non-square size. Build coordinates with `MF_SpinnerCoords`: `P` is centered and y-up, and the shorter side spans -1..1, so the shape stays round and centered. `PixelSize` is one screen pixel in `P` units, for anti-aliasing. It derives the widget size from UV screen derivatives, so no size parameter is needed.
 
 ### Asset loader (secondary feature)
@@ -75,6 +76,8 @@ The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`) we
 `LFXProto.Gallery shot quit` draws every material square, wide, tall, tinted and small (`SLoadingFXProtoGallery`) and saves two screenshots to `Saved/Screenshots/LFXProto_Gallery_{A,B}.png`, to check the material contract visually.
 
 `LFXProto.IconTravel [Map] [Sec] [quit]` exercises the real `ULoadingFXIconSubsystem`: acquire (one plain request, one owned by a throwaway object that is then marked garbage), OpenLevel with `Sec` seconds of simulated load (expect the icon as loading screen), release. Saves `Saved/Screenshots/LFXProto_Icon_{Viewport,AfterTravel}.png`.
+
+`LFXProto.Showcase [Size] [ref] [shot] [quit]` is the quick visual review: every material under `/LoadingFX/Materials` side by side on a black full-screen background (the loading screen's background), `Size` px each (default 256), drawn through `SLoadingFXSpinner` (`SLoadingFXProtoShowcase`). Without `quit` it stays open so the animation can be watched; `ref` overlays the contract's reference circle (blue) and square (orange) on every tile; `shot` saves `Saved/Screenshots/LFXProto_Showcase.png`. Run `LFXProto.Showcase` again to hide it.
 
 `LFXProto.UmgSpinner [shot] [quit]` shows a row of runtime-created `ULoadingFXSpinner` widgets (project default, `M_LoadingBoxes` tinted at 96 px, dynamic material with `PrimaryColor` / `Speed` changed, opacity 0.3, wide 160x64) and saves `Saved/Screenshots/LFXProto_UmgSpinner.png`.
 
