@@ -49,6 +49,7 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingBoxes.M_LoadingBoxes"), TEXT("Boxes (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingBars.M_LoadingBars"), TEXT("Bars (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingArc.M_LoadingArc"), TEXT("Arc (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingComet.M_LoadingComet"), TEXT("Comet (RealTime)") },
 	};
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
