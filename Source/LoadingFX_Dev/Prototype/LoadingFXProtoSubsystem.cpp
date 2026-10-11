@@ -7,6 +7,7 @@
 #include "SLoadingFXProtoShowcase.h"
 
 #include "LoadingFXIconSubsystem.h"
+#include "LoadingFXSettings.h"
 #include "LoadingFXSpinner.h"
 
 #include "Engine/Engine.h"
@@ -17,10 +18,17 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Kismet/GameplayStatics.h"
+#include "MaterialShared.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/CommandLine.h"
+#include "Misc/CoreDelegates.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "MoviePlayer.h"
+#include "PipelineStateCache.h"
+#include "PSOPrecacheValidation.h"
+#include "RHIFeatureLevel.h"
 #include "UnrealClient.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
@@ -54,6 +62,73 @@ namespace LoadingFXProto
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
 	constexpr int32 ViewportOverlayZOrder = 10000;
+
+	/** LFXProto.Preload compares the icon material with this one, which nothing loads before the test does. */
+	static const TCHAR* const PreloadControlMaterialPath = TEXT("/LoadingFX/Materials/M_LoadingArc.M_LoadingArc");
+
+	void RequestScreenshot(const TCHAR* Context, const TCHAR* Name)
+	{
+		const FString Filename = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots") / Name);
+		FScreenshotRequest::RequestScreenshot(Filename, /*bInShowUI*/ true, /*bAddUniqueSuffix*/ false);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[%s] screenshot requested: %s"), Context, *Filename);
+	}
+
+	/**
+	 * Logs the compile state of every graphics PSO that loading the material asked to precache. PSO precaching is
+	 * compiled out of editor builds (PipelineStateCache::IsPSOPrecachingEnabled), so this needs a packaged build.
+	 */
+	void LogPSOPrecacheState(const TCHAR* Context, const UMaterialInterface* Material)
+	{
+		if (!Material)
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] %s no material"), Context);
+			return;
+		}
+
+#if PSO_PRECACHING_TRACKING
+		if (!PipelineStateCache::IsPSOPrecachingEnabled())
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] %s %s: PSO precaching is off (r.PSOPrecaching=0, or not supported by this RHI)"), Context, *Material->GetName());
+			return;
+		}
+
+		const FMaterialResource* Resource = Material->GetMaterialResource(GMaxRHIFeatureLevel);
+		if (!Resource)
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] %s %s: no material resource for the current feature level"), Context, *Material->GetName());
+			return;
+		}
+
+		const TArray<FMaterialPSOPrecacheRequestID> RequestIDs = Resource->GetMaterialPSOPrecacheRequestIDs();
+		int32 NumPSOs = 0;
+		int32 NumComplete = 0;
+		int32 NumActive = 0;
+		int32 NumMissed = 0;
+		int32 NumOther = 0;
+		for (const FMaterialPSOPrecacheRequestID RequestID : RequestIDs)
+		{
+			for (const FPSOPrecacheData& Data : GetMaterialPSOPrecacheData(RequestID))
+			{
+				if (Data.Type != FPSOPrecacheData::EType::Graphics)
+				{
+					continue;
+				}
+				++NumPSOs;
+				switch (PipelineStateCache::CheckPipelineStateInCache(Data.GraphicsPSOInitializer))
+				{
+				case EPSOPrecacheResult::Complete: ++NumComplete; break;
+				case EPSOPrecacheResult::Active:   ++NumActive;   break;
+				case EPSOPrecacheResult::Missed:   ++NumMissed;   break;
+				default:                           ++NumOther;    break;
+				}
+			}
+		}
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] %s %s: %d PSO precache request(s), %d graphics PSO(s): %d compiled, %d still compiling, %d not requested, %d other (%u precache compiles in flight overall)"),
+			Context, *Material->GetName(), RequestIDs.Num(), NumPSOs, NumComplete, NumActive, NumMissed, NumOther, PipelineStateCache::NumActivePrecacheRequests());
+#else
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] %s %s: PSO precaching is compiled out of editor builds; run the packaged build to see PSO states"), Context, *Material->GetName());
+#endif
+	}
 
 	ULoadingFXProtoSubsystem* FindSubsystem(const UWorld* World)
 	{
@@ -180,6 +255,17 @@ namespace LoadingFXProto
 				Subsystem->RunShowcase(TileSize, Args.Contains(TEXT("ref")), Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs PreloadCommand(
+		TEXT("LFXProto.Preload"),
+		TEXT("Verification prototype: check the icon material preload (in memory before Acquire, no sync load, PSOs precached in packaged builds). Args: [shot] [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunPreloadTest(Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -190,6 +276,42 @@ bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 void ULoadingFXProtoSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+
+	// The icon subsystem starts its material preload in Initialize; initializing it first makes the early
+	// Acquire below land while that load is in flight.
+	ULoadingFXIconSubsystem* IconSubsystem = Collection.InitializeDependency<ULoadingFXIconSubsystem>();
+
+	// Every sync load of the icon material's package is counted for LFXProto.Preload (expect none).
+	IconPackageName = GetDefault<ULoadingFXSettings>()->LoadingIconMaterial.ToSoftObjectPath().GetLongPackageName();
+	SyncLoadPackageHandle = FCoreDelegates::OnSyncLoadPackage.AddUObject(this, &ThisClass::HandleSyncLoadPackage);
+
+	if (IconSubsystem && FParse::Param(FCommandLine::Get(), TEXT("LFXProtoEarlyAcquire")))
+	{
+		const UObject* IconMaterial = GetDefault<ULoadingFXSettings>()->LoadingIconMaterial.Get();
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] early Acquire during game instance init: icon material in memory=%d, game viewport=%d (expect 0, 0: the icon appears once the viewport exists, waiting for the preload if needed)"),
+			IconMaterial ? 1 : 0, GetGameInstance()->GetGameViewportClient() ? 1 : 0);
+		EarlyAcquireHandle = IconSubsystem->Acquire(TEXT("LFXProto.EarlyAcquire"));
+	}
+
+	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
+	if (MoviePlayer)
+	{
+		PrepareLoadingScreenHandle = MoviePlayer->OnPrepareLoadingScreen().AddUObject(this, &ThisClass::HandlePrepareLoadingScreen);
+		MoviePlaybackStartedHandle = MoviePlayer->OnMoviePlaybackStarted().AddUObject(this, &ThisClass::HandleMoviePlaybackStarted);
+	}
+	PostLoadMapHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &ThisClass::HandlePostLoadMap);
+
+	UE_LOG(LogLoadingFXProto, Display, TEXT("Initialized: MoviePlayer enabled=%d initialized=%d"),
+		IsMoviePlayerEnabled() ? 1 : 0, (MoviePlayer && MoviePlayer->IsInitialized()) ? 1 : 0);
+}
+
+void ULoadingFXProtoSubsystem::LoadMaterials()
+{
+	if (bMaterialsLoaded)
+	{
+		return;
+	}
+	bMaterialsLoaded = true;
 
 	for (const LoadingFXProto::FMaterialEntry& Entry : LoadingFXProto::MaterialEntries)
 	{
@@ -203,17 +325,7 @@ void ULoadingFXProtoSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			UE_LOG(LogLoadingFXProto, Warning, TEXT("Material not found: %s"), Entry.Path);
 		}
 	}
-
-	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
-	if (MoviePlayer)
-	{
-		PrepareLoadingScreenHandle = MoviePlayer->OnPrepareLoadingScreen().AddUObject(this, &ThisClass::HandlePrepareLoadingScreen);
-		MoviePlaybackStartedHandle = MoviePlayer->OnMoviePlaybackStarted().AddUObject(this, &ThisClass::HandleMoviePlaybackStarted);
-	}
-	PostLoadMapHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &ThisClass::HandlePostLoadMap);
-
-	UE_LOG(LogLoadingFXProto, Display, TEXT("Initialized: %d materials, MoviePlayer enabled=%d initialized=%d"),
-		Materials.Num(), IsMoviePlayerEnabled() ? 1 : 0, (MoviePlayer && MoviePlayer->IsInitialized()) ? 1 : 0);
+	UE_LOG(LogLoadingFXProto, Display, TEXT("Loaded %d prototype materials"), Materials.Num());
 }
 
 void ULoadingFXProtoSubsystem::Deinitialize()
@@ -230,6 +342,7 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 		MoviePlayer->OnMoviePlaybackStarted().Remove(MoviePlaybackStartedHandle);
 	}
 	FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapHandle);
+	FCoreDelegates::OnSyncLoadPackage.Remove(SyncLoadPackageHandle);
 
 	HideViewportOverlay();
 	HideGallery();
@@ -584,8 +697,10 @@ void ULoadingFXProtoSubsystem::StartSequence()
 	}
 }
 
-TSharedRef<SLoadingFXProtoOverlay> ULoadingFXProtoSubsystem::MakeOverlay(const FString& Label) const
+TSharedRef<SLoadingFXProtoOverlay> ULoadingFXProtoSubsystem::MakeOverlay(const FString& Label)
 {
+	LoadMaterials();
+
 	TArray<SLoadingFXProtoOverlay::FTile> Tiles;
 	for (int32 Index = 0; Index < Materials.Num(); ++Index)
 	{
@@ -649,6 +764,7 @@ void ULoadingFXProtoSubsystem::ShowGallery()
 		return;
 	}
 
+	LoadMaterials();
 	TArray<SLoadingFXProtoGallery::FRow> Rows;
 	for (int32 Index = 0; Index < Materials.Num(); ++Index)
 	{
@@ -726,6 +842,7 @@ void ULoadingFXProtoSubsystem::ShowShowcase(float TileSize, bool bShowReference)
 	}
 
 	// Only the plugin's bundled materials: the prototype's own test variants under /Game look the same as their originals.
+	LoadMaterials();
 	TArray<SLoadingFXProtoShowcase::FTile> Tiles;
 	for (UMaterialInterface* Material : Materials)
 	{
@@ -754,6 +871,75 @@ void ULoadingFXProtoSubsystem::HideShowcase()
 		}
 	}
 	ShowcaseRoot.Reset();
+}
+
+void ULoadingFXProtoSubsystem::RunPreloadTest(bool bTakeScreenshot, bool bQuitWhenDone)
+{
+	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	if (!IconSubsystem)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[Preload] ULoadingFXIconSubsystem not found"));
+		return;
+	}
+
+	SequenceSteps.Reset();
+	SequenceSteps.Add({ 0.0f, [this, IconSubsystem]()
+	{
+		const TSoftObjectPtr<UMaterialInterface>& IconMaterialPtr = GetDefault<ULoadingFXSettings>()->LoadingIconMaterial;
+		UMaterialInterface* IconMaterial = IconMaterialPtr.Get();
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] 1/4 before Acquire: icon material %s in memory=%d (expect 1), sync loads of its package so far=%d (expect 0), early request active=%d"),
+			*IconMaterialPtr.ToString(), IconMaterial ? 1 : 0, IconPackageSyncLoads, IconSubsystem->IsHandleActive(EarlyAcquireHandle) ? 1 : 0);
+		LoadingFXProto::LogPSOPrecacheState(TEXT("1/4 icon material, before Acquire:"), IconMaterial);
+
+		const int32 SyncLoadsBefore = IconPackageSyncLoads;
+		const double AcquireStartSeconds = FPlatformTime::Seconds();
+		PreloadTestHandle = IconSubsystem->Acquire(TEXT("LFXProto.Preload"));
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] 2/4 Acquire took %.2f ms, sync loads of the icon material package during it=%d (expect 0), visible=%d (expect 1)"),
+			(FPlatformTime::Seconds() - AcquireStartSeconds) * 1000.0, IconPackageSyncLoads - SyncLoadsBefore, IconSubsystem->IsIconVisible() ? 1 : 0);
+
+		// The control: a material loaded only now, as the icon material was before the preload. Its PSO compiles
+		// start at this load, so right after it they are expected to be still in flight (or not collected yet).
+		const double ControlLoadStartSeconds = FPlatformTime::Seconds();
+		PreloadControlMaterial = LoadObject<UMaterialInterface>(nullptr, LoadingFXProto::PreloadControlMaterialPath);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] 2/4 control %s loaded on demand in %.2f ms"),
+			LoadingFXProto::PreloadControlMaterialPath, (FPlatformTime::Seconds() - ControlLoadStartSeconds) * 1000.0);
+		LoadingFXProto::LogPSOPrecacheState(TEXT("2/4 control, right after its load:"), PreloadControlMaterial);
+	} });
+	SequenceSteps.Add({ 3.0f, [this, bTakeScreenshot]()
+	{
+		LoadingFXProto::LogPSOPrecacheState(TEXT("3/4 icon material, 3 s later:"), GetDefault<ULoadingFXSettings>()->LoadingIconMaterial.Get());
+		LoadingFXProto::LogPSOPrecacheState(TEXT("3/4 control, 3 s later:"), PreloadControlMaterial);
+		if (bTakeScreenshot)
+		{
+			LoadingFXProto::RequestScreenshot(TEXT("Preload"), TEXT("LFXProto_Preload.png"));
+		}
+	} });
+	SequenceSteps.Add({ 1.0f, [this, IconSubsystem]()
+	{
+		const bool bReleased = IconSubsystem->Release(PreloadTestHandle);
+		const bool bReleasedEarly = IconSubsystem->Release(EarlyAcquireHandle);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] 4/4 release=%d, early release=%d (1 with -LFXProtoEarlyAcquire), visible=%d (expect 0), icon package sync loads in total=%d (expect 0)"),
+			bReleased ? 1 : 0, bReleasedEarly ? 1 : 0, IconSubsystem->IsIconVisible() ? 1 : 0, IconPackageSyncLoads);
+	} });
+	SequenceSteps.Add({ 0.5f, [bQuitWhenDone]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] finished"));
+		if (bQuitWhenDone)
+		{
+			FPlatformMisc::RequestExit(false, TEXT("LFXProto.Preload"));
+		}
+	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::HandleSyncLoadPackage(const FString& PackageName)
+{
+	if (PackageName == IconPackageName)
+	{
+		++IconPackageSyncLoads;
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] sync load of the icon material package %s (#%d)"), *PackageName, IconPackageSyncLoads);
+	}
 }
 
 void ULoadingFXProtoSubsystem::SimulateBlockingWork(float Seconds, bool bCollectGarbage) const

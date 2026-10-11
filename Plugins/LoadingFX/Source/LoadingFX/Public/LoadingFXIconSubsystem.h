@@ -12,6 +12,7 @@
 class SWidget;
 class UGameViewportClient;
 class UMaterialInterface;
+struct FSoftObjectPath;
 
 /**
  * Identifies one show request made with ULoadingFXIconSubsystem::Acquire. Pass it to Release when done.
@@ -47,6 +48,10 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FLoadingFXIconVisibilityChangedNative, bool 
  * Show and hide are reference counted: every Acquire returns a handle, and the icon stays until each handle
  * has been released, so independent systems can share it. A request may name an owner object and is then
  * released automatically once that object is destroyed.
+ *
+ * The icon material is loaded in the background as soon as the subsystem initializes, which also starts precaching
+ * its PSOs, so showing the icon later loads and compiles nothing. An Acquire that comes before that load has
+ * finished waits for it, so the icon still appears at once.
  *
  * The icon is viewport content (not a UMG widget added to the viewport), so it survives map travel. While it
  * is visible, a blocking map load (OpenLevel, LoadMap) is rendered through MoviePlayer with the icon as the
@@ -126,6 +131,12 @@ private:
 	bool ReleaseInternal(int32 Id, const TCHAR* Context);
 	void NotifyVisibilityChanged(bool bVisible);
 
+	/** Starts loading the icon material asynchronously (Initialize). */
+	void PreloadIconMaterial();
+	void HandleIconMaterialPreloaded(const FSoftObjectPath& MaterialPath, UObject* LoadedObject);
+	/** Takes the result of the load (null if it failed) as the icon material, and warns about unusable ones. */
+	void SetIconMaterial(UMaterialInterface* Material, const FSoftObjectPath& MaterialPath);
+	/** The icon material, or null if there is none. Waits for the preload if it is still in flight. */
 	UMaterialInterface* GetIconMaterial();
 	TSharedRef<SWidget> MakeIconWidget();
 
@@ -140,7 +151,11 @@ private:
 	/** Keeps the material alive across garbage collection, including the one inside LoadMap. */
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> IconMaterial;
-	bool bIconMaterialLoadAttempted = false;
+
+	/** True while the preload is in flight. Its request id is INDEX_NONE if the loader did not return one. */
+	bool bIconMaterialPreloadPending = false;
+	int32 IconMaterialPreloadRequestId = INDEX_NONE;
+	double IconMaterialPreloadStartSeconds = 0.0;
 
 	TArray<FRequest> Requests;
 	int32 NextRequestId = 1;

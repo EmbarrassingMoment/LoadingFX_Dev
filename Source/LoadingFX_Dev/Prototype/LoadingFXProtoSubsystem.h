@@ -29,7 +29,13 @@ class UMaterialInterface;
  *   LFXProto.Showcase [Size] [ref] [shot] [quit]  Toggle a full-screen showcase of every bundled spinner material on black, Size px
  *                                 each (default 256). 'ref' overlays the material contract's reference circle and square,
  *                                 'shot' saves Saved/Screenshots/LFXProto_Showcase.png, 'quit' exits afterwards.
+ *   LFXProto.Preload [shot] [quit]  Check the icon material preload: in memory before the first Acquire, no sync load
+ *                                 during Acquire, and its PSOs precached by then, against a material loaded on demand
+ *                                 (PSO states only in packaged builds). 'shot' saves Saved/Screenshots/LFXProto_Preload.png.
+ *                                 Start with -LFXProtoEarlyAcquire to also acquire during game instance init, before
+ *                                 the preload can have finished.
  *
+ * The prototype loads its own material list on first use, so that it does not hide the icon material preload.
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
  */
 UCLASS()
@@ -50,6 +56,7 @@ public:
 	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bQuitWhenDone);
 	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone);
+	void RunPreloadTest(bool bTakeScreenshot, bool bQuitWhenDone);
 
 private:
 	struct FSequenceStep
@@ -58,7 +65,9 @@ private:
 		TFunction<void()> Action;
 	};
 
-	TSharedRef<SLoadingFXProtoOverlay> MakeOverlay(const FString& Label) const;
+	/** Loads the prototype's material list on first use. */
+	void LoadMaterials();
+	TSharedRef<SLoadingFXProtoOverlay> MakeOverlay(const FString& Label);
 	void ShowViewportOverlay();
 	void HideViewportOverlay();
 	void ShowGallery();
@@ -74,12 +83,23 @@ private:
 	void HandlePrepareLoadingScreen();
 	void HandleMoviePlaybackStarted();
 	void HandlePostLoadMap(UWorld* LoadedWorld);
+	void HandleSyncLoadPackage(const FString& PackageName);
 	bool TickSequence(float DeltaTime);
 
 	/** Keeps the spinner materials alive across the GC that runs during LoadMap. */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInterface>> Materials;
 	TArray<FString> MaterialCaptions;
+	bool bMaterialsLoaded = false;
+
+	/** LFXProto.Preload: the icon material's package, sync loads of it seen so far, and the requests made by the test. */
+	FString IconPackageName;
+	int32 IconPackageSyncLoads = 0;
+	FLoadingFXIconHandle EarlyAcquireHandle;
+	FLoadingFXIconHandle PreloadTestHandle;
+	/** A material nobody preloaded, loaded on demand by LFXProto.Preload to compare its PSO state with the icon's. */
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> PreloadControlMaterial;
 
 	TSharedPtr<SWidget> ViewportOverlayRoot;
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;
@@ -109,4 +129,5 @@ private:
 	FDelegateHandle PrepareLoadingScreenHandle;
 	FDelegateHandle MoviePlaybackStartedHandle;
 	FDelegateHandle PostLoadMapHandle;
+	FDelegateHandle SyncLoadPackageHandle;
 };

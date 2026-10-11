@@ -16,6 +16,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Misc/CoreMisc.h"
 #include "MoviePlayer.h"
+#include "UObject/SoftObjectPath.h"
+#include "UObject/UObjectGlobals.h"
 #include "Widgets/Layout/SBox.h"
 
 #if !UE_BUILD_SHIPPING
@@ -71,6 +73,8 @@ void ULoadingFXIconSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
+	PreloadIconMaterial();
+
 	// In a standalone game the viewport is created after the game instance (UGameEngine::Init), so a request
 	// made during startup has to wait for it.
 	ViewportCreatedHandle = UGameViewportClient::OnViewportCreated().AddUObject(this, &ThisClass::HandleViewportCreated);
@@ -112,6 +116,10 @@ void ULoadingFXIconSubsystem::Deinitialize()
 	}
 	ConsoleHandles.Reset();
 	HideViewportIcon();
+
+	// A load request cannot be cancelled: its completion is ignored from now on.
+	bIconMaterialPreloadPending = false;
+	IconMaterialPreloadRequestId = INDEX_NONE;
 
 	Super::Deinitialize();
 }
@@ -266,32 +274,93 @@ void ULoadingFXIconSubsystem::NotifyVisibilityChanged(bool bVisible)
 	OnVisibilityChanged.Broadcast(bVisible);
 }
 
-UMaterialInterface* ULoadingFXIconSubsystem::GetIconMaterial()
+void ULoadingFXIconSubsystem::PreloadIconMaterial()
 {
-	if (IconMaterial || bIconMaterialLoadAttempted)
-	{
-		return IconMaterial;
-	}
-	bIconMaterialLoadAttempted = true;
-
 	const TSoftObjectPtr<UMaterialInterface>& MaterialPtr = GetDefault<ULoadingFXSettings>()->LoadingIconMaterial;
 	if (MaterialPtr.IsNull())
 	{
 		UE_LOG(LogLoadingFX, Warning, TEXT("LoadingIconMaterial is not set (Project Settings > Plugins > LoadingFX): the loading icon has nothing to draw."));
-		return nullptr;
+		return;
 	}
 
-	IconMaterial = MaterialPtr.LoadSynchronous();
+	// Already in memory (in the editor, or loaded by something else): nothing to wait for.
+	if (UMaterialInterface* LoadedMaterial = MaterialPtr.Get())
+	{
+		SetIconMaterial(LoadedMaterial, MaterialPtr.ToSoftObjectPath());
+		return;
+	}
+
+	// Loading a UI-domain material also starts precaching its PSOs (UMaterial::PostLoad, collected by Slate), so
+	// the load and the PSO compiles both happen now rather than when the icon has to appear. The flag is set
+	// first because the delegate may run before LoadAsync returns, for a path that cannot be loaded at all.
+	bIconMaterialPreloadPending = true;
+	IconMaterialPreloadStartSeconds = FPlatformTime::Seconds();
+	const int32 RequestId = MaterialPtr.ToSoftObjectPath().LoadAsync(
+		FLoadSoftObjectPathAsyncDelegate::CreateUObject(this, &ThisClass::HandleIconMaterialPreloaded));
+	if (bIconMaterialPreloadPending)
+	{
+		IconMaterialPreloadRequestId = RequestId;
+		UE_LOG(LogLoadingFX, Verbose, TEXT("Preloading the loading icon material %s (request %d)."), *MaterialPtr.ToString(), RequestId);
+	}
+}
+
+void ULoadingFXIconSubsystem::HandleIconMaterialPreloaded(const FSoftObjectPath& MaterialPath, UObject* LoadedObject)
+{
+	if (!bIconMaterialPreloadPending)
+	{
+		// The subsystem was deinitialized meanwhile.
+		return;
+	}
+	bIconMaterialPreloadPending = false;
+	IconMaterialPreloadRequestId = INDEX_NONE;
+
+	UMaterialInterface* LoadedMaterial = Cast<UMaterialInterface>(LoadedObject);
+	if (LoadedMaterial)
+	{
+		UE_LOG(LogLoadingFX, Log, TEXT("Preloaded the loading icon material %s (ready %.1f ms after the request)."),
+			*MaterialPath.ToString(), (FPlatformTime::Seconds() - IconMaterialPreloadStartSeconds) * 1000.0);
+	}
+	SetIconMaterial(LoadedMaterial, MaterialPath);
+}
+
+void ULoadingFXIconSubsystem::SetIconMaterial(UMaterialInterface* Material, const FSoftObjectPath& MaterialPath)
+{
+	IconMaterial = Material;
 	if (!IconMaterial)
 	{
-		UE_LOG(LogLoadingFX, Warning, TEXT("LoadingIconMaterial %s could not be loaded (missing, or not cooked): the loading icon has nothing to draw."), *MaterialPtr.ToString());
-		return nullptr;
+		UE_LOG(LogLoadingFX, Warning, TEXT("LoadingIconMaterial %s could not be loaded as a material (missing, not cooked, or another asset type): the loading icon has nothing to draw."), *MaterialPath.ToString());
+		return;
 	}
 
 	const UMaterial* BaseMaterial = IconMaterial->GetMaterial();
 	if (BaseMaterial && BaseMaterial->MaterialDomain != MD_UI)
 	{
-		UE_LOG(LogLoadingFX, Warning, TEXT("LoadingIconMaterial %s is not a User Interface domain material: Slate cannot draw it."), *MaterialPtr.ToString());
+		UE_LOG(LogLoadingFX, Warning, TEXT("LoadingIconMaterial %s is not a User Interface domain material: Slate cannot draw it."), *MaterialPath.ToString());
+	}
+}
+
+UMaterialInterface* ULoadingFXIconSubsystem::GetIconMaterial()
+{
+	if (bIconMaterialPreloadPending)
+	{
+		// Needed before the preload finished (an Acquire right at startup, or a blocking load that starts that
+		// early). Wait for that one request rather than show the icon late: the wait is at most what is left of
+		// loading one small package, and the flush runs the completion delegate.
+		const double WaitStartSeconds = FPlatformTime::Seconds();
+		if (IconMaterialPreloadRequestId != INDEX_NONE)
+		{
+			FlushAsyncLoading(IconMaterialPreloadRequestId);
+		}
+		if (bIconMaterialPreloadPending)
+		{
+			// No request id to wait for, or the loader did not report back: load it here instead.
+			bIconMaterialPreloadPending = false;
+			IconMaterialPreloadRequestId = INDEX_NONE;
+			const TSoftObjectPtr<UMaterialInterface>& MaterialPtr = GetDefault<ULoadingFXSettings>()->LoadingIconMaterial;
+			SetIconMaterial(MaterialPtr.LoadSynchronous(), MaterialPtr.ToSoftObjectPath());
+		}
+		UE_LOG(LogLoadingFX, Log, TEXT("The loading icon material was needed before its preload finished: waited %.1f ms for it."),
+			(FPlatformTime::Seconds() - WaitStartSeconds) * 1000.0);
 	}
 	return IconMaterial;
 }
