@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language
+
+Reply to the user in Japanese. Code, comments, commit messages and the docs in this repository stay in English (`README.ja.md` is the Japanese README).
+
 ## Project
 
 LoadingFX is an Unreal Engine 5 plugin: a library of material-based loading spinners, a loading icon display that keeps animating during blocking loads, and a lightweight asset loader. This repository is the development and sample project (`LoadingFX_Dev`). It is published on GitHub (MIT), and the plugin is distributed **for free** on Fab.
