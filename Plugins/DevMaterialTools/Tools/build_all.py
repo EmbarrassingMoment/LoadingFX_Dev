@@ -25,6 +25,8 @@ SCRIPTS = [
     "build_m_loadingcomet.py",
     "build_m_loadingdots.py",
     "build_m_loadingdualarc.py",
+    "build_m_loadingsegments.py",
+    "build_m_loadingtimer.py",
 ]
 
 for name in SCRIPTS:

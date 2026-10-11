@@ -25,6 +25,8 @@ Local-only editor plugin for developing LoadingFX. It is **not** part of the Loa
 | `build_m_loadingcomet.py` | `/LoadingFX/Materials/M_LoadingComet` (round head with a tail that thins and fades over one turn) |
 | `build_m_loadingdots.py` | `/LoadingFX/Materials/M_LoadingDots` (a row of dots that swell and brighten in turn) |
 | `build_m_loadingdualarc.py` | `/LoadingFX/Materials/M_LoadingDualArc` (two counter-rotating pairs of arcs, one color) |
+| `build_m_loadingsegments.py` | `/LoadingFX/Materials/M_LoadingSegments` (a segmented ring that fills and drains one segment at a time) |
+| `build_m_loadingtimer.py` | `/LoadingFX/Materials/M_LoadingTimer` (a pie that fills and empties inside a thin ring) |
 | `build_all.py` | Runs all of the above in dependency order |
 
 Run them with **UE 5.5** so the saved assets stay loadable in 5.5:
