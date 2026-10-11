@@ -35,6 +35,7 @@
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -58,6 +59,7 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingBars.M_LoadingBars"), TEXT("Bars (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingArc.M_LoadingArc"), TEXT("Arc (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingComet.M_LoadingComet"), TEXT("Comet (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDots.M_LoadingDots"), TEXT("Dots (RealTime)") },
 	};
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
@@ -804,13 +806,20 @@ void ULoadingFXProtoSubsystem::ShowGallery()
 		Rows.Add({ Materials[Index], MaterialCaptions[Index] });
 	}
 
+	// Each row is about 144 px tall, so from eight materials on the gallery outgrows a 1080 px viewport. Scale it down
+	// to fit rather than cut rows off. The materials stay sharp: PixelSize comes from the screen derivatives.
 	GalleryRoot = SNew(SBox)
-		.HAlign(HAlign_Left)
-		.VAlign(VAlign_Top)
 		.Padding(24.0f)
 		.Visibility(EVisibility::HitTestInvisible)
 		[
-			SNew(SLoadingFXProtoGallery).Rows(Rows)
+			SNew(SScaleBox)
+			.Stretch(EStretch::ScaleToFit)
+			.StretchDirection(EStretchDirection::DownOnly)
+			.HAlign(HAlign_Left)
+			.VAlign(VAlign_Top)
+			[
+				SNew(SLoadingFXProtoGallery).Rows(Rows)
+			]
 		];
 	ViewportClient->AddViewportWidgetContent(GalleryRoot.ToSharedRef(), LoadingFXProto::ViewportOverlayZOrder + 1);
 }
