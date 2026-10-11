@@ -115,6 +115,7 @@ void ULoadingFXIconSubsystem::Deinitialize()
 		Requests.Reset();
 	}
 	ConsoleHandles.Reset();
+	CancelPendingShow();
 	CancelPendingHide();
 	bIconVisible = false;
 	HideViewportIcon();
@@ -168,10 +169,20 @@ FLoadingFXIconHandle ULoadingFXIconSubsystem::Acquire(FName Reason, UObject* Own
 		}
 		else
 		{
-			bIconVisible = true;
-			IconShownAtSeconds = Request.AcquiredAtSeconds;
-			ShowViewportIcon();
-			NotifyVisibilityChanged(true);
+			// Read at every first request, so a value changed in the editor applies to the next one.
+			const double ShowDelay = FMath::Max(GetDefault<ULoadingFXSettings>()->IconShowDelay, 0.0f);
+			if (ShowDelay > 0.0)
+			{
+				PendingShowAtSeconds = Request.AcquiredAtSeconds + ShowDelay;
+				if (!PendingShowTickerHandle.IsValid())
+				{
+					PendingShowTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &ThisClass::TickPendingShow));
+				}
+			}
+			else
+			{
+				ShowIcon(Request.AcquiredAtSeconds);
+			}
 		}
 	}
 	return Handle;
@@ -202,7 +213,7 @@ void ULoadingFXIconSubsystem::ReleaseAll()
 
 	UE_LOG(LogLoadingFX, Verbose, TEXT("ReleaseAll: dropping %d loading icon request(s)."), Requests.Num());
 	Requests.Reset();
-	HideAfterMinimumDisplayTime();
+	HandleLastRelease();
 }
 
 bool ULoadingFXIconSubsystem::IsHandleActive(const FLoadingFXIconHandle& Handle) const
@@ -214,12 +225,15 @@ void ULoadingFXIconSubsystem::DumpRequests() const
 {
 	const double Now = FPlatformTime::Seconds();
 	FString State = IsIconVisible() ? TEXT("visible") : TEXT("hidden");
+	if (PendingShowTickerHandle.IsValid())
+	{
+		State += FString::Printf(TEXT(" (show delay, appears in %.2fs)"), FMath::Max(PendingShowAtSeconds - Now, 0.0));
+	}
 	if (PendingHideTickerHandle.IsValid())
 	{
 		State += FString::Printf(TEXT(" (minimum display time, hides in %.2fs)"), FMath::Max(PendingHideAtSeconds - Now, 0.0));
 	}
 	UE_LOG(LogLoadingFX, Display, TEXT("Loading icon: %s, %d active request(s)"), *State, Requests.Num());
-
 
 	for (const FRequest& Request : Requests)
 	{
@@ -279,7 +293,7 @@ bool ULoadingFXIconSubsystem::ReleaseInternal(int32 Id, const TCHAR* Context)
 
 	if (Requests.Num() == 0)
 	{
-		HideAfterMinimumDisplayTime();
+		HandleLastRelease();
 	}
 	return true;
 }
@@ -288,6 +302,63 @@ void ULoadingFXIconSubsystem::NotifyVisibilityChanged(bool bVisible)
 {
 	OnVisibilityChangedNative.Broadcast(bVisible);
 	OnVisibilityChanged.Broadcast(bVisible);
+}
+
+void ULoadingFXIconSubsystem::HandleLastRelease()
+{
+	if (PendingShowTickerHandle.IsValid())
+	{
+		if (FPlatformTime::Seconds() < PendingShowAtSeconds)
+		{
+			// Released within the show delay: the icon never appears.
+			CancelPendingShow();
+			return;
+		}
+
+		// The delay is over but the ticker has not run since, because the game thread was blocked (for example a
+		// release from BeginPlay inside LoadMap). The icon has been on the loading screen since then, so it counts
+		// as shown from that moment and gets the rest of its minimum display time.
+		ShowIcon(PendingShowAtSeconds);
+		if (Requests.Num() > 0)
+		{
+			// Acquired again from OnVisibilityChanged.
+			return;
+		}
+	}
+	HideAfterMinimumDisplayTime();
+}
+
+void ULoadingFXIconSubsystem::ShowIcon(double ShownAtSeconds)
+{
+	CancelPendingShow();
+	bIconVisible = true;
+	IconShownAtSeconds = ShownAtSeconds;
+	ShowViewportIcon();
+	NotifyVisibilityChanged(true);
+}
+
+void ULoadingFXIconSubsystem::CancelPendingShow()
+{
+	if (PendingShowTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(PendingShowTickerHandle);
+		PendingShowTickerHandle.Reset();
+	}
+}
+
+bool ULoadingFXIconSubsystem::TickPendingShow(float /*DeltaTime*/)
+{
+	if (FPlatformTime::Seconds() < PendingShowAtSeconds)
+	{
+		return true;
+	}
+
+	// Reset before showing, so ShowIcon does not remove the ticker that is running now. The display time counts
+	// from the end of the delay rather than from now: after a blocking load the icon has been on the loading screen
+	// since then.
+	PendingShowTickerHandle.Reset();
+	ShowIcon(PendingShowAtSeconds);
+	return false;
 }
 
 void ULoadingFXIconSubsystem::HideAfterMinimumDisplayTime()
@@ -434,14 +505,36 @@ UMaterialInterface* ULoadingFXIconSubsystem::GetIconMaterial()
 	return IconMaterial;
 }
 
-TSharedRef<SWidget> ULoadingFXIconSubsystem::MakeIconWidget()
+TSharedRef<SWidget> ULoadingFXIconSubsystem::MakeIconWidget(double ShowAtSeconds)
 {
 	const ULoadingFXSettings* Settings = GetDefault<ULoadingFXSettings>();
+
+	TAttribute<EVisibility> Visibility = EVisibility::HitTestInvisible;
+	if (ShowAtSeconds > FPlatformTime::Seconds())
+	{
+		// Evaluated in MoviePlayer's Slate prepass on its loading thread while the game thread is blocked, so the
+		// lambda reads only what it copied.
+		const TSharedRef<bool> bAppeared = MakeShared<bool>(false);
+		Visibility = TAttribute<EVisibility>::CreateLambda([ShowAtSeconds, bAppeared]()
+		{
+			if (FPlatformTime::Seconds() < ShowAtSeconds)
+			{
+				return EVisibility::Hidden;
+			}
+			if (!*bAppeared)
+			{
+				*bAppeared = true;
+				UE_LOG(LogLoadingFX, Log, TEXT("The show delay ended during a blocking load: the loading icon appears on the loading screen."));
+			}
+			return EVisibility::HitTestInvisible;
+		});
+	}
+
 	return SNew(SBox)
 		.HAlign(Settings->IconHorizontalAlignment)
 		.VAlign(Settings->IconVerticalAlignment)
 		.Padding(Settings->IconPadding)
-		.Visibility(EVisibility::HitTestInvisible)
+		.Visibility(Visibility)
 		[
 			SNew(SLoadingFXSpinner)
 			.Material(GetIconMaterial())
@@ -498,10 +591,12 @@ void ULoadingFXIconSubsystem::HandleViewportCreated()
 
 void ULoadingFXIconSubsystem::HandlePrepareLoadingScreen()
 {
-	// v1 scope: take over the loading screen only while the icon is visible. Showing it, and deciding when the
-	// travel is over, stays with the caller. That includes the minimum display time after the last release: the
-	// icon is on screen then, and would freeze there for the whole load otherwise.
-	if (!IsIconVisible() || !GetIconMaterial())
+	// v1 scope: take over the loading screen only while the icon is visible or requested. Showing it, and deciding
+	// when the travel is over, stays with the caller. That includes the minimum display time after the last release
+	// (the icon is on screen then, and would freeze there for the whole load otherwise), and the show delay after the
+	// first request (the icon then appears on the loading screen when the delay is over, as it would in the game).
+	const bool bShowPending = PendingShowTickerHandle.IsValid();
+	if ((!IsIconVisible() && !bShowPending) || !GetIconMaterial())
 	{
 		return;
 	}
@@ -516,14 +611,22 @@ void ULoadingFXIconSubsystem::HandlePrepareLoadingScreen()
 	// MoviePlayer needs its own widget instance: the viewport one keeps its parent. The attributes are cleared
 	// by MoviePlayer after every playback, so this runs again for the next load.
 	FLoadingScreenAttributes Attributes;
-	Attributes.WidgetLoadingScreen = MakeIconWidget();
+	Attributes.WidgetLoadingScreen = MakeIconWidget(bShowPending ? PendingShowAtSeconds : 0.0);
 	Attributes.bAutoCompleteWhenLoadingCompletes = true;
 	Attributes.bMoviesAreSkippable = false;
 	Attributes.bWaitForManualStop = false;
 	Attributes.MinimumLoadingScreenDisplayTime = -1.0f;
 	MoviePlayer->SetupLoadingScreen(Attributes);
 
-	UE_LOG(LogLoadingFX, Log, TEXT("Loading icon is visible (%d request(s)): rendering the blocking load through MoviePlayer."), Requests.Num());
+	if (bShowPending)
+	{
+		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon is requested (%d request(s)) and appears in %.2fs (show delay): rendering the blocking load through MoviePlayer."),
+			Requests.Num(), FMath::Max(PendingShowAtSeconds - FPlatformTime::Seconds(), 0.0));
+	}
+	else
+	{
+		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon is visible (%d request(s)): rendering the blocking load through MoviePlayer."), Requests.Num());
+	}
 }
 
 bool ULoadingFXIconSubsystem::TickOwnerWatch(float /*DeltaTime*/)

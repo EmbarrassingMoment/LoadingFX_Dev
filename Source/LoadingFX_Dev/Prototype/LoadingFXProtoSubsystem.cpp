@@ -130,6 +130,17 @@ namespace LoadingFXProto
 #endif
 	}
 
+	/** Acquires with IconShowDelay at 0 for this one request, so the icon shows at once (as the preload checks expect). */
+	FLoadingFXIconHandle AcquireWithoutShowDelay(ULoadingFXIconSubsystem& IconSubsystem, FName Reason)
+	{
+		ULoadingFXSettings* Settings = GetMutableDefault<ULoadingFXSettings>();
+		const float SavedShowDelay = Settings->IconShowDelay;
+		Settings->IconShowDelay = 0.0f;
+		const FLoadingFXIconHandle Handle = IconSubsystem.Acquire(Reason);
+		Settings->IconShowDelay = SavedShowDelay;
+		return Handle;
+	}
+
 	ULoadingFXProtoSubsystem* FindSubsystem(const UWorld* World)
 	{
 		const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
@@ -277,6 +288,17 @@ namespace LoadingFXProto
 				Subsystem->RunMinDisplayTest(Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs ShowDelayCommand(
+		TEXT("LFXProto.ShowDelay"),
+		TEXT("Verification prototype: check the loading icon's show delay (short and long requests, two requests, setting at 0, blocking loads within the delay). Args: [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunShowDelayTest(Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -301,7 +323,7 @@ void ULoadingFXProtoSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		const UObject* IconMaterial = GetDefault<ULoadingFXSettings>()->LoadingIconMaterial.Get();
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] early Acquire during game instance init: icon material in memory=%d, game viewport=%d (expect 0, 0: the icon appears once the viewport exists, waiting for the preload if needed)"),
 			IconMaterial ? 1 : 0, GetGameInstance()->GetGameViewportClient() ? 1 : 0);
-		EarlyAcquireHandle = IconSubsystem->Acquire(TEXT("LFXProto.EarlyAcquire"));
+		EarlyAcquireHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.EarlyAcquire"));
 	}
 
 	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
@@ -515,8 +537,8 @@ void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float E
 		AActor* Owner = GetWorld()->SpawnActor<AActor>();
 		IconTravelOwner = Owner;
 		const FLoadingFXIconHandle OwnedHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel (owned)"), Owner);
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] visible=%d requests=%d (expect 1, 2); handles active: %d %d (expect 1, 1)"),
-			IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(),
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] visible=%d requests=%d (expect %d, 2: the icon appears after IconShowDelay); handles active: %d %d (expect 1, 1)"),
+			IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(), GetDefault<ULoadingFXSettings>()->IconShowDelay > 0.0f ? 0 : 1,
 			IconSubsystem->IsHandleActive(IconTravelHandle) ? 1 : 0, IconSubsystem->IsHandleActive(OwnedHandle) ? 1 : 0);
 	} });
 	SequenceSteps.Add({ 3.0f, [this, RequestShot]()
@@ -904,7 +926,7 @@ void ULoadingFXProtoSubsystem::RunPreloadTest(bool bTakeScreenshot, bool bQuitWh
 
 		const int32 SyncLoadsBefore = IconPackageSyncLoads;
 		const double AcquireStartSeconds = FPlatformTime::Seconds();
-		PreloadTestHandle = IconSubsystem->Acquire(TEXT("LFXProto.Preload"));
+		PreloadTestHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.Preload"));
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[Preload] 2/4 Acquire took %.2f ms, sync loads of the icon material package during it=%d (expect 0), visible=%d (expect 1)"),
 			(FPlatformTime::Seconds() - AcquireStartSeconds) * 1000.0, IconPackageSyncLoads - SyncLoadsBefore, IconSubsystem->IsIconVisible() ? 1 : 0);
 
@@ -944,124 +966,286 @@ void ULoadingFXProtoSubsystem::RunPreloadTest(bool bTakeScreenshot, bool bQuitWh
 	StartSequence();
 }
 
-void ULoadingFXProtoSubsystem::RunMinDisplayTest(bool bQuitWhenDone)
+ULoadingFXIconSubsystem* ULoadingFXProtoSubsystem::BeginIconTest(const TCHAR* Tag)
 {
 	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
 	if (!IconSubsystem)
 	{
-		UE_LOG(LogLoadingFXProto, Warning, TEXT("[MinDisplay] ULoadingFXIconSubsystem not found"));
-		return;
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s ULoadingFXIconSubsystem not found"), Tag);
+		return nullptr;
 	}
-	if (IconSubsystem->IsIconVisible())
+	if (IconSubsystem->IsIconVisible() || IconSubsystem->GetRequestCount() > 0)
 	{
-		UE_LOG(LogLoadingFXProto, Warning, TEXT("[MinDisplay] the loading icon is already visible: release its requests first (LoadingFX.Icon.Hide all)"));
-		return;
-	}
-
-	// The cases run against the project's setting (case 5 sets it to 0 for a moment). The expected values below
-	// assume it is long enough to still be holding the icon 0.6 s after it appeared.
-	const float MinTime = GetDefault<ULoadingFXSettings>()->IconMinimumDisplayTime;
-	UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay] IconMinimumDisplayTime=%.2fs"), MinTime);
-	if (MinTime < 0.8f)
-	{
-		UE_LOG(LogLoadingFXProto, Warning, TEXT("[MinDisplay] the expected values assume IconMinimumDisplayTime >= 0.8 s"));
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s the loading icon is in use: release its requests first (LoadingFX.Icon.Hide all)"), Tag);
+		return nullptr;
 	}
 	if (!IconVisibilityChangedHandle.IsValid())
 	{
 		IconVisibilityChangedHandle = IconSubsystem->OnVisibilityChangedNative.AddUObject(this, &ThisClass::HandleIconVisibilityChanged);
 	}
+	return IconSubsystem;
+}
 
-	auto StartCase = [this, IconSubsystem](const FString& Description)
+void ULoadingFXProtoSubsystem::EndIconTest(const TCHAR* Tag, bool bQuitWhenDone)
+{
+	if (ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>())
 	{
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay] %s"), *Description);
-		MinDisplayEvents.Reset();
-		MinDisplayCaseStartSeconds = FPlatformTime::Seconds();
-		MinDisplayHandle = IconSubsystem->Acquire(TEXT("LFXProto.MinDisplay"));
-	};
-	auto Report = [this, IconSubsystem](const TCHAR* Step, const FString& Expect)
+		IconSubsystem->OnVisibilityChangedNative.Remove(IconVisibilityChangedHandle);
+	}
+	IconVisibilityChangedHandle.Reset();
+	UE_LOG(LogLoadingFXProto, Display, TEXT("%s finished"), Tag);
+	if (bQuitWhenDone)
 	{
-		FString Events;
-		for (const TPair<bool, double>& Event : MinDisplayEvents)
-		{
-			Events += FString::Printf(TEXT(" %s@%.2fs"), Event.Key ? TEXT("show") : TEXT("hide"), Event.Value - MinDisplayCaseStartSeconds);
-		}
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay]   %s at %.2fs: visible=%d requests=%d events:%s (expect %s)"),
-			Step, FPlatformTime::Seconds() - MinDisplayCaseStartSeconds, IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(),
-			Events.IsEmpty() ? TEXT(" none") : *Events, *Expect);
-	};
+		FPlatformMisc::RequestExit(false, Tag);
+	}
+}
+
+void ULoadingFXProtoSubsystem::StartIconCase(const TCHAR* Tag, const FString& Description)
+{
+	UE_LOG(LogLoadingFXProto, Display, TEXT("%s %s"), Tag, *Description);
+	IconTestEvents.Reset();
+	IconTestCaseStartSeconds = FPlatformTime::Seconds();
+	IconTestHandle = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>()->Acquire(TEXT("LFXProto.IconTest"));
+}
+
+void ULoadingFXProtoSubsystem::ReportIconCase(const TCHAR* Tag, const TCHAR* Step, const FString& Expect) const
+{
+	const ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	FString Events;
+	for (const TPair<bool, double>& Event : IconTestEvents)
+	{
+		Events += FString::Printf(TEXT(" %s@%.2fs"), Event.Key ? TEXT("show") : TEXT("hide"), Event.Value - IconTestCaseStartSeconds);
+	}
+	UE_LOG(LogLoadingFXProto, Display, TEXT("%s   %s at %.2fs: visible=%d requests=%d events:%s (expect %s)"),
+		Tag, Step, FPlatformTime::Seconds() - IconTestCaseStartSeconds, IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(),
+		Events.IsEmpty() ? TEXT(" none") : *Events, *Expect);
+}
+
+void ULoadingFXProtoSubsystem::StartIconTestTravel(float Seconds)
+{
+	// The IconTravel path: HandleMoviePlaybackStarted simulates the load inside LoadMap, HandlePostLoadMap logs its duration.
+	bIconTravelPending = true;
+	TravelExtraLoadSeconds = Seconds;
+	TravelStartSeconds = FPlatformTime::Seconds();
+	OpenLevel(LoadingFXProto::TravelTestMap);
+}
+
+void ULoadingFXProtoSubsystem::RunMinDisplayTest(bool bQuitWhenDone)
+{
+	static const TCHAR* const Tag = TEXT("[MinDisplay]");
+	ULoadingFXIconSubsystem* IconSubsystem = BeginIconTest(Tag);
+	if (!IconSubsystem)
+	{
+		return;
+	}
+
+	// The cases run against the project's setting (case 5 sets it to 0 for a moment), with the show delay off so the
+	// icon appears at each request. The expected values assume the minimum is long enough to still be holding the
+	// icon 0.6 s after it appeared.
+	ULoadingFXSettings* Settings = GetMutableDefault<ULoadingFXSettings>();
+	const float MinTime = Settings->IconMinimumDisplayTime;
+	const float SavedShowDelay = Settings->IconShowDelay;
+	Settings->IconShowDelay = 0.0f;
+	UE_LOG(LogLoadingFXProto, Display, TEXT("%s IconMinimumDisplayTime=%.2fs (IconShowDelay set to 0 for the test)"), Tag, MinTime);
+	if (MinTime < 0.8f)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s the expected values assume IconMinimumDisplayTime >= 0.8 s"), Tag);
+	}
+
 	const FString ExpectHeld = FString::Printf(TEXT("visible=1 requests=0, show@0.00s only: held until %.2fs"), MinTime);
 	const FString ExpectHidden = FString::Printf(TEXT("visible=0, show@0.00s hide@%.2fs"), MinTime);
 
 	SequenceSteps.Reset();
 
-	SequenceSteps.Add({ 0.5f, [StartCase]() { StartCase(TEXT("1/5 short request: release after 0.2 s")); } });
-	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, ExpectHeld]()
+	SequenceSteps.Add({ 0.5f, [this]() { StartIconCase(Tag, TEXT("1/5 short request: release after 0.2 s")); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, ExpectHeld]()
 	{
-		IconSubsystem->Release(MinDisplayHandle);
-		Report(TEXT("released"), ExpectHeld);
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("released"), ExpectHeld);
 	} });
-	SequenceSteps.Add({ MinTime, [Report, ExpectHidden]() { Report(TEXT("after the minimum display time"), ExpectHidden); } });
+	SequenceSteps.Add({ MinTime, [this, ExpectHidden]() { ReportIconCase(Tag, TEXT("after the minimum display time"), ExpectHidden); } });
 
-	SequenceSteps.Add({ 0.5f, [StartCase]() { StartCase(TEXT("2/5 acquire again while held: release at 0.2 s, acquire at 0.4 s, release at 0.6 s")); } });
-	SequenceSteps.Add({ 0.2f, [this, IconSubsystem]() { IconSubsystem->Release(MinDisplayHandle); } });
-	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report]()
+	SequenceSteps.Add({ 0.5f, [this]() { StartIconCase(Tag, TEXT("2/5 acquire again while held: release at 0.2 s, acquire at 0.4 s, release at 0.6 s")); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem]() { IconSubsystem->Release(IconTestHandle); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem]()
 	{
-		MinDisplayHandle = IconSubsystem->Acquire(TEXT("LFXProto.MinDisplay (again)"));
-		Report(TEXT("acquired again"), TEXT("visible=1 requests=1, show@0.00s only: no hide in between"));
+		IconTestHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTest (again)"));
+		ReportIconCase(Tag, TEXT("acquired again"), TEXT("visible=1 requests=1, show@0.00s only: no hide in between"));
 	} });
-	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, ExpectHeld]()
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, ExpectHeld]()
 	{
-		IconSubsystem->Release(MinDisplayHandle);
+		IconSubsystem->Release(IconTestHandle);
 		IconSubsystem->DumpRequests();
-		Report(TEXT("released again"), ExpectHeld + TEXT(", counted from the first show"));
+		ReportIconCase(Tag, TEXT("released again"), ExpectHeld + TEXT(", counted from the first show"));
 	} });
-	SequenceSteps.Add({ MinTime, [Report, ExpectHidden]() { Report(TEXT("after the minimum display time"), ExpectHidden); } });
+	SequenceSteps.Add({ MinTime, [this, ExpectHidden]() { ReportIconCase(Tag, TEXT("after the minimum display time"), ExpectHidden); } });
 
-	SequenceSteps.Add({ 0.5f, [StartCase, MinTime]() { StartCase(FString::Printf(TEXT("3/5 long request: release after %.2f s"), MinTime + 0.3f)); } });
-	SequenceSteps.Add({ MinTime + 0.3f, [this, IconSubsystem, Report, MinTime]()
+	SequenceSteps.Add({ 0.5f, [this, MinTime]() { StartIconCase(Tag, FString::Printf(TEXT("3/5 long request: release after %.2f s"), MinTime + 0.3f)); } });
+	SequenceSteps.Add({ MinTime + 0.3f, [this, IconSubsystem, MinTime]()
 	{
-		IconSubsystem->Release(MinDisplayHandle);
-		Report(TEXT("released"), FString::Printf(TEXT("visible=0 requests=0, show@0.00s hide@%.2fs: hidden at the release"), MinTime + 0.3f));
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("released"), FString::Printf(TEXT("visible=0 requests=0, show@0.00s hide@%.2fs: hidden at the release"), MinTime + 0.3f));
 	} });
 
-	SequenceSteps.Add({ 0.5f, [StartCase]() { StartCase(TEXT("4/5 ReleaseAll after 0.2 s")); } });
-	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, ExpectHeld]()
+	SequenceSteps.Add({ 0.5f, [this]() { StartIconCase(Tag, TEXT("4/5 ReleaseAll after 0.2 s")); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, ExpectHeld]()
 	{
 		IconSubsystem->ReleaseAll();
-		MinDisplayHandle.Invalidate();
-		Report(TEXT("released all"), ExpectHeld);
+		IconTestHandle.Invalidate();
+		ReportIconCase(Tag, TEXT("released all"), ExpectHeld);
 	} });
-	SequenceSteps.Add({ MinTime, [Report, ExpectHidden]() { Report(TEXT("after the minimum display time"), ExpectHidden); } });
+	SequenceSteps.Add({ MinTime, [this, ExpectHidden]() { ReportIconCase(Tag, TEXT("after the minimum display time"), ExpectHidden); } });
 
-	SequenceSteps.Add({ 0.5f, [StartCase]()
+	SequenceSteps.Add({ 0.5f, [this]()
 	{
 		GetMutableDefault<ULoadingFXSettings>()->IconMinimumDisplayTime = 0.0f;
-		StartCase(TEXT("5/5 IconMinimumDisplayTime=0: release after 0.2 s"));
+		StartIconCase(Tag, TEXT("5/5 IconMinimumDisplayTime=0: release after 0.2 s"));
 	} });
-	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, MinTime]()
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, MinTime]()
 	{
-		IconSubsystem->Release(MinDisplayHandle);
+		IconSubsystem->Release(IconTestHandle);
 		GetMutableDefault<ULoadingFXSettings>()->IconMinimumDisplayTime = MinTime;
-		Report(TEXT("released"), TEXT("visible=0 requests=0, show@0.00s hide@0.20s: hidden at the release"));
+		ReportIconCase(Tag, TEXT("released"), TEXT("visible=0 requests=0, show@0.00s hide@0.20s: hidden at the release"));
 	} });
 
-	SequenceSteps.Add({ 0.5f, [this, IconSubsystem, bQuitWhenDone]()
+	SequenceSteps.Add({ 0.5f, [this, SavedShowDelay, bQuitWhenDone]()
 	{
-		IconSubsystem->OnVisibilityChangedNative.Remove(IconVisibilityChangedHandle);
-		IconVisibilityChangedHandle.Reset();
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay] finished"));
-		if (bQuitWhenDone)
-		{
-			FPlatformMisc::RequestExit(false, TEXT("LFXProto.MinDisplay"));
-		}
+		GetMutableDefault<ULoadingFXSettings>()->IconShowDelay = SavedShowDelay;
+		EndIconTest(Tag, bQuitWhenDone);
 	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::RunShowDelayTest(bool bQuitWhenDone)
+{
+	static const TCHAR* const Tag = TEXT("[ShowDelay]");
+	ULoadingFXIconSubsystem* IconSubsystem = BeginIconTest(Tag);
+	if (!IconSubsystem)
+	{
+		return;
+	}
+
+	// The cases run against the project's settings (case 5 sets the delay to 0 for a moment). The expected values
+	// assume a delay of at least 0.4 s, and a delay plus minimum display time that is over before case 6's load is.
+	const ULoadingFXSettings* Settings = GetDefault<ULoadingFXSettings>();
+	const float Delay = Settings->IconShowDelay;
+	const float MinTime = Settings->IconMinimumDisplayTime;
+	UE_LOG(LogLoadingFXProto, Display, TEXT("%s IconShowDelay=%.2fs IconMinimumDisplayTime=%.2fs"), Tag, Delay, MinTime);
+	if (Delay < 0.4f || Delay + MinTime > 1.8f)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s the expected values assume IconShowDelay >= 0.4 s and IconShowDelay + IconMinimumDisplayTime <= 1.8 s"), Tag);
+	}
+
+	const FString ExpectHeld = FString::Printf(TEXT("visible=1 requests=0, show@%.2fs only: held until %.2fs"), Delay, Delay + MinTime);
+	const FString ExpectHidden = FString::Printf(TEXT("visible=0, show@%.2fs hide@%.2fs"), Delay, Delay + MinTime);
+
+	SequenceSteps.Reset();
+
+	SequenceSteps.Add({ 0.5f, [this, Delay]() { StartIconCase(Tag, FString::Printf(TEXT("1/7 short request: release at %.2f s, within the delay"), Delay * 0.5f)); } });
+	SequenceSteps.Add({ Delay * 0.5f, [this, IconSubsystem]()
+	{
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("released"), TEXT("visible=0 requests=0, no events: the icon never appeared"));
+	} });
+	SequenceSteps.Add({ Delay, [this]() { ReportIconCase(Tag, TEXT("after the delay would have ended"), TEXT("visible=0, no events")); } });
+
+	SequenceSteps.Add({ 0.5f, [this, Delay, MinTime]() { StartIconCase(Tag, FString::Printf(TEXT("2/7 long request: release at %.2f s"), Delay + MinTime + 0.3f)); } });
+	SequenceSteps.Add({ Delay - 0.1f, [this]() { ReportIconCase(Tag, TEXT("just before the delay ends"), TEXT("visible=0 requests=1, no events")); } });
+	SequenceSteps.Add({ 0.2f, [this, Delay]() { ReportIconCase(Tag, TEXT("just after the delay"), FString::Printf(TEXT("visible=1 requests=1, show@%.2fs"), Delay)); } });
+	SequenceSteps.Add({ MinTime + 0.2f, [this, IconSubsystem, Delay, MinTime]()
+	{
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("released"), FString::Printf(TEXT("visible=0 requests=0, show@%.2fs hide@%.2fs: hidden at the release"), Delay, Delay + MinTime + 0.3f));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Delay]() { StartIconCase(Tag, FString::Printf(TEXT("3/7 release soon after the icon appears: release at %.2f s"), Delay + 0.2f)); } });
+	SequenceSteps.Add({ Delay + 0.2f, [this, IconSubsystem, ExpectHeld]()
+	{
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("released"), ExpectHeld);
+	} });
+	SequenceSteps.Add({ MinTime, [this, ExpectHidden]() { ReportIconCase(Tag, TEXT("after the minimum display time"), ExpectHidden); } });
+
+	SequenceSteps.Add({ 0.5f, [this, Delay]()
+	{
+		StartIconCase(Tag, FString::Printf(TEXT("4/7 two requests: second at %.2f s, first released at %.2f s, second at %.2f s"), Delay * 0.5f, Delay * 0.75f, Delay + 0.2f));
+	} });
+	SequenceSteps.Add({ Delay * 0.5f, [this, IconSubsystem]() { IconTestSecondHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTest (second)")); } });
+	SequenceSteps.Add({ Delay * 0.25f, [this, IconSubsystem]()
+	{
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("first released"), TEXT("visible=0 requests=1, no events"));
+	} });
+	SequenceSteps.Add({ Delay * 0.25f + 0.1f, [this, Delay]()
+	{
+		ReportIconCase(Tag, TEXT("after the delay"), FString::Printf(TEXT("visible=1 requests=1, show@%.2fs: the delay counts from the first request"), Delay));
+	} });
+	SequenceSteps.Add({ 0.1f, [this, IconSubsystem, ExpectHeld]()
+	{
+		IconSubsystem->Release(IconTestSecondHandle);
+		ReportIconCase(Tag, TEXT("second released"), ExpectHeld);
+	} });
+	SequenceSteps.Add({ MinTime, [this, ExpectHidden]() { ReportIconCase(Tag, TEXT("after the minimum display time"), ExpectHidden); } });
+
+	SequenceSteps.Add({ 0.5f, [this, Delay]()
+	{
+		GetMutableDefault<ULoadingFXSettings>()->IconShowDelay = 0.0f;
+		StartIconCase(Tag, TEXT("5/7 IconShowDelay=0: the icon appears at the request"));
+		GetMutableDefault<ULoadingFXSettings>()->IconShowDelay = Delay;
+		ReportIconCase(Tag, TEXT("acquired"), TEXT("visible=1 requests=1, show@0.00s"));
+	} });
+	SequenceSteps.Add({ MinTime + 0.2f, [this, IconSubsystem, MinTime]()
+	{
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("released"), FString::Printf(TEXT("visible=0 requests=0, show@0.00s hide@%.2fs: hidden at the release"), MinTime + 0.2f));
+	} });
+
+	// A blocking load that starts within the delay: MoviePlayer takes over at once, and LogLoadingFX should report the
+	// icon appearing on the loading screen when the delay is over.
+	SequenceSteps.Add({ 0.5f, [this]() { StartIconCase(Tag, TEXT("6/7 blocking load within the delay: OpenLevel at 0.1 s with 2 s of simulated loading")); } });
+	SequenceSteps.Add({ 0.1f, [this]()
+	{
+		ReportIconCase(Tag, TEXT("before OpenLevel"), TEXT("visible=0 requests=1, no events"));
+		StartIconTestTravel(2.0f);
+	} });
+	SequenceSteps.Add({ 3.5f, [this, Delay]()
+	{
+		ReportIconCase(Tag, TEXT("after the load"), FString::Printf(TEXT("visible=1 requests=1, show once the game thread was back: on the loading screen since %.2fs"), Delay));
+	} });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem]()
+	{
+		IconSubsystem->Release(IconTestHandle);
+		ReportIconCase(Tag, TEXT("released"), TEXT("visible=0 requests=0: hidden at the release, the minimum display time is over"));
+	} });
+
+	// The release comes from inside LoadMap, after the delay but before the ticker could show the icon: it is shown
+	// then (it was on the loading screen) and held for the rest of the minimum display time. The load is sized to end
+	// between the two.
+	const float ReleaseInLoadMapLoad = Delay + MinTime * 0.5f - 0.3f;
+	SequenceSteps.Add({ 0.5f, [this, ReleaseInLoadMapLoad]()
+	{
+		StartIconCase(Tag, FString::Printf(TEXT("7/7 release inside LoadMap after the delay: OpenLevel at 0.1 s with %.2f s of simulated loading, release from PostLoadMapWithWorld"), ReleaseInLoadMapLoad));
+	} });
+	SequenceSteps.Add({ 0.1f, [this, ReleaseInLoadMapLoad, Delay, MinTime]()
+	{
+		bReleaseIconTestInLoadMap = true;
+		IconTestReleaseInLoadMapExpect = FString::Printf(TEXT("visible=1 requests=0, show at the release only: held until %.2fs (if the load ended after %.2fs)"), Delay + MinTime, Delay);
+		StartIconTestTravel(ReleaseInLoadMapLoad);
+	} });
+	SequenceSteps.Add({ Delay + MinTime + 0.3f, [this, Delay, MinTime]()
+	{
+		ReportIconCase(Tag, TEXT("after the minimum display time"), FString::Printf(TEXT("visible=0, show at the release, hide@%.2fs"), Delay + MinTime));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, bQuitWhenDone]() { EndIconTest(Tag, bQuitWhenDone); } });
 
 	StartSequence();
 }
 
 void ULoadingFXProtoSubsystem::HandleIconVisibilityChanged(bool bVisible)
 {
-	MinDisplayEvents.Emplace(bVisible, FPlatformTime::Seconds());
+	IconTestEvents.Emplace(bVisible, FPlatformTime::Seconds());
 }
 
 void ULoadingFXProtoSubsystem::HandleSyncLoadPackage(const FString& PackageName)
@@ -1156,6 +1340,17 @@ void ULoadingFXProtoSubsystem::HandlePostLoadMap(UWorld* LoadedWorld)
 	else
 	{
 		LogOverlayStats(*FString::Printf(TEXT("LoadMap %s"), *MapName), FPlatformTime::Seconds() - TravelStartSeconds);
+	}
+
+	if (bReleaseIconTestInLoadMap)
+	{
+		// Still inside LoadMap: the core ticker has not run since the load started.
+		bReleaseIconTestInLoadMap = false;
+		if (ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>())
+		{
+			IconSubsystem->Release(IconTestHandle);
+			ReportIconCase(TEXT("[ShowDelay]"), TEXT("released in PostLoadMapWithWorld"), IconTestReleaseInLoadMapExpect);
+		}
 	}
 
 	bTravelPending = false;

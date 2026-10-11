@@ -35,7 +35,11 @@ class UMaterialInterface;
  *                                 Start with -LFXProtoEarlyAcquire to also acquire during game instance init, before
  *                                 the preload can have finished.
  *   LFXProto.MinDisplay [quit]    Check the icon's minimum display time (IconMinimumDisplayTime, expected >= 0.8 s): short
- *                                 request, re-acquire while held, long request, ReleaseAll, and the setting at 0.
+ *                                 request, re-acquire while held, long request, ReleaseAll, and the setting at 0. Runs with
+ *                                 IconShowDelay at 0.
+ *   LFXProto.ShowDelay [quit]     Check the icon's show delay (IconShowDelay, expected >= 0.4 s): short and long requests, release
+ *                                 soon after the icon appears, two requests, the setting at 0, a blocking load within the delay,
+ *                                 and a release from inside LoadMap after the delay.
  *
  * The prototype loads its own material list on first use, so that it does not hide the icon material preload.
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
@@ -60,6 +64,7 @@ public:
 	void RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunPreloadTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunMinDisplayTest(bool bQuitWhenDone);
+	void RunShowDelayTest(bool bQuitWhenDone);
 
 private:
 	struct FSequenceStep
@@ -83,6 +88,15 @@ private:
 	void OpenLevel(const FString& MapName);
 	void LogOverlayStats(const TCHAR* Context, double ElapsedSeconds) const;
 
+	/** LFXProto.MinDisplay / ShowDelay: the icon subsystem if it is idle (warns otherwise), recording its visibility changes from now on. */
+	ULoadingFXIconSubsystem* BeginIconTest(const TCHAR* Tag);
+	void EndIconTest(const TCHAR* Tag, bool bQuitWhenDone);
+	/** Starts a case: acquires IconTestHandle, and the times in the reports count from now. */
+	void StartIconCase(const TCHAR* Tag, const FString& Description);
+	void ReportIconCase(const TCHAR* Tag, const TCHAR* Step, const FString& Expect) const;
+	/** OpenLevel to the travel test map with Seconds of simulated loading inside LoadMap. */
+	void StartIconTestTravel(float Seconds);
+
 	void HandlePrepareLoadingScreen();
 	void HandleMoviePlaybackStarted();
 	void HandlePostLoadMap(UWorld* LoadedWorld);
@@ -105,11 +119,15 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> PreloadControlMaterial;
 
-	/** LFXProto.MinDisplay: the request of the current case, and the icon's visibility changes since the case started. */
-	FLoadingFXIconHandle MinDisplayHandle;
-	TArray<TPair<bool, double>> MinDisplayEvents;
-	double MinDisplayCaseStartSeconds = 0.0;
+	/** LFXProto.MinDisplay / ShowDelay: the requests of the current case, and the icon's visibility changes since it started. */
+	FLoadingFXIconHandle IconTestHandle;
+	FLoadingFXIconHandle IconTestSecondHandle;
+	TArray<TPair<bool, double>> IconTestEvents;
+	double IconTestCaseStartSeconds = 0.0;
 	FDelegateHandle IconVisibilityChangedHandle;
+	/** LFXProto.ShowDelay: release IconTestHandle from PostLoadMapWithWorld (inside LoadMap), and what to expect then. */
+	bool bReleaseIconTestInLoadMap = false;
+	FString IconTestReleaseInLoadMapExpect;
 
 	TSharedPtr<SWidget> ViewportOverlayRoot;
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;

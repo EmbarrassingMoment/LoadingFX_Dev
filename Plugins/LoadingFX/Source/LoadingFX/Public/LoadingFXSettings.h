@@ -51,6 +51,15 @@ public:
 	FLinearColor IconTint = FLinearColor::White;
 
 	/**
+	 * Time from the first request until the icon appears, so a load shorter than this shows nothing: releasing every
+	 * request within it cancels the icon, and IsIconVisible / OnVisibilityChanged report it only once it appears. A
+	 * blocking map load that starts within the delay is still rendered through MoviePlayer, and the icon appears on
+	 * that screen when the delay is over. 0 shows the icon at the first request.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "LoadingFX|Loading Icon", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "5.0", ForceUnits = "s"))
+	float IconShowDelay = 0.5f;
+
+	/**
 	 * Shortest time the icon stays on screen once it appears, so a short load does not make it flicker. If the last
 	 * request is released sooner, the icon stays visible (IsIconVisible, OnVisibilityChanged) until this time is over,
 	 * and an Acquire in the meantime keeps it up without hiding it in between. 0 hides it at the last release.
