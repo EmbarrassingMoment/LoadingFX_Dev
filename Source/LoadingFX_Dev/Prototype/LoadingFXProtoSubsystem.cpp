@@ -63,6 +63,7 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingDualArc.M_LoadingDualArc"), TEXT("DualArc (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingSegments.M_LoadingSegments"), TEXT("Segments (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingTimer.M_LoadingTimer"), TEXT("Timer (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingHourglass.M_LoadingHourglass"), TEXT("Hourglass (RealTime)") },
 	};
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
