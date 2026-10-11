@@ -37,6 +37,29 @@ Command-line build (UE 5.5):
 
 The current materials (`M_LoadingSpinner`, `M_LoadingIcon`, `M_LoadingBoxes`, `M_LoadingBars`, `M_LoadingArc`, `M_LoadingComet`) follow the material contract below. The first three were ported from the sandbox project; `M_LoadingBars` was ported from the user's Shadertoy with the AA width taken from `fwidth(d)` (DDX/DDY of the distance field) instead of `PixelSize`, which is only valid when `d` is continuous across cells (every bar has the same shape). `M_LoadingArc` (one rounded arc that stretches and shrinks while it turns) was designed here: the look was approved from stills rendered in Python with the same formulas, and the shape is iq's `sdArc` (loop-free and branch-free; `Step` + `Lerp` select the end cap). It has two rates: `Speed` (steady rotation, rev/s) and `StretchSpeed` (grow/shrink cycles per second). With the defaults (0.3, 0.75) each cycle advances about 1.02 turns, so every stretch starts near 12 o'clock. `M_LoadingComet` (a round head with a tail that thins and fades over one turn) was ported from the user's sandbox `M_Loading_Icon_UI`. The original faded the tail by darkening its color while its centerline alpha stayed 1, so a dark full circle showed on light backgrounds; the port fades opacity instead. It also adds a round head cap whose diameter covers the `frac` wrap, so `max(tail, cap)` is continuous there, and uses real time (the original's `TimeWithSpeedVariable` uses GameTime).
 
+## 1.0 Scope (decided 2026-10-11)
+
+What users reference by name is frozen at 1.0: asset paths and names, material parameter names, Blueprint / C++ API names, ini keys, module names. Additive changes (new spinners, settings or modules) can ship in 1.x.
+
+- **Display:** the implemented icon subsystem, settings, Slate / UMG spinner and bundled materials.
+- **Show delay and minimum display time** for the loading icon (project settings), so short loads do not flicker.
+- **Preload the icon material** asynchronously when the subsystem initializes, instead of `LoadSynchronous` on the first `Acquire`. Loading a UI-domain material starts its PSO precaching (UE 5.5: `UMaterial::PostLoad` → `PrecachePSOs`, collected by Slate's `SlateMaterialPSOCollector`; `r.PSOPrecaching` and `r.PSOPrecache.SlateMaterials` default to 1), so the preload moves both the load and the PSO work away from the moment the icon must appear, and avoids a sync load while the loader's async loads run. Shaders need nothing extra (they are cooked with the material). A recorded PSO cache (`.upipelinecache`) is per project, so the plugin does not ship one.
+- **Asset loader and Bridge:** generic async loading (progress, cancel) and sync loading in `LoadingFXLoader`. Through the Bridge, the icon keeps animating during the loader's sync loads. This needs a blocking-section API on the icon subsystem (manual MoviePlayer playback, verified by the prototype).
+- **More spinners** are still to be added before 1.0.
+- **Naming pass before the freeze, as the last material task** (after the spinner set is final, so names change only once): rename the materials by shape (`M_LoadingIcon` clashes with the "loading icon" feature; `M_LoadingSpinner` names one particular design, a dot ring) and unify parameter names (`Ring` vs `Radius`; `RMax` / `RMin` vs `RBase` / `RGrow`). `M_LoadingIcon`'s builder still uses the old `scalar_param` form, so its parameters have no descriptions or sort priorities. Do all of it in the builder scripts, then update the settings default, the prototype and this file.
+- **Release checks:** BuildPlugin on 5.5 – 5.8 (5.6 and 5.7 are not installed yet), a packaged Shipping build, and a fresh Blueprint-only project with the plugin installed as an engine plugin, as Fab installs it (settings page, UMG palette, Acquire / Release nodes, default material cooked without `DirectoriesToAlwaysCook`).
+- **Docs and listing:** README (English and Japanese) rewritten, CHANGELOG 1.0.0, `VersionName` 1.0.0, Fab description and media.
+- **Samples:** only in this project, as a Blueprint sample map and widget kept apart from the C++ prototype. The plugin ships no sample content.
+
+After 1.0: a background color for the blocking screen, fades, platforms other than Win64.
+
+### Still open (1.0)
+
+- Loader API: request shape (soft object / class references), Blueprint async action nodes, how long loaded assets stay referenced, and whether the Bridge also shows the icon during async loads.
+- Show delay semantics: what `IsIconVisible` / `OnVisibilityChanged` report during the delay (today they mean "at least one request"), whether a blocking load that starts during the delay shows the icon at once, and the defaults.
+- Preload: what `Acquire` does when the preload has not finished yet (show the icon once the material arrives, or fall back to a sync load).
+- The new material and parameter names.
+
 ## Confirmed Design Decisions
 
 ### Loading icon (display — the main feature)
@@ -101,10 +124,6 @@ Verified 2026-10-08 with a throwaway probe (a `UDeveloperSettings` class holding
 - **Alternatives considered.** A plugin-shipped `Config/Game.ini` with `+DirectoriesToAlwaysCook=(Path="/LoadingFX")` works and has Epic precedent (`Engine/Plugins/NNE/NNEDenoiser/Config/Game.ini`), but cooks every bundled spinner. Plugin ini files are dynamic config layers applied *after* the project's `Default*.ini` (`FConfigBranch::AddDynamicLayersToHierarchy`), so never put a scalar default such as the material path in one: it would override the user's choice. `UPrimaryAssetLabel` needs project-side `PrimaryAssetTypesToScan` edits (the default type is `bIsEditorOnly=True`, `CookRule=Unknown`, scans `/Game` only, and only one entry per type is allowed). Loading the material at startup (hard reference in a native CDO) is cooked as `StartupPackage` but forces an eager load in every process. `GetCookModificationDelegate` is deprecated since 5.0.
 - `SkipOnlyEditorOnly=true` is the 5.5 default (`BaseEditor.ini`), so packages merely loaded during the cook are not cooked unless a cooked package references them.
 - This project keeps `+DirectoriesToAlwaysCook=(Path="/LoadingFX")` because the prototype loads every spinner by path at runtime.
-
-### Still open
-
-- Decide whether sample content ships inside the plugin (for Fab users) or only in this project.
 
 ## Conventions
 
