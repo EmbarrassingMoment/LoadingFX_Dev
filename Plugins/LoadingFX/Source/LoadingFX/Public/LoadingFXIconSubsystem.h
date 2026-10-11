@@ -38,7 +38,7 @@ private:
 	int32 Id = 0;
 };
 
-/** Fires when the loading icon becomes visible (first request) or hidden (last release). */
+/** Fires when the loading icon becomes visible (first request) or hidden (last release, after the minimum display time). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FLoadingFXIconVisibilityChanged, bool, bVisible);
 DECLARE_MULTICAST_DELEGATE_OneParam(FLoadingFXIconVisibilityChangedNative, bool /*bVisible*/);
 
@@ -48,6 +48,10 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FLoadingFXIconVisibilityChangedNative, bool 
  * Show and hide are reference counted: every Acquire returns a handle, and the icon stays until each handle
  * has been released, so independent systems can share it. A request may name an owner object and is then
  * released automatically once that object is destroyed.
+ *
+ * Once shown, the icon stays for at least the minimum display time (Project Settings, IconMinimumDisplayTime), so a
+ * short load does not make it flicker: after an early last release it is hidden when that time is over, and it still
+ * counts as visible until then.
  *
  * The icon material is loaded in the background as soon as the subsystem initializes, which also starts precaching
  * its PSOs, so showing the icon later loads and compiles nothing. An Acquire that comes before that load has
@@ -82,19 +86,25 @@ public:
 	FLoadingFXIconHandle Acquire(FName Reason, UObject* Owner = nullptr);
 
 	/**
-	 * Releases a request and invalidates the handle. The icon hides once no request is left.
-	 * Returns false if the handle was not active (already released, or never issued).
+	 * Releases a request and invalidates the handle. The icon hides once no request is left and it has been shown
+	 * for the minimum display time. Returns false if the handle was not active (already released, or never issued).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "LoadingFX", meta = (DisplayName = "Release Loading Icon"))
 	bool Release(UPARAM(ref) FLoadingFXIconHandle& Handle);
 
-	/** Releases every request, whoever made it, and hides the icon. For recovery paths such as returning to the main menu. */
+	/**
+	 * Releases every request, whoever made it, so the icon hides (after the minimum display time, like any last
+	 * release). For recovery paths such as returning to the main menu.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "LoadingFX", meta = (DisplayName = "Release All Loading Icon Requests"))
 	void ReleaseAll();
 
-	/** True while at least one request is active. */
+	/**
+	 * True from the first request until the icon hides: while at least one request is active, and after the last
+	 * release for the rest of the minimum display time.
+	 */
 	UFUNCTION(BlueprintPure, Category = "LoadingFX")
-	bool IsIconVisible() const { return Requests.Num() > 0; }
+	bool IsIconVisible() const { return bIconVisible; }
 
 	/** Number of active requests. */
 	UFUNCTION(BlueprintPure, Category = "LoadingFX")
@@ -104,7 +114,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "LoadingFX")
 	bool IsHandleActive(const FLoadingFXIconHandle& Handle) const;
 
-	/** Fires when the icon becomes visible (first request) or hidden (last release). */
+	/** Fires when the icon becomes visible (first request) or hidden (last release, after the minimum display time). */
 	UPROPERTY(BlueprintAssignable, Category = "LoadingFX")
 	FLoadingFXIconVisibilityChanged OnVisibilityChanged;
 
@@ -130,6 +140,12 @@ private:
 
 	bool ReleaseInternal(int32 Id, const TCHAR* Context);
 	void NotifyVisibilityChanged(bool bVisible);
+
+	/** Called when the last request is gone: hides the icon now, or once it has been shown for the minimum display time. */
+	void HideAfterMinimumDisplayTime();
+	void HideIcon();
+	void CancelPendingHide();
+	bool TickPendingHide(float DeltaTime);
 
 	/** Starts loading the icon material asynchronously (Initialize). */
 	void PreloadIconMaterial();
@@ -159,6 +175,14 @@ private:
 
 	TArray<FRequest> Requests;
 	int32 NextRequestId = 1;
+
+	/** True from the first request until the icon hides (see IsIconVisible), and when that showing started. */
+	bool bIconVisible = false;
+	double IconShownAtSeconds = 0.0;
+
+	/** Registered only while the icon is kept on screen after the last release; hides it at PendingHideAtSeconds. */
+	FTSTicker::FDelegateHandle PendingHideTickerHandle;
+	double PendingHideAtSeconds = 0.0;
 
 	/** The icon shown as viewport content, and the viewport client it was added to. */
 	TSharedPtr<SWidget> ViewportIconRoot;

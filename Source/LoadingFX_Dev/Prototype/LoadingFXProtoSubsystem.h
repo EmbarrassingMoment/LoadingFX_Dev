@@ -34,6 +34,8 @@ class UMaterialInterface;
  *                                 (PSO states only in packaged builds). 'shot' saves Saved/Screenshots/LFXProto_Preload.png.
  *                                 Start with -LFXProtoEarlyAcquire to also acquire during game instance init, before
  *                                 the preload can have finished.
+ *   LFXProto.MinDisplay [quit]    Check the icon's minimum display time (IconMinimumDisplayTime, expected >= 0.8 s): short
+ *                                 request, re-acquire while held, long request, ReleaseAll, and the setting at 0.
  *
  * The prototype loads its own material list on first use, so that it does not hide the icon material preload.
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
@@ -57,6 +59,7 @@ public:
 	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunPreloadTest(bool bTakeScreenshot, bool bQuitWhenDone);
+	void RunMinDisplayTest(bool bQuitWhenDone);
 
 private:
 	struct FSequenceStep
@@ -84,6 +87,7 @@ private:
 	void HandleMoviePlaybackStarted();
 	void HandlePostLoadMap(UWorld* LoadedWorld);
 	void HandleSyncLoadPackage(const FString& PackageName);
+	void HandleIconVisibilityChanged(bool bVisible);
 	bool TickSequence(float DeltaTime);
 
 	/** Keeps the spinner materials alive across the GC that runs during LoadMap. */
@@ -100,6 +104,12 @@ private:
 	/** A material nobody preloaded, loaded on demand by LFXProto.Preload to compare its PSO state with the icon's. */
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> PreloadControlMaterial;
+
+	/** LFXProto.MinDisplay: the request of the current case, and the icon's visibility changes since the case started. */
+	FLoadingFXIconHandle MinDisplayHandle;
+	TArray<TPair<bool, double>> MinDisplayEvents;
+	double MinDisplayCaseStartSeconds = 0.0;
+	FDelegateHandle IconVisibilityChangedHandle;
 
 	TSharedPtr<SWidget> ViewportOverlayRoot;
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;

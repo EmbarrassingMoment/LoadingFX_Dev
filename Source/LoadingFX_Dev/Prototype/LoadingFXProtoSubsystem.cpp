@@ -266,6 +266,17 @@ namespace LoadingFXProto
 				Subsystem->RunPreloadTest(Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs MinDisplayCommand(
+		TEXT("LFXProto.MinDisplay"),
+		TEXT("Verification prototype: check the loading icon's minimum display time (short request, re-acquire while held, long request, ReleaseAll, setting at 0). Args: [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunMinDisplayTest(Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -931,6 +942,126 @@ void ULoadingFXProtoSubsystem::RunPreloadTest(bool bTakeScreenshot, bool bQuitWh
 	} });
 
 	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::RunMinDisplayTest(bool bQuitWhenDone)
+{
+	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	if (!IconSubsystem)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[MinDisplay] ULoadingFXIconSubsystem not found"));
+		return;
+	}
+	if (IconSubsystem->IsIconVisible())
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[MinDisplay] the loading icon is already visible: release its requests first (LoadingFX.Icon.Hide all)"));
+		return;
+	}
+
+	// The cases run against the project's setting (case 5 sets it to 0 for a moment). The expected values below
+	// assume it is long enough to still be holding the icon 0.6 s after it appeared.
+	const float MinTime = GetDefault<ULoadingFXSettings>()->IconMinimumDisplayTime;
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay] IconMinimumDisplayTime=%.2fs"), MinTime);
+	if (MinTime < 0.8f)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[MinDisplay] the expected values assume IconMinimumDisplayTime >= 0.8 s"));
+	}
+	if (!IconVisibilityChangedHandle.IsValid())
+	{
+		IconVisibilityChangedHandle = IconSubsystem->OnVisibilityChangedNative.AddUObject(this, &ThisClass::HandleIconVisibilityChanged);
+	}
+
+	auto StartCase = [this, IconSubsystem](const FString& Description)
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay] %s"), *Description);
+		MinDisplayEvents.Reset();
+		MinDisplayCaseStartSeconds = FPlatformTime::Seconds();
+		MinDisplayHandle = IconSubsystem->Acquire(TEXT("LFXProto.MinDisplay"));
+	};
+	auto Report = [this, IconSubsystem](const TCHAR* Step, const FString& Expect)
+	{
+		FString Events;
+		for (const TPair<bool, double>& Event : MinDisplayEvents)
+		{
+			Events += FString::Printf(TEXT(" %s@%.2fs"), Event.Key ? TEXT("show") : TEXT("hide"), Event.Value - MinDisplayCaseStartSeconds);
+		}
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay]   %s at %.2fs: visible=%d requests=%d events:%s (expect %s)"),
+			Step, FPlatformTime::Seconds() - MinDisplayCaseStartSeconds, IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(),
+			Events.IsEmpty() ? TEXT(" none") : *Events, *Expect);
+	};
+	const FString ExpectHeld = FString::Printf(TEXT("visible=1 requests=0, show@0.00s only: held until %.2fs"), MinTime);
+	const FString ExpectHidden = FString::Printf(TEXT("visible=0, show@0.00s hide@%.2fs"), MinTime);
+
+	SequenceSteps.Reset();
+
+	SequenceSteps.Add({ 0.5f, [StartCase]() { StartCase(TEXT("1/5 short request: release after 0.2 s")); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, ExpectHeld]()
+	{
+		IconSubsystem->Release(MinDisplayHandle);
+		Report(TEXT("released"), ExpectHeld);
+	} });
+	SequenceSteps.Add({ MinTime, [Report, ExpectHidden]() { Report(TEXT("after the minimum display time"), ExpectHidden); } });
+
+	SequenceSteps.Add({ 0.5f, [StartCase]() { StartCase(TEXT("2/5 acquire again while held: release at 0.2 s, acquire at 0.4 s, release at 0.6 s")); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem]() { IconSubsystem->Release(MinDisplayHandle); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report]()
+	{
+		MinDisplayHandle = IconSubsystem->Acquire(TEXT("LFXProto.MinDisplay (again)"));
+		Report(TEXT("acquired again"), TEXT("visible=1 requests=1, show@0.00s only: no hide in between"));
+	} });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, ExpectHeld]()
+	{
+		IconSubsystem->Release(MinDisplayHandle);
+		IconSubsystem->DumpRequests();
+		Report(TEXT("released again"), ExpectHeld + TEXT(", counted from the first show"));
+	} });
+	SequenceSteps.Add({ MinTime, [Report, ExpectHidden]() { Report(TEXT("after the minimum display time"), ExpectHidden); } });
+
+	SequenceSteps.Add({ 0.5f, [StartCase, MinTime]() { StartCase(FString::Printf(TEXT("3/5 long request: release after %.2f s"), MinTime + 0.3f)); } });
+	SequenceSteps.Add({ MinTime + 0.3f, [this, IconSubsystem, Report, MinTime]()
+	{
+		IconSubsystem->Release(MinDisplayHandle);
+		Report(TEXT("released"), FString::Printf(TEXT("visible=0 requests=0, show@0.00s hide@%.2fs: hidden at the release"), MinTime + 0.3f));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [StartCase]() { StartCase(TEXT("4/5 ReleaseAll after 0.2 s")); } });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, ExpectHeld]()
+	{
+		IconSubsystem->ReleaseAll();
+		MinDisplayHandle.Invalidate();
+		Report(TEXT("released all"), ExpectHeld);
+	} });
+	SequenceSteps.Add({ MinTime, [Report, ExpectHidden]() { Report(TEXT("after the minimum display time"), ExpectHidden); } });
+
+	SequenceSteps.Add({ 0.5f, [StartCase]()
+	{
+		GetMutableDefault<ULoadingFXSettings>()->IconMinimumDisplayTime = 0.0f;
+		StartCase(TEXT("5/5 IconMinimumDisplayTime=0: release after 0.2 s"));
+	} });
+	SequenceSteps.Add({ 0.2f, [this, IconSubsystem, Report, MinTime]()
+	{
+		IconSubsystem->Release(MinDisplayHandle);
+		GetMutableDefault<ULoadingFXSettings>()->IconMinimumDisplayTime = MinTime;
+		Report(TEXT("released"), TEXT("visible=0 requests=0, show@0.00s hide@0.20s: hidden at the release"));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, IconSubsystem, bQuitWhenDone]()
+	{
+		IconSubsystem->OnVisibilityChangedNative.Remove(IconVisibilityChangedHandle);
+		IconVisibilityChangedHandle.Reset();
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[MinDisplay] finished"));
+		if (bQuitWhenDone)
+		{
+			FPlatformMisc::RequestExit(false, TEXT("LFXProto.MinDisplay"));
+		}
+	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::HandleIconVisibilityChanged(bool bVisible)
+{
+	MinDisplayEvents.Emplace(bVisible, FPlatformTime::Seconds());
 }
 
 void ULoadingFXProtoSubsystem::HandleSyncLoadPackage(const FString& PackageName)

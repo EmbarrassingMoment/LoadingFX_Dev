@@ -51,6 +51,14 @@ public:
 	FLinearColor IconTint = FLinearColor::White;
 
 	/**
+	 * Shortest time the icon stays on screen once it appears, so a short load does not make it flicker. If the last
+	 * request is released sooner, the icon stays visible (IsIconVisible, OnVisibilityChanged) until this time is over,
+	 * and an Acquire in the meantime keeps it up without hiding it in between. 0 hides it at the last release.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "LoadingFX|Loading Icon", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "5.0", ForceUnits = "s"))
+	float IconMinimumDisplayTime = 1.0f;
+
+	/**
 	 * Z-order of the icon among viewport widgets. UMG's Add to Viewport uses its ZOrder + 10, so the default
 	 * draws above HUD widgets added with the usual small values.
 	 */
