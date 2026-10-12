@@ -28,6 +28,7 @@ Local-only editor plugin for developing LoadingFX. It is **not** part of the Loa
 | `build_m_loadingsegments.py` | `/LoadingFX/Materials/M_LoadingSegments` (a segmented ring that fills and drains one segment at a time) |
 | `build_m_loadingtimer.py` | `/LoadingFX/Materials/M_LoadingTimer` (a pie that fills and empties inside a thin ring) |
 | `build_m_loadinghourglass.py` | `/LoadingFX/MaterialFunctions/MF_SdSegment2D`, `/LoadingFX/Materials/M_LoadingHourglass` (sand runs out, then the glass turns over) |
+| `build_m_loadingbounce.py` | `/LoadingFX/MaterialFunctions/MF_SdEllipse2D`, `/LoadingFX/Materials/M_LoadingBounce` (a ball that bounces and flattens on landing) |
 | `build_all.py` | Runs all of the above in dependency order |
 
 Run them with **UE 5.5** so the saved assets stay loadable in 5.5:

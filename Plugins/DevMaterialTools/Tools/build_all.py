@@ -28,6 +28,7 @@ SCRIPTS = [
     "build_m_loadingsegments.py",
     "build_m_loadingtimer.py",
     "build_m_loadinghourglass.py",
+    "build_m_loadingbounce.py",
 ]
 
 for name in SCRIPTS:
