@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "LoadingFXIconSubsystem.h"
+#include "LoadingFXLoaderSubsystem.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "LoadingFXProtoSubsystem.generated.h"
 
+class AActor;
 class SLoadingFXProtoOverlay;
 class SWidget;
 class UWidget;
@@ -40,6 +42,10 @@ class UMaterialInterface;
  *   LFXProto.ShowDelay [quit]     Check the icon's show delay (IconShowDelay, expected >= 0.4 s): short and long requests, release
  *                                 soon after the icon appears, two requests, the setting at 0, a blocking load within the delay,
  *                                 and a release from inside LoadMap after the delay.
+ *   LFXProto.Loader [quit]        Check the asset loader and the Bridge: async loads (progress, results, retention across GC,
+ *                                 release, already loaded, empty, cancel, owner), sync loads with and without the loading icon
+ *                                 (the blocking section), the Blueprint sync function and the Load Assets Async action. Run it
+ *                                 in a fresh process: it expects its materials not to be loaded yet.
  *
  * The prototype loads its own material list on first use, so that it does not hide the icon material preload.
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
@@ -65,8 +71,17 @@ public:
 	void RunPreloadTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunMinDisplayTest(bool bQuitWhenDone);
 	void RunShowDelayTest(bool bQuitWhenDone);
+	void RunLoaderTest(bool bQuitWhenDone);
 
 private:
+	/** LFXProto.Loader: the outputs of the Load Assets Async actions it starts. */
+	UFUNCTION()
+	void HandleLoaderActionProgress(FLoadingFXLoadHandle Handle, float Progress, const TArray<UObject*>& LoadedAssets, const TArray<UClass*>& LoadedClasses);
+	UFUNCTION()
+	void HandleLoaderActionCompleted(FLoadingFXLoadHandle Handle, float Progress, const TArray<UObject*>& LoadedAssets, const TArray<UClass*>& LoadedClasses);
+	UFUNCTION()
+	void HandleLoaderActionCanceled(FLoadingFXLoadHandle Handle, float Progress, const TArray<UObject*>& LoadedAssets, const TArray<UClass*>& LoadedClasses);
+
 	struct FSequenceStep
 	{
 		float DelayBefore = 0.0f;
@@ -96,6 +111,14 @@ private:
 	void ReportIconCase(const TCHAR* Tag, const TCHAR* Step, const FString& Expect) const;
 	/** OpenLevel to the travel test map with Seconds of simulated loading inside LoadMap. */
 	void StartIconTestTravel(float Seconds);
+
+	/** LFXProto.Loader: starts a case (times in its logs count from now), and C++ callbacks that log what they get. */
+	void StartLoaderCase(const FString& Description);
+	double LoaderCaseSeconds() const;
+	FLoadingFXLoadHandle LoadAsyncForTest(const TArray<FSoftObjectPath>& Paths, FName Reason, UObject* Owner, bool bShowLoadingIcon);
+	void ReportLoaderState(const TCHAR* Step, const FLoadingFXLoadHandle& Handle, const FString& Expect) const;
+	void HandleLoaderLoadStarted(const FLoadingFXLoadInfo& Info);
+	void HandleLoaderLoadEnded(const FLoadingFXLoadInfo& Info);
 
 	void HandlePrepareLoadingScreen();
 	void HandleMoviePlaybackStarted();
@@ -128,6 +151,23 @@ private:
 	/** LFXProto.ShowDelay: release IconTestHandle from PostLoadMapWithWorld (inside LoadMap), and what to expect then. */
 	bool bReleaseIconTestInLoadMap = false;
 	FString IconTestReleaseInLoadMapExpect;
+
+	/** LFXProto.Loader state. */
+	double LoaderCaseStartSeconds = 0.0;
+	uint64 LoaderCaseStartFrame = 0;
+	/** True while a load call made by the test runs, to catch callbacks fired inside it. */
+	bool bLoaderInsideCall = false;
+	int32 LoaderCompletedCount = 0;
+	int32 LoaderCanceledCount = 0;
+	/** The non-null results of the last completed C++ load, to see whether they stay in memory. */
+	TArray<TWeakObjectPtr<UObject>> LoaderLoadedAssets;
+	FLoadingFXLoadHandle LoaderHandles[4];
+	FLoadingFXIconHandle LoaderIconHandle;
+	TWeakObjectPtr<AActor> LoaderOwner;
+	/** Extra seconds to block inside the next sync load's end event, which runs before the Bridge ends the blocking section. */
+	float LoaderSimulatedSyncSeconds = 0.0f;
+	FDelegateHandle LoaderStartedHandle;
+	FDelegateHandle LoaderEndedHandle;
 
 	TSharedPtr<SWidget> ViewportOverlayRoot;
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;

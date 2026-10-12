@@ -7,9 +7,12 @@
 #include "SLoadingFXProtoShowcase.h"
 
 #include "LoadingFXIconSubsystem.h"
+#include "LoadingFXLoadAssetsAsyncAction.h"
+#include "LoadingFXLoaderSubsystem.h"
 #include "LoadingFXSettings.h"
 #include "LoadingFXSpinner.h"
 
+#include "Algo/Count.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
@@ -145,6 +148,32 @@ namespace LoadingFXProto
 		const FLoadingFXIconHandle Handle = IconSubsystem.Acquire(Reason);
 		Settings->IconShowDelay = SavedShowDelay;
 		return Handle;
+	}
+
+	/** LFXProto.Loader: a bundled material by name. The test expects them not to be loaded yet (M_LoadingSpinner is the preloaded icon). */
+	FSoftObjectPath LoaderMaterial(const TCHAR* Name)
+	{
+		return FSoftObjectPath(FString::Printf(TEXT("/LoadingFX/Materials/%s.%s"), Name, Name));
+	}
+
+	static const TCHAR* const LoaderMissingPath = TEXT("/LoadingFX/Materials/M_LoadingMissing.M_LoadingMissing");
+	static const TCHAR* const LoaderBlueprintClassPath = TEXT("/Engine/EngineSky/BP_Sky_Sphere.BP_Sky_Sphere_C");
+
+	template <typename ObjectType>
+	FString DescribeObjects(const TArray<ObjectType*>& Objects)
+	{
+		FString Text;
+		for (const ObjectType* Object : Objects)
+		{
+			Text += Text.IsEmpty() ? TEXT("") : TEXT(", ");
+			Text += Object ? Object->GetName() : FString(TEXT("null"));
+		}
+		return Text.IsEmpty() ? FString(TEXT("(none)")) : Text;
+	}
+
+	int32 CountAlive(const TArray<TWeakObjectPtr<UObject>>& Objects)
+	{
+		return Algo::CountIf(Objects, [](const TWeakObjectPtr<UObject>& Object) { return Object.IsValid(); });
 	}
 
 	ULoadingFXProtoSubsystem* FindSubsystem(const UWorld* World)
@@ -305,6 +334,17 @@ namespace LoadingFXProto
 				Subsystem->RunShowDelayTest(Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs LoaderCommand(
+		TEXT("LFXProto.Loader"),
+		TEXT("Verification prototype: check the asset loader and the Bridge (async and sync loads, retention, cancel, owner, the loading icon, the Blueprint entry points). Run it in a fresh process. Args: [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunLoaderTest(Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -382,6 +422,11 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 	}
 	FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapHandle);
 	FCoreDelegates::OnSyncLoadPackage.Remove(SyncLoadPackageHandle);
+	if (ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>())
+	{
+		Loader->OnLoadStartedNative.Remove(LoaderStartedHandle);
+		Loader->OnLoadEndedNative.Remove(LoaderEndedHandle);
+	}
 
 	HideViewportOverlay();
 	HideGallery();
@@ -1254,6 +1299,337 @@ void ULoadingFXProtoSubsystem::RunShowDelayTest(bool bQuitWhenDone)
 	SequenceSteps.Add({ 0.5f, [this, bQuitWhenDone]() { EndIconTest(Tag, bQuitWhenDone); } });
 
 	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
+{
+	static const TCHAR* const Tag = TEXT("[Loader]");
+	using LoadingFXProto::LoaderMaterial;
+
+	ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>();
+	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	if (!Loader || !IconSubsystem)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s ULoadingFXLoaderSubsystem or ULoadingFXIconSubsystem not found"), Tag);
+		return;
+	}
+	if (IconSubsystem->IsIconVisible() || IconSubsystem->GetRequestCount() > 0)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s the loading icon is in use: release its requests first (LoadingFX.Icon.Hide all)"), Tag);
+		return;
+	}
+
+	// Bound after the Bridge, so these run before it (multicast delegates call the last bound first): the end event of
+	// a sync load arrives here while the Bridge's blocking section is still on.
+	if (!LoaderStartedHandle.IsValid())
+	{
+		LoaderStartedHandle = Loader->OnLoadStartedNative.AddUObject(this, &ThisClass::HandleLoaderLoadStarted);
+		LoaderEndedHandle = Loader->OnLoadEndedNative.AddUObject(this, &ThisClass::HandleLoaderLoadEnded);
+	}
+
+	const ULoadingFXSettings* Settings = GetDefault<ULoadingFXSettings>();
+	UE_LOG(LogLoadingFXProto, Display, TEXT("%s IconShowDelay=%.2fs IconMinimumDisplayTime=%.2fs, MoviePlayer enabled=%d"),
+		Tag, Settings->IconShowDelay, Settings->IconMinimumDisplayTime, IsMoviePlayerEnabled() ? 1 : 0);
+
+	TArray<FSoftObjectPath> MainPaths =
+	{
+		LoaderMaterial(TEXT("M_LoadingBars")),
+		LoaderMaterial(TEXT("M_LoadingComet")),
+		LoaderMaterial(TEXT("M_LoadingDots")),
+		LoaderMaterial(TEXT("M_LoadingTimer")),
+		FSoftObjectPath(LoadingFXProto::LoaderMissingPath),
+		FSoftObjectPath(),
+	};
+	const TSharedRef<TArray<TWeakObjectPtr<UObject>>> FirstLoadAssets = MakeShared<TArray<TWeakObjectPtr<UObject>>>();
+
+	SequenceSteps.Reset();
+
+	SequenceSteps.Add({ 0.5f, [this, MainPaths]()
+	{
+		StartLoaderCase(TEXT("1/13 async: 4 materials, a missing path and a null entry"));
+		LoaderHandles[0] = LoadAsyncForTest(MainPaths, TEXT("LFXProto.Loader 1"), nullptr, false);
+		ReportLoaderState(TEXT("after the call"), LoaderHandles[0], TEXT("active=1 in progress=1, nothing fired inside the call"));
+	} });
+	SequenceSteps.Add({ 2.0f, [this, FirstLoadAssets]()
+	{
+		ReportLoaderState(TEXT("2 s later"), LoaderHandles[0], TEXT("active=1 in progress=0 progress=1.00 completed=1: 4 materials, null, null, one warning for the missing path"));
+		*FirstLoadAssets = LoaderLoadedAssets;
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, true);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   after a GC: %d of %d loaded asset(s) still in memory (expect all: the handle keeps them)"),
+			Tag, LoadingFXProto::CountAlive(*FirstLoadAssets), FirstLoadAssets->Num());
+	} });
+
+	SequenceSteps.Add({ 0.2f, [this]()
+	{
+		StartLoaderCase(TEXT("2/13 async: a material that is already loaded (held by load 1)"));
+		LoaderHandles[1] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingBars")) }, TEXT("LFXProto.Loader 2"), nullptr, false);
+		ReportLoaderState(TEXT("after the call"), LoaderHandles[1], TEXT("in progress=1: it completes on a later frame, not inside the call"));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Loader, FirstLoadAssets]()
+	{
+		StartLoaderCase(TEXT("3/13 release loads 1 and 2, then GC"));
+		FLoadingFXLoadHandle StaleCopy = LoaderHandles[0];
+		const bool bReleased1 = Loader->Release(LoaderHandles[0]);
+		const bool bReleased2 = Loader->Release(LoaderHandles[1]);
+		const bool bReleasedStale = Loader->Release(StaleCopy);
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, true);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   released=%d,%d stale copy=%d; %d of %d asset(s) of load 1 still in memory (expect 1,1 0 with a warning; 0: unloaded)"),
+			Tag, bReleased1 ? 1 : 0, bReleased2 ? 1 : 0, bReleasedStale ? 1 : 0, LoadingFXProto::CountAlive(*FirstLoadAssets), FirstLoadAssets->Num());
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this]()
+	{
+		StartLoaderCase(TEXT("4/13 async: empty request"));
+		LoaderHandles[0] = LoadAsyncForTest({}, TEXT("LFXProto.Loader 4"), nullptr, false);
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Loader]()
+	{
+		ReportLoaderState(TEXT("0.5 s later"), LoaderHandles[0], TEXT("active=1 in progress=0 completed=1: (none), after the call returned (on the next core ticker pass, which can be the same frame)"));
+		Loader->Release(LoaderHandles[0]);
+
+		StartLoaderCase(TEXT("5/13 async: release right after the call (cancel)"));
+		LoaderHandles[0] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingSegments")), LoaderMaterial(TEXT("M_LoadingHourglass")) }, TEXT("LFXProto.Loader 5"), nullptr, false);
+		Loader->Release(LoaderHandles[0]);
+		ReportLoaderState(TEXT("right after the release"), LoaderHandles[0], TEXT("active=0 canceled=1 completed=0"));
+	} });
+	SequenceSteps.Add({ 1.0f, [this]()
+	{
+		ReportLoaderState(TEXT("1 s later"), LoaderHandles[0], TEXT("canceled=1 completed=0: no completion after a cancel"));
+	} });
+
+	SequenceSteps.Add({ 0.2f, [this]()
+	{
+		StartLoaderCase(TEXT("6/13 async with an owner actor that is destroyed after the load completes"));
+		AActor* Owner = GetWorld() ? GetWorld()->SpawnActor<AActor>() : nullptr;
+		LoaderOwner = Owner;
+		LoaderHandles[0] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingDualArc")) }, TEXT("LFXProto.Loader 6"), Owner, false);
+	} });
+	SequenceSteps.Add({ 1.0f, [this]()
+	{
+		ReportLoaderState(TEXT("before the owner is destroyed"), LoaderHandles[0], TEXT("active=1 in progress=0 completed=1"));
+		if (AActor* Owner = LoaderOwner.Get())
+		{
+			Owner->Destroy();
+		}
+	} });
+	SequenceSteps.Add({ 0.2f, [this]()
+	{
+		ReportLoaderState(TEXT("0.2 s after the owner was destroyed"), LoaderHandles[0], TEXT("active=0: released by the owner watch"));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Loader]()
+	{
+		StartLoaderCase(TEXT("7/13 sync without the icon flag, icon not requested"));
+		TArray<UObject*> Loaded;
+		LoaderHandles[0] = Loader->LoadAssetsSync({ LoaderMaterial(TEXT("M_LoadingBoxes")) }, TEXT("LFXProto.Loader 7"), nullptr, false, Loaded);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   returned at %.2fs: %s, active=%d (expect M_LoadingBoxes, 1; ended with blocking section=1 MoviePlayer playing=0)"),
+			Tag, LoaderCaseSeconds(), *LoadingFXProto::DescribeObjects(Loaded), Loader->IsHandleActive(LoaderHandles[0]) ? 1 : 0);
+		Loader->Release(LoaderHandles[0]);
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Loader, IconSubsystem]()
+	{
+		StartLoaderCase(TEXT("8/13 sync without the icon flag while the icon is visible, +1.5 s simulated"));
+		LoaderIconHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.Loader 8"));
+		LoaderSimulatedSyncSeconds = 1.5f;
+		TArray<UObject*> Loaded;
+		LoaderHandles[0] = Loader->LoadAssetsSync({ LoaderMaterial(TEXT("M_LoadingIcon")) }, TEXT("LFXProto.Loader 8"), nullptr, false, Loaded);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   returned at %.2fs: %s (expect M_LoadingIcon after ~1.5 s; ended with blocking section=1 MoviePlayer playing=1)"),
+			Tag, LoaderCaseSeconds(), *LoadingFXProto::DescribeObjects(Loaded));
+		IconSubsystem->Release(LoaderIconHandle);
+		Loader->Release(LoaderHandles[0]);
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Loader, IconSubsystem]()
+	{
+		StartLoaderCase(TEXT("9/13 sync with the icon flag, icon not requested before, +1.5 s simulated"));
+		LoaderSimulatedSyncSeconds = 1.5f;
+		TArray<UObject*> Loaded;
+		LoaderHandles[0] = Loader->LoadAssetsSync({ LoaderMaterial(TEXT("M_LoadingArc")) }, TEXT("LFXProto.Loader 9"), nullptr, true, Loaded);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   returned at %.2fs: %s, icon visible=%d requests=%d (expect M_LoadingArc; requests=0, the Bridge released its request; ended with blocking section=1 MoviePlayer playing=1 requests=1)"),
+			Tag, LoaderCaseSeconds(), *LoadingFXProto::DescribeObjects(Loaded), IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount());
+		Loader->Release(LoaderHandles[0]);
+	} });
+
+	SequenceSteps.Add({ 1.0f, [this, IconSubsystem]()
+	{
+		StartLoaderCase(TEXT("10/13 async with the icon flag"));
+		LoaderHandles[0] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingSegments")) }, TEXT("LFXProto.Loader 10"), nullptr, true);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   icon requests=%d right after the call (expect 1; 0 by the completion)"), Tag, IconSubsystem->GetRequestCount());
+	} });
+	SequenceSteps.Add({ 1.0f, [this, Loader]()
+	{
+		Loader->Release(LoaderHandles[0]);
+
+		StartLoaderCase(TEXT("11/13 Blueprint sync: one asset and two classes (a Blueprint class and a native class)"));
+		const TArray<TSoftObjectPtr<UObject>> Assets = { TSoftObjectPtr<UObject>(LoaderMaterial(TEXT("M_LoadingComet"))) };
+		const TArray<TSoftClassPtr<UObject>> Classes =
+		{
+			TSoftClassPtr<UObject>(FSoftObjectPath(LoadingFXProto::LoaderBlueprintClassPath)),
+			TSoftClassPtr<UObject>(FSoftObjectPath(AActor::StaticClass())),
+		};
+		TArray<UObject*> LoadedAssets;
+		TArray<UClass*> LoadedClasses;
+		LoaderHandles[0] = Loader->K2_LoadAssetsSync(Assets, Classes, TEXT("LFXProto.Loader 11"), this, false, LoadedAssets, LoadedClasses);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   assets: %s / classes: %s (expect M_LoadingComet / BP_Sky_Sphere_C, Actor)"),
+			Tag, *LoadingFXProto::DescribeObjects(LoadedAssets), *LoadingFXProto::DescribeObjects(LoadedClasses));
+		Loader->Release(LoaderHandles[0]);
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this]()
+	{
+		StartLoaderCase(TEXT("12/13 Load Assets Async action: one asset and one class, owned by this subsystem"));
+		ULoadingFXLoadAssetsAsyncAction* Action = ULoadingFXLoadAssetsAsyncAction::LoadAssetsAsync(GetGameInstance(),
+			{ TSoftObjectPtr<UObject>(LoaderMaterial(TEXT("M_LoadingDots"))) },
+			{ TSoftClassPtr<UObject>(FSoftObjectPath(LoadingFXProto::LoaderBlueprintClassPath)) },
+			TEXT("LFXProto.Loader 12"), this, false);
+		Action->OnProgress.AddDynamic(this, &ThisClass::HandleLoaderActionProgress);
+		Action->OnCompleted.AddDynamic(this, &ThisClass::HandleLoaderActionCompleted);
+		Action->OnCanceled.AddDynamic(this, &ThisClass::HandleLoaderActionCanceled);
+		bLoaderInsideCall = true;
+		Action->Activate();
+		bLoaderInsideCall = false;
+	} });
+
+	SequenceSteps.Add({ 1.0f, [this]()
+	{
+		StartLoaderCase(TEXT("13/13 Load Assets Async action canceled right after activation"));
+		ULoadingFXLoadAssetsAsyncAction* Action = ULoadingFXLoadAssetsAsyncAction::LoadAssetsAsync(GetGameInstance(),
+			{ TSoftObjectPtr<UObject>(LoaderMaterial(TEXT("M_LoadingHourglass"))) }, {}, TEXT("LFXProto.Loader 13"), this, false);
+		Action->OnProgress.AddDynamic(this, &ThisClass::HandleLoaderActionProgress);
+		Action->OnCompleted.AddDynamic(this, &ThisClass::HandleLoaderActionCompleted);
+		Action->OnCanceled.AddDynamic(this, &ThisClass::HandleLoaderActionCanceled);
+		Action->Activate();
+		Action->Cancel();
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   right after Cancel: canceled=%d completed=%d active=%d (expect 1, 0, 1: IsActive stays true after SetReadyToDestroy)"),
+			Tag, LoaderCanceledCount, LoaderCompletedCount, Action->IsActive() ? 1 : 0);
+	} });
+
+	SequenceSteps.Add({ 1.0f, [this, Loader, bQuitWhenDone]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   1 s later: canceled=%d completed=%d (expect 1, 0). Active loads (expect one: load 12, owned by this subsystem):"),
+			Tag, LoaderCanceledCount, LoaderCompletedCount);
+		Loader->DumpLoads();
+		Loader->ReleaseAll();
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   after ReleaseAll (expect none):"), Tag);
+		Loader->DumpLoads();
+
+		Loader->OnLoadStartedNative.Remove(LoaderStartedHandle);
+		Loader->OnLoadEndedNative.Remove(LoaderEndedHandle);
+		LoaderStartedHandle.Reset();
+		LoaderEndedHandle.Reset();
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s finished"), Tag);
+		if (bQuitWhenDone)
+		{
+			FPlatformMisc::RequestExit(false, Tag);
+		}
+	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::StartLoaderCase(const FString& Description)
+{
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader] %s"), *Description);
+	LoaderCaseStartSeconds = FPlatformTime::Seconds();
+	LoaderCaseStartFrame = GFrameCounter;
+	LoaderCompletedCount = 0;
+	LoaderCanceledCount = 0;
+}
+
+double ULoadingFXProtoSubsystem::LoaderCaseSeconds() const
+{
+	return FPlatformTime::Seconds() - LoaderCaseStartSeconds;
+}
+
+FLoadingFXLoadHandle ULoadingFXProtoSubsystem::LoadAsyncForTest(const TArray<FSoftObjectPath>& Paths, FName Reason, UObject* Owner, bool bShowLoadingIcon)
+{
+	ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>();
+
+	bLoaderInsideCall = true;
+	const FLoadingFXLoadHandle Handle = Loader->LoadAssetsAsync(Paths, Reason, Owner, bShowLoadingIcon,
+		FLoadingFXLoadCompleted::CreateWeakLambda(this, [this, Reason](FLoadingFXLoadHandle, const TArray<UObject*>& LoadedAssets)
+		{
+			++LoaderCompletedCount;
+			LoaderLoadedAssets.Reset();
+			for (UObject* Object : LoadedAssets)
+			{
+				if (Object)
+				{
+					LoaderLoadedAssets.Add(Object);
+				}
+			}
+			const ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   '%s' completed at %.2fs (frame +%llu, inside the call=%d): %s; icon requests=%d"),
+				*Reason.ToString(), LoaderCaseSeconds(), GFrameCounter - LoaderCaseStartFrame, bLoaderInsideCall ? 1 : 0,
+				*LoadingFXProto::DescribeObjects(LoadedAssets), IconSubsystem ? IconSubsystem->GetRequestCount() : -1);
+		}),
+		FLoadingFXLoadProgressChanged::CreateWeakLambda(this, [this, Reason](FLoadingFXLoadHandle, float Progress)
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   '%s' progress %.2f at %.2fs (inside the call=%d)"),
+				*Reason.ToString(), Progress, LoaderCaseSeconds(), bLoaderInsideCall ? 1 : 0);
+		}),
+		FLoadingFXLoadCanceled::CreateWeakLambda(this, [this, Reason](FLoadingFXLoadHandle)
+		{
+			++LoaderCanceledCount;
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   '%s' canceled at %.2fs (inside the call=%d)"),
+				*Reason.ToString(), LoaderCaseSeconds(), bLoaderInsideCall ? 1 : 0);
+		}));
+	bLoaderInsideCall = false;
+	return Handle;
+}
+
+void ULoadingFXProtoSubsystem::ReportLoaderState(const TCHAR* Step, const FLoadingFXLoadHandle& Handle, const FString& Expect) const
+{
+	const ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>();
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   %s at %.2fs: active=%d in progress=%d progress=%.2f completed=%d canceled=%d (expect %s)"),
+		Step, LoaderCaseSeconds(), Loader->IsHandleActive(Handle) ? 1 : 0, Loader->IsLoadInProgress(Handle) ? 1 : 0, Loader->GetLoadProgress(Handle),
+		LoaderCompletedCount, LoaderCanceledCount, *Expect);
+}
+
+void ULoadingFXProtoSubsystem::HandleLoaderLoadStarted(const FLoadingFXLoadInfo& Info)
+{
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   '%s' started at %.2fs (sync=%d icon=%d)"),
+		*Info.Reason.ToString(), LoaderCaseSeconds(), Info.bSync ? 1 : 0, Info.bShowLoadingIcon ? 1 : 0);
+}
+
+void ULoadingFXProtoSubsystem::HandleLoaderLoadEnded(const FLoadingFXLoadInfo& Info)
+{
+	const ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	const IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   '%s' ended at %.2fs (canceled=%d sync=%d): blocking section=%d MoviePlayer playing=%d icon visible=%d requests=%d"),
+		*Info.Reason.ToString(), LoaderCaseSeconds(), Info.bCanceled ? 1 : 0, Info.bSync ? 1 : 0,
+		IconSubsystem && IconSubsystem->IsInBlockingSection() ? 1 : 0, MoviePlayer && MoviePlayer->IsMovieCurrentlyPlaying() ? 1 : 0,
+		IconSubsystem && IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem ? IconSubsystem->GetRequestCount() : -1);
+
+	if (Info.bSync && LoaderSimulatedSyncSeconds > 0.0f)
+	{
+		const float Seconds = LoaderSimulatedSyncSeconds;
+		LoaderSimulatedSyncSeconds = 0.0f;
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   simulating +%.1fs of loading inside the sync load (watch the icon)"), Seconds);
+		SimulateBlockingWork(Seconds, false);
+	}
+}
+
+void ULoadingFXProtoSubsystem::HandleLoaderActionProgress(FLoadingFXLoadHandle Handle, float Progress, const TArray<UObject*>& LoadedAssets, const TArray<UClass*>& LoadedClasses)
+{
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Progress %.2f at %.2fs (inside Activate=%d)"), Progress, LoaderCaseSeconds(), bLoaderInsideCall ? 1 : 0);
+}
+
+void ULoadingFXProtoSubsystem::HandleLoaderActionCompleted(FLoadingFXLoadHandle Handle, float Progress, const TArray<UObject*>& LoadedAssets, const TArray<UClass*>& LoadedClasses)
+{
+	++LoaderCompletedCount;
+	const ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>();
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Completed at %.2fs: progress %.2f, assets: %s / classes: %s, handle active=%d (expect M_LoadingDots / BP_Sky_Sphere_C, 1)"),
+		LoaderCaseSeconds(), Progress, *LoadingFXProto::DescribeObjects(LoadedAssets), *LoadingFXProto::DescribeObjects(LoadedClasses), Loader->IsHandleActive(Handle) ? 1 : 0);
+}
+
+void ULoadingFXProtoSubsystem::HandleLoaderActionCanceled(FLoadingFXLoadHandle Handle, float Progress, const TArray<UObject*>& LoadedAssets, const TArray<UClass*>& LoadedClasses)
+{
+	++LoaderCanceledCount;
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Canceled at %.2fs: progress %.2f"), LoaderCaseSeconds(), Progress);
 }
 
 void ULoadingFXProtoSubsystem::HandleIconVisibilityChanged(bool bVisible)

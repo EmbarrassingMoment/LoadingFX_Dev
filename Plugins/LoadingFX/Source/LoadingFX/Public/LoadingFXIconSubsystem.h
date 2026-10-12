@@ -117,6 +117,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "LoadingFX")
 	bool IsHandleActive(const FLoadingFXIconHandle& Handle) const;
 
+	/**
+	 * Marks the start of work that blocks the game thread (a sync load, for example), so the icon keeps animating
+	 * through it. If the icon is requested at that moment (also within the show delay), MoviePlayer takes over and draws
+	 * it on a black screen until the matching EndBlockingSection; otherwise nothing changes and the game just hitches.
+	 * Sections nest, and only the outermost one starts and stops MoviePlayer.
+	 * Does nothing where MoviePlayer is unavailable (editor, PIE, -NoLoadingScreen) or while another loading screen is
+	 * set up or playing. Prefer FLoadingFXBlockingScope, which cannot miss the end.
+	 */
+	void BeginBlockingSection(FName Reason);
+
+	/** Ends the section started by the matching BeginBlockingSection. The outermost one waits for MoviePlayer to finish. */
+	void EndBlockingSection();
+
+	/** True between the outermost BeginBlockingSection and its EndBlockingSection, whether MoviePlayer took over or not. */
+	bool IsInBlockingSection() const { return BlockingSectionDepth > 0; }
+
 	/** Fires when the icon appears (after the show delay) or hides (after the last release and the minimum display time). */
 	UPROPERTY(BlueprintAssignable, Category = "LoadingFX")
 	FLoadingFXIconVisibilityChanged OnVisibilityChanged;
@@ -174,6 +190,12 @@ private:
 
 	void HandlePrepareLoadingScreen();
 
+	/**
+	 * Hands MoviePlayer a loading screen with the icon, if the icon is visible or requested and nobody else has set one
+	 * up. What names the blocking work for the log. Returns true if it did.
+	 */
+	bool SetUpIconLoadingScreen(const FString& What);
+
 	bool TickOwnerWatch(float DeltaTime);
 
 	/** Keeps the material alive across garbage collection, including the one inside LoadMap. */
@@ -207,8 +229,36 @@ private:
 	FDelegateHandle ViewportCreatedHandle;
 	FDelegateHandle PrepareLoadingScreenHandle;
 
+	/** Nesting depth of BeginBlockingSection, and whether the outermost section started MoviePlayer. */
+	int32 BlockingSectionDepth = 0;
+	bool bBlockingSectionPlaysMovie = false;
+	FName BlockingSectionReason;
+	double BlockingSectionStartSeconds = 0.0;
+
 	/** Registered only while some request has an owner to watch. */
 	FTSTicker::FDelegateHandle OwnerWatchTickerHandle;
 
 	TArray<FLoadingFXIconHandle> ConsoleHandles;
+};
+
+/**
+ * Keeps the loading icon animating through blocking work in C++: runs BeginBlockingSection on construction and
+ * EndBlockingSection on destruction, on the loading icon subsystem of WorldContextObject's game instance. Does nothing
+ * if there is none.
+ *
+ *     {
+ *         FLoadingFXBlockingScope BlockingScope(this, TEXT("BuildCache"));
+ *         // ... work that blocks the game thread ...
+ *     }
+ */
+class LOADINGFX_API FLoadingFXBlockingScope
+{
+public:
+	FLoadingFXBlockingScope(const UObject* WorldContextObject, FName Reason);
+	~FLoadingFXBlockingScope();
+
+	UE_NONCOPYABLE(FLoadingFXBlockingScope);
+
+private:
+	TWeakObjectPtr<ULoadingFXIconSubsystem> Subsystem;
 };

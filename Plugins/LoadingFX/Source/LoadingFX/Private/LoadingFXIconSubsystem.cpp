@@ -6,6 +6,7 @@
 #include "LoadingFXSettings.h"
 #include "SLoadingFXSpinner.h"
 
+#include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
@@ -123,6 +124,13 @@ void ULoadingFXIconSubsystem::Deinitialize()
 	// A load request cannot be cancelled: its completion is ignored from now on.
 	bIconMaterialPreloadPending = false;
 	IconMaterialPreloadRequestId = INDEX_NONE;
+
+	if (BlockingSectionDepth > 0)
+	{
+		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon subsystem shut down inside blocking section '%s'."), *BlockingSectionReason.ToString());
+		BlockingSectionDepth = 0;
+		bBlockingSectionPlaysMovie = false;
+	}
 
 	Super::Deinitialize();
 }
@@ -592,20 +600,26 @@ void ULoadingFXIconSubsystem::HandleViewportCreated()
 void ULoadingFXIconSubsystem::HandlePrepareLoadingScreen()
 {
 	// v1 scope: take over the loading screen only while the icon is visible or requested. Showing it, and deciding
-	// when the travel is over, stays with the caller. That includes the minimum display time after the last release
-	// (the icon is on screen then, and would freeze there for the whole load otherwise), and the show delay after the
-	// first request (the icon then appears on the loading screen when the delay is over, as it would in the game).
+	// when the travel is over, stays with the caller.
+	SetUpIconLoadingScreen(TEXT("the blocking load"));
+}
+
+bool ULoadingFXIconSubsystem::SetUpIconLoadingScreen(const FString& What)
+{
+	// Visible includes the minimum display time after the last release (the icon is on screen then, and would freeze
+	// there for the whole load otherwise). Requested includes the show delay after the first request (the icon then
+	// appears on the loading screen when the delay is over, as it would in the game).
 	const bool bShowPending = PendingShowTickerHandle.IsValid();
 	if ((!IsIconVisible() && !bShowPending) || !GetIconMaterial())
 	{
-		return;
+		return false;
 	}
 
 	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
 	if (!MoviePlayer || MoviePlayer->LoadingScreenIsPrepared())
 	{
-		// Someone else answered this broadcast first: leave their loading screen alone.
-		return;
+		// Someone else set up a loading screen first: leave it alone.
+		return false;
 	}
 
 	// MoviePlayer needs its own widget instance: the viewport one keeps its parent. The attributes are cleared
@@ -620,13 +634,94 @@ void ULoadingFXIconSubsystem::HandlePrepareLoadingScreen()
 
 	if (bShowPending)
 	{
-		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon is requested (%d request(s)) and appears in %.2fs (show delay): rendering the blocking load through MoviePlayer."),
-			Requests.Num(), FMath::Max(PendingShowAtSeconds - FPlatformTime::Seconds(), 0.0));
+		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon is requested (%d request(s)) and appears in %.2fs (show delay): rendering %s through MoviePlayer."),
+			Requests.Num(), FMath::Max(PendingShowAtSeconds - FPlatformTime::Seconds(), 0.0), *What);
 	}
 	else
 	{
-		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon is visible (%d request(s)): rendering the blocking load through MoviePlayer."), Requests.Num());
+		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon is visible (%d request(s)): rendering %s through MoviePlayer."), Requests.Num(), *What);
 	}
+	return true;
+}
+
+void ULoadingFXIconSubsystem::BeginBlockingSection(FName Reason)
+{
+	if (!ensureMsgf(IsInGameThread(), TEXT("ULoadingFXIconSubsystem::BeginBlockingSection must be called from the game thread.")))
+	{
+		return;
+	}
+	if (BlockingSectionDepth++ > 0)
+	{
+		UE_LOG(LogLoadingFX, Verbose, TEXT("BeginBlockingSection '%s': nested in '%s' (depth %d)."), *Reason.ToString(), *BlockingSectionReason.ToString(), BlockingSectionDepth);
+		return;
+	}
+	BlockingSectionReason = Reason;
+	BlockingSectionStartSeconds = FPlatformTime::Seconds();
+	bBlockingSectionPlaysMovie = false;
+
+	if (!IsIconVisible() && !PendingShowTickerHandle.IsValid())
+	{
+		UE_LOG(LogLoadingFX, Verbose, TEXT("BeginBlockingSection '%s': the loading icon is not requested, so nothing takes over."), *Reason.ToString());
+		return;
+	}
+
+	IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
+	if (!MoviePlayer || !IsMoviePlayerEnabled())
+	{
+		// Logged at Initialize: the icon freezes for the section.
+		return;
+	}
+	if (MoviePlayer->IsMovieCurrentlyPlaying())
+	{
+		// A loading screen is already drawing (a sync load inside LoadMap, for example): it covers the section.
+		UE_LOG(LogLoadingFX, Verbose, TEXT("BeginBlockingSection '%s': MoviePlayer is already playing."), *Reason.ToString());
+		return;
+	}
+
+	// Set up here rather than through PlayMovie's OnPrepareLoadingScreen broadcast, which would also ask every other
+	// listener (a project's own loading screen for map travel, for example) to set one up for this section.
+	if (!SetUpIconLoadingScreen(FString::Printf(TEXT("blocking section '%s'"), *Reason.ToString())))
+	{
+		return;
+	}
+
+	bBlockingSectionPlaysMovie = MoviePlayer->PlayMovie();
+	if (!bBlockingSectionPlaysMovie)
+	{
+		// Do not leave the screen set up for the next map load.
+		MoviePlayer->SetupLoadingScreen(FLoadingScreenAttributes());
+		UE_LOG(LogLoadingFX, Warning, TEXT("BeginBlockingSection '%s': MoviePlayer did not start, so the loading icon freezes for this section."), *Reason.ToString());
+	}
+}
+
+void ULoadingFXIconSubsystem::EndBlockingSection()
+{
+	if (!ensureMsgf(IsInGameThread(), TEXT("ULoadingFXIconSubsystem::EndBlockingSection must be called from the game thread.")))
+	{
+		return;
+	}
+	if (BlockingSectionDepth <= 0)
+	{
+		UE_LOG(LogLoadingFX, Warning, TEXT("EndBlockingSection without a matching BeginBlockingSection."));
+		return;
+	}
+	if (--BlockingSectionDepth > 0)
+	{
+		return;
+	}
+
+	if (bBlockingSectionPlaysMovie)
+	{
+		bBlockingSectionPlaysMovie = false;
+		if (IGameMoviePlayer* MoviePlayer = GetMoviePlayer())
+		{
+			// Returns once the loading thread has stopped drawing; the game viewport draws again from the next frame.
+			MoviePlayer->WaitForMovieToFinish();
+		}
+		UE_LOG(LogLoadingFX, Log, TEXT("Blocking section '%s' ended after %.2fs: MoviePlayer stopped."),
+			*BlockingSectionReason.ToString(), FPlatformTime::Seconds() - BlockingSectionStartSeconds);
+	}
+	BlockingSectionReason = NAME_None;
 }
 
 bool ULoadingFXIconSubsystem::TickOwnerWatch(float /*DeltaTime*/)
@@ -651,4 +746,28 @@ bool ULoadingFXIconSubsystem::TickOwnerWatch(float /*DeltaTime*/)
 		OwnerWatchTickerHandle.Reset();
 	}
 	return bKeepTicking;
+}
+
+FLoadingFXBlockingScope::FLoadingFXBlockingScope(const UObject* WorldContextObject, FName Reason)
+{
+	const UGameInstance* GameInstance = Cast<UGameInstance>(WorldContextObject);
+	if (!GameInstance && WorldContextObject && GEngine)
+	{
+		const UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull);
+		GameInstance = World ? World->GetGameInstance() : nullptr;
+	}
+
+	if (ULoadingFXIconSubsystem* Found = GameInstance ? GameInstance->GetSubsystem<ULoadingFXIconSubsystem>() : nullptr)
+	{
+		Subsystem = Found;
+		Found->BeginBlockingSection(Reason);
+	}
+}
+
+FLoadingFXBlockingScope::~FLoadingFXBlockingScope()
+{
+	if (ULoadingFXIconSubsystem* Found = Subsystem.Get())
+	{
+		Found->EndBlockingSection();
+	}
 }
