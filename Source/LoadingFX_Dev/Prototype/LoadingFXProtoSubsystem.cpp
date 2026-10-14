@@ -71,6 +71,7 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingRipple.M_LoadingRipple"), TEXT("Ripple (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingEqualizer.M_LoadingEqualizer"), TEXT("Equalizer (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingGooey.M_LoadingGooey"), TEXT("Gooey (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingMorph.M_LoadingMorph"), TEXT("Morph (RealTime)") },
 	};
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
