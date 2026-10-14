@@ -68,6 +68,7 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingTimer.M_LoadingTimer"), TEXT("Timer (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingHourglass.M_LoadingHourglass"), TEXT("Hourglass (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingBounce.M_LoadingBounce"), TEXT("Bounce (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingRipple.M_LoadingRipple"), TEXT("Ripple (RealTime)") },
 	};
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
