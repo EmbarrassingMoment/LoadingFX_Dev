@@ -33,6 +33,9 @@ SCRIPTS = [
     "build_m_loadingequalizer.py",
     "build_m_loadinggooey.py",
     "build_m_loadingmorph.py",
+    "build_m_loadingbarslide.py",
+    "build_m_loadingbarstripes.py",
+    "build_m_loadingbarfill.py",
 ]
 
 for name in SCRIPTS:
