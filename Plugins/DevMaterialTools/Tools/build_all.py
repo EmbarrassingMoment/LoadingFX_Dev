@@ -34,6 +34,7 @@ SCRIPTS = [
     "build_m_loadinggooey.py",
     "build_m_loadingmorph.py",
     "build_m_loadinglinear.py",
+    "build_m_loadingchase.py",
 ]
 
 for name in SCRIPTS:
