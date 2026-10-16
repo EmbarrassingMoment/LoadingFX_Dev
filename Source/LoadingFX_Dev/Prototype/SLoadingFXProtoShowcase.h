@@ -22,6 +22,8 @@ public:
 		/** Not referenced by the widget: the caller keeps it alive. */
 		UMaterialInterface* Material = nullptr;
 		FString Caption;
+		/** Width / height of the tile: 1 for spinners, wider for bar materials (drawn TileSize wide and TileSize / AspectRatio high). */
+		float AspectRatio = 1.0f;
 	};
 
 	SLATE_BEGIN_ARGS(SLoadingFXProtoShowcase)
@@ -29,7 +31,7 @@ public:
 		, _ShowReference(false)
 	{}
 		SLATE_ARGUMENT(TArray<FTile>, Tiles)
-		/** Edge length of each square tile in Slate units. */
+		/** Width of each tile in Slate units (also its height for square tiles). */
 		SLATE_ARGUMENT(float, TileSize)
 		/** Overlay the reference circle (ring layouts) and square (grid layouts) of the material contract. */
 		SLATE_ARGUMENT(bool, ShowReference)

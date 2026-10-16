@@ -133,14 +133,18 @@ UMaterialInterface* ULoadingFXSpinner::ResolveMaterial()
 	if (Resolved != DrawnMaterial)
 	{
 		DrawnMaterial = Resolved;
-
-		const UMaterial* BaseMaterial = Resolved ? Resolved->GetMaterial() : nullptr;
-		if (BaseMaterial && BaseMaterial->MaterialDomain != MD_UI)
-		{
-			UE_LOG(LogLoadingFX, Warning, TEXT("%s: %s is not a User Interface domain material, Slate cannot draw it."), *GetPathName(), *Resolved->GetPathName());
-		}
+		CheckMaterialDomain(Resolved);
 	}
 	return Resolved;
+}
+
+void ULoadingFXSpinner::CheckMaterialDomain(const UMaterialInterface* Resolved) const
+{
+	const UMaterial* BaseMaterial = Resolved ? Resolved->GetMaterial() : nullptr;
+	if (BaseMaterial && BaseMaterial->MaterialDomain != MD_UI)
+	{
+		UE_LOG(LogLoadingFX, Warning, TEXT("%s: %s is not a User Interface domain material, Slate cannot draw it."), *GetPathName(), *Resolved->GetPathName());
+	}
 }
 
 void ULoadingFXSpinner::ApplyMaterial()

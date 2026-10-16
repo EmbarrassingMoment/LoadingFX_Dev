@@ -15,6 +15,7 @@ LoadingFX is a loading indicator plugin for Unreal Engine 5. It ships a library 
 ## Planned Features
 
 - **Spinner material library** — procedural (SDF) spinner materials with no textures. Use them on a plain UMG `Image`, through the bundled UMG spinner widget, or as the project-wide loading icon.
+- **Loading bars** — indeterminate bars (a sliding segment, running stripes) and a progress bar that fills to a `Progress` value, drawn by the same material library. The progress bar widget is made for the asset loader: connect the loader's progress to it. Map travel and blocking loads report no progress in the engine, so use a spinner or an indeterminate bar for those.
 - **Loading icon subsystem** — show and hide the loading icon from Blueprint or C++ anywhere in your game. Requests are reference-counted, so multiple systems can share the icon safely, and the icon survives map travel.
 - **Keeps spinning during blocking loads** — the icon keeps animating while the game thread is blocked (for example during `OpenLevel`). This relies on the engine's MoviePlayer, which is unavailable in the editor and PIE, so the icon freezes there during blocking loads; check it with `-game` or a packaged build.
 - **Lightweight asset loader** — async and sync asset loading with completion callbacks and progress. It can drive the loading icon automatically, or be used on its own.
