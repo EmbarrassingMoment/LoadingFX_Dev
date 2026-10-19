@@ -36,6 +36,8 @@ SCRIPTS = [
     "build_m_loadingbarslide.py",
     "build_m_loadingbarstripes.py",
     "build_m_loadingbarfill.py",
+    "build_m_loadinglinear.py",
+    "build_m_loadingchase.py",
 ]
 
 for name in SCRIPTS:

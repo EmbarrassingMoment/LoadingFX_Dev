@@ -33,6 +33,8 @@ Local-only editor plugin for developing LoadingFX. It is **not** part of the Loa
 | `build_m_loadingequalizer.py` | `/LoadingFX/Materials/M_LoadingEqualizer` (a row of rounded bars that grow and shrink in turn) |
 | `build_m_loadinggooey.py` | `/LoadingFX/Materials/M_LoadingGooey` (droplets that bud off a core and melt back while turning) |
 | `build_m_loadingmorph.py` | `/LoadingFX/Materials/M_LoadingMorph` (a rounded square that turns a quarter and rounds into a circle on the way) |
+| `build_m_loadinglinear.py` | `/LoadingFX/Materials/M_LoadingLinear` (a bar that grows from the left of a thin track and leaves to the right) |
+| `build_m_loadingchase.py` | `/LoadingFX/Materials/M_LoadingChase` (dots that chase each other around a ring and melt together where they bunch up) |
 | `build_all.py` | Runs all of the above in dependency order |
 
 Run them with **UE 5.5** so the saved assets stay loadable in 5.5:
