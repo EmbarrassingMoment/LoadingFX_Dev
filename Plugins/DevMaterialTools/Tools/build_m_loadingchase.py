@@ -35,7 +35,7 @@ clamp(x, 0, 1) は Saturate で書く。
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
 
-  ScalarParameter / VectorParameter はグループ "LoadingChase"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion に分ける(PARAM_GROUPS)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   Radius / Easing(8 箇所)と Stagger(7 箇所)は Declaration 化、Speed / Count / Smoothness / DotRadius は 1 箇所なので直接配線。
   点の距離は dot() で 8 回、smooth min は smin() で 7 回作る。
@@ -58,7 +58,18 @@ MAX_DOTS = 8
 HIDE = 10.0            # distance added to a dot beyond Count (far more than the widget and any Smoothness)
 SMOOTH_EPSILON = 1e-4
 AA_EPSILON = 1e-5
-PARAM_GROUP = "LoadingChase"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "Count": "Shape",
+    "Radius": "Shape",
+    "DotRadius": "Shape",
+    "Smoothness": "Shape",
+    "Speed": "Motion",
+    "Stagger": "Motion",
+    "Easing": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -109,7 +120,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -129,18 +140,18 @@ make_decl("p", coords, -3300, -1550, C_UV, "P")
 
 # ---- Shared parameters ----
 # Footprint (material contract): the melted blob reaches 0.8005 with the defaults (Radius + DotRadius = 0.762 apart).
-radius_p = scalar_param("Radius", 0.672, 0,
+radius_p = scalar_param("Radius", 0.672, 1,
                         "Distance from the center to the dot centers (half the shorter widget side = 1.0)",
                         -3800, -1250)
 make_decl("Radius", radius_p, -3550, -1250, C_SC)
-easing_p = scalar_param("Easing", 0.85, 6,
+easing_p = scalar_param("Easing", 0.85, 2,
                         "How much the dots slow down at 12 o'clock and speed up at 6 o'clock: "
                         "0 = steady speed, toward 1 they nearly stop at the top (below 1)", -3800, -1130)
 make_decl("Easing", easing_p, -3550, -1130, C_SC)
-stagger_p = scalar_param("Stagger", 0.075, 5, "Delay between neighboring dots, as a fraction of a lap",
+stagger_p = scalar_param("Stagger", 0.075, 1, "Delay between neighboring dots, as a fraction of a lap",
                          -3800, -1010)
 make_decl("Stagger", stagger_p, -3550, -1010, C_SC)
-count_p = scalar_param("Count", 5.0, 2, "Number of dots (integer, 1 to 8)", -3800, -890)
+count_p = scalar_param("Count", 5.0, 0, "Number of dots (integer, 1 to 8)", -3800, -890)
 cutoff_v = expr(unreal.MaterialExpressionMultiply, -3550, -890, const_b=-HIDE)
 _connect(count_p, "", cutoff_v, "A")
 make_decl("cutoff", cutoff_v, -3400, -890, C_SC)
@@ -159,7 +170,7 @@ time_n = expr(unreal.MaterialExpressionTime, -3800, -450)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.55, 4, "Laps per second. Positive = clockwise", -3800, -330)
+speed_p = scalar_param("Speed", 0.55, 0, "Laps per second. Positive = clockwise", -3800, -330)
 s_v = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -3600, -400)
 make_decl("s", s_v, -3450, -400, C_TM)
 
@@ -223,7 +234,7 @@ for i in range(1, MAX_DOTS):
     y = DOT_Y + i * DOT_DY
     nxt = use(f"len{i}", SMIN_X - 150, y + 60)
     chain = smin(chain, nxt, SMIN_X, y - 100)
-dotr_p = scalar_param("DotRadius", 0.09, 1, "Radius of a dot", SMIN_X + 900, DOT_Y + MAX_DOTS * DOT_DY)
+dotr_p = scalar_param("DotRadius", 0.09, 2, "Radius of a dot", SMIN_X + 900, DOT_Y + MAX_DOTS * DOT_DY)
 d_v = binary(unreal.MaterialExpressionSubtract, chain, dotr_p, SMIN_X + 1100, DOT_Y + MAX_DOTS * DOT_DY - 150)
 make_decl("d", d_v, SMIN_X + 1250, DOT_Y + MAX_DOTS * DOT_DY - 150, C_SDF)
 
@@ -249,7 +260,7 @@ make_decl("mask", mask_sat, AA_X + 600, AA_Y + 250, C_COL)
 OUT_X, OUT_Y = 1950, 900
 primary_p = expr(unreal.MaterialExpressionVectorParameter, OUT_X, OUT_Y - 150,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Color of the dots (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Color of the dots (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, OUT_X, OUT_Y + 100)
 emissive = binary(unreal.MaterialExpressionMultiply, primary_p, vcolor, OUT_X + 250, OUT_Y - 100)
 results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
@@ -298,12 +309,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     OUT_X - 50, OUT_Y - 270, 650, 680, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, mf_calls, param_groups = [], {}, [], 0, {}
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -311,15 +325,20 @@ for e in smt.get_material_expressions(mat):
         nm = smt.get_named_reroute_usage_display_name(e)
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
-        params.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        params.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 len_names = [f"len{i}" for i in range(MAX_DOTS)]
 expected_decls = sorted(["p", "Radius", "Easing", "Stagger", "cutoff", "k", "kInv4", "s", "d", "aa", "mask"]
@@ -330,6 +349,7 @@ expected_usages = {"p": MAX_DOTS, "Radius": MAX_DOTS, "Easing": MAX_DOTS, "s": M
 expected_params = sorted(["Radius", "DotRadius", "Count", "Smoothness", "Speed", "Stagger", "Easing", "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 8
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

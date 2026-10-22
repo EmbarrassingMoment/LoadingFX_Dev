@@ -1,5 +1,5 @@
 """
-Bar spinner (user's own Shadertoy) -> M_LoadingBars (Material Domain = UI, Translucent)
+Spoke spinner (user's own Shadertoy) -> M_LoadingSpokes (Material Domain = UI, Translucent)
 
 角丸の棒 N 本を放射状に並べ、12 時の棒から時計回りに「白 -> 薄い」のフェードを巡回させる、定番のロードアイコン。
 ピクセルの角度から最も近い棒の番号を求め、その棒が真上を向くよう座標を回転してからカプセル SDF を 1 回だけ評価する
@@ -17,11 +17,11 @@ Bar spinner (user's own Shadertoy) -> M_LoadingBars (Material Domain = UI, Trans
                                                     GLSL の aa = 2 / iResolution.y を導関数ベースに置き換え)
   mask  = clamp(0.5 - d / aa, 0, 1)                (アンチエイリアス付きマスク)
   fade  = fract(Time * Speed - id / Count)         (棒ごとに 1/Count ずつ位相をずらす。Speed は回転数/秒)
-  alpha = mix(1, BrightMin, fade)                  (0 で最も明るく、1 に向かって薄くなる)
+  alpha = mix(1, OpacityMin, fade)                 (0 で最も明るく、1 に向かって薄くなる)
 
   fwidth(d) について: d は「最も近い棒までの距離」で、棒はすべて同じ形なので隣のセルとの境界(二等分線)上で
   両側の値が一致し連続。6 時方向の atan の切れ目でも id = ±Count/2 が同じ回転・同じ位相を与えるので連続。
-  よって M_LoadingIcon(セルごとに半径が違い d が不連続)と違い、fwidth(d) を使っても継ぎ目は出ない。
+  よって M_LoadingDotGrid(セルごとに半径が違い d が不連続)と違い、fwidth(d) を使っても継ぎ目は出ない。
   max(…, 1e-5) は棒の芯線上で ddx/ddy が同時に 0 になるピクセル(0 除算 -> inf/NaN)の保険。
 
   デフォルト値は Shadertoy の定数(R_IN 0.12 / R_OUT 0.30 / WIDTH 0.035)を 2.39 倍し、
@@ -31,12 +31,12 @@ Bar spinner (user's own Shadertoy) -> M_LoadingBars (Material Domain = UI, Trans
         Opacity = mask * alpha * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   背景(bg)は不要なので mix(bg, white, mask * alpha) は PrimaryColor + アルファに置き換え。
 
-  const -> ScalarParameter / VectorParameter(グループ "LoadingBars"、並びは GLSL の宣言順)
+  const -> ScalarParameter / VectorParameter(グループ Appearance / Shape / Motion、並びはグループ内の Sort Priority)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   TAU(2 箇所)と Count(3 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
 実行例:
-  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingbars.py"
+  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingspokes.py"
 """
 import unreal
 
@@ -45,12 +45,22 @@ import unreal
 unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/LoadingFX"], True)
 
 ASSET_PATH = "/LoadingFX/Materials"
-ASSET_NAME = "M_LoadingBars"
+ASSET_NAME = "M_LoadingSpokes"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 TAU = 6.28318530718
 AA_EPSILON = 1e-5
-PARAM_GROUP = "LoadingBars"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "OpacityMin": "Appearance",
+    "Count": "Shape",
+    "InnerRadius": "Shape",
+    "OuterRadius": "Shape",
+    "Thickness": "Shape",
+    "Speed": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -100,7 +110,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def mask_x(x, y):
@@ -264,7 +274,7 @@ time_n = expr(unreal.MaterialExpressionTime, -1450, 650)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 1.0, 4, "Revolutions per second. Positive = clockwise", -1450, 750)
+speed_p = scalar_param("Speed", 1.0, 0, "Revolutions per second. Positive = clockwise", -1450, 750)
 t_speed = expr(unreal.MaterialExpressionMultiply, -1300, 700)
 _connect(time_n, "", t_speed, "A")
 _connect(speed_p, "", t_speed, "B")
@@ -280,12 +290,12 @@ t_frac = expr(unreal.MaterialExpressionFrac, -1000, 800)
 _connect(t_sub, "", t_frac, "")
 make_decl("fade", t_frac, -850, 800, C_TM)
 
-# ---- alpha = mix(1, BrightMin, fade)  (brightest at fade 0, fades towards BrightMin) ----
-brightmin_p = scalar_param("BrightMin", 0.12, 5, "Faintest bar (depth of the fade); the leading bar is fully bright",
-                           -600, 700)
+# ---- alpha = mix(1, OpacityMin, fade)  (brightest at fade 0, fades towards OpacityMin) ----
+opacitymin_p = scalar_param("OpacityMin", 0.12, 1, "Faintest bar (depth of the fade); the leading bar is fully bright",
+                            -600, 700)
 fade_u1 = use("fade", -600, 820)
 alpha_v = expr(unreal.MaterialExpressionLinearInterpolate, -400, 750, const_a=1.0)
-_connect(brightmin_p, "", alpha_v, "B")
+_connect(opacitymin_p, "", alpha_v, "B")
 _connect(fade_u1, "", alpha_v, "Alpha")
 make_decl("alpha", alpha_v, -250, 750, C_TM)
 
@@ -293,7 +303,7 @@ make_decl("alpha", alpha_v, -250, 750, C_TM)
 #      Opacity = mask * alpha * PrimaryColor.a * VertexColor.a  (bg dropped) ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 3500, 0,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=6, desc="Bar color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Bar color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 3500, 250)
 emissive = expr(unreal.MaterialExpressionMultiply, 3750, 50)
 _connect(primary_p, "", emissive, "A")
@@ -318,7 +328,7 @@ smt.create_comment_in_material(
     -4300, -1100, 550, 230, C_SC)
 smt.create_comment_in_material(
     mat, "const N -> ScalarParameter Count (used three times -> Named Reroute).\n"
-         "InnerRadius / OuterRadius / Thickness / Speed / BrightMin / PrimaryColor are wired directly at their single use site",
+         "InnerRadius / OuterRadius / Thickness / Speed / OpacityMin / PrimaryColor are wired directly at their single use site",
     -4300, -840, 650, 260, C_SC)
 smt.create_comment_in_material(
     mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
@@ -347,7 +357,7 @@ smt.create_comment_in_material(
 smt.create_comment_in_material(
     mat, "aa = max(fwidth(d), 1e-5) = max(abs(ddx(d)) + abs(ddy(d)), 1e-5)   (one screen pixel of d, per pixel)\n"
          "Replaces the GLSL aa = 2 / iResolution.y. Safe here: every bar has the same shape, so d is the exact\n"
-         "distance to the nearest bar and continuous across cell borders (unlike M_LoadingIcon, where per-cell radii differ).\n"
+         "distance to the nearest bar and continuous across cell borders (unlike M_LoadingDotGrid, where per-cell radii differ).\n"
          "The epsilon guards pixels on a bar's center line where ddx and ddy are both 0 (d / 0 -> inf / NaN)",
     2450, -420, 1000, 340, C_SDF)
 smt.create_comment_in_material(
@@ -359,8 +369,8 @@ smt.create_comment_in_material(
          "Time ignores pause (real time), so the spinner keeps turning while the game thread is blocked",
     -1500, 560, 800, 520, C_TM)
 smt.create_comment_in_material(
-    mat, "alpha = mix(1, BrightMin, fade)\n"
-         "Fully bright at fade 0, fades linearly to BrightMin",
+    mat, "alpha = mix(1, OpacityMin, fade)\n"
+         "Fully bright at fade 0, fades linearly to OpacityMin",
     -650, 600, 600, 330, C_TM)
 smt.create_comment_in_material(
     mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
@@ -368,12 +378,15 @@ smt.create_comment_in_material(
          "Background dropped: mix(bg, white, mask * alpha) becomes PrimaryColor with alpha",
     3450, -120, 700, 800, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, param_names, mf_calls = [], {}, [], 0
+decl_names, usage_count, param_names, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -382,27 +395,33 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                         unreal.MaterialExpressionVectorParameter)):
-        param_names.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        param_names.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {sorted(decl_names)}")
 print(f"[TEST] {ASSET_NAME} usages: {dict(sorted(usage_count.items()))}")
 print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
 expected_decls = sorted(["TAU", "Count", "p", "a", "id", "ang", "c", "s", "q", "d", "aa", "mask", "fade", "alpha"])
 expected_usages = {"TAU": 2, "Count": 3, "p": 4, "a": 1, "id": 2, "ang": 2, "c": 2, "s": 2, "q": 2,
                    "d": 3, "aa": 1, "mask": 1, "fade": 1, "alpha": 1}
-expected_params = sorted(["Count", "InnerRadius", "OuterRadius", "Thickness", "Speed", "BrightMin", "PrimaryColor"])
+expected_params = sorted(["Count", "InnerRadius", "OuterRadius", "Thickness", "Speed", "OpacityMin", "PrimaryColor"])
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
+groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
 comments_ok = len(smt.get_material_comment_texts(mat)) == 13
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
-passed = (all(results) and decls_ok and usages_ok and params_ok and mf_ok
+passed = (all(results) and decls_ok and usages_ok and params_ok and groups_ok and mf_ok
           and comments_ok and domain_ok and blend_ok and saved)
 print("[TEST] RESULT: " + ("PASS" if passed else "FAIL"))

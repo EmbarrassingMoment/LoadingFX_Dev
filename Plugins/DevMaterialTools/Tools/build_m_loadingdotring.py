@@ -1,5 +1,5 @@
 """
-Dot-ring loading spinner (user's own Shadertoy) -> M_LoadingSpinner (Material Domain = UI, Translucent)
+Dot-ring loading spinner (user's own Shadertoy) -> M_LoadingDotRing (Material Domain = UI, Translucent)
 
 円周の 3/4 に 8 個の丸を並べ、先頭(最大)から末尾(最小)へ半径を小さくしながら時計回りに回すロードアイコン。
 角度を扇形セルに分け、ピクセルが属するセルの丸だけを評価するのでループ不要。
@@ -11,22 +11,22 @@ Dot-ring loading spinner (user's own Shadertoy) -> M_LoadingSpinner (Material Do
   a     = mod(atan(p.y, p.x) + rot, TAU)            (回転座標系でのピクセル角度 0..TAU。mod は MF_GLSLMod)
   id    = floor(a / stepA)                          (扇形セルの番号。0 = 先頭の丸)
   ca    = (id + 0.5) * stepA - rot                  (セル中心の角度を画面座標系へ戻す)
-  c     = Ring * vec2(cos(ca), sin(ca))
-  r     = mix(RMax, RMin, id / (Count - 1))
+  c     = Radius * vec2(cos(ca), sin(ca))
+  r     = mix(DotRadiusMax, DotRadiusMin, id / (Count - 1))
   d     = length(p - c) - r
   mask  = (1 - smoothstep(-aa, aa, d)) * step(id, Count - 0.5)   (id >= Count のセル = 残り 1 - Arc は描かない)
 
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   背景(bg)は不要なので mix(bg, fg, m) は PrimaryColor + アルファに置き換え。
-  デフォルト値は Ring + RMax = 0.8(材質契約の基準円。1.0 = 短辺の端)に合わせてある。
+  デフォルト値は Radius + DotRadiusMax = 0.8(材質契約の基準円。1.0 = 短辺の端)に合わせてある。
 
-  const -> ScalarParameter / VectorParameter(グループ "LoadingSpinner"、並びは GLSL の宣言順)
+  const -> ScalarParameter / VectorParameter(グループ Appearance / Shape / Motion、並びはグループ内の Sort Priority)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   TAU(3 箇所)と Count(3 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
 実行例:
-  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingspinner.py"
+  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingdotring.py"
 """
 import unreal
 
@@ -35,12 +35,22 @@ import unreal
 unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/LoadingFX"], True)
 
 ASSET_PATH = "/LoadingFX/Materials"
-ASSET_NAME = "M_LoadingSpinner"
+ASSET_NAME = "M_LoadingDotRing"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_MOD_PATH = "/LoadingFX/MaterialFunctions/MF_GLSLMod"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 TAU = 6.28318530718
-PARAM_GROUP = "LoadingSpinner"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "Count": "Shape",
+    "Radius": "Shape",
+    "Arc": "Shape",
+    "DotRadiusMax": "Shape",
+    "DotRadiusMin": "Shape",
+    "Speed": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -92,7 +102,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def mask_x(x, y):
@@ -119,7 +129,7 @@ time_n = expr(unreal.MaterialExpressionTime, -4250, 50)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.64, 5, "Revolutions per second. Positive = clockwise", -4250, 150)
+speed_p = scalar_param("Speed", 0.64, 0, "Revolutions per second. Positive = clockwise", -4250, 150)
 rev_v = expr(unreal.MaterialExpressionMultiply, -4000, 100)
 _connect(time_n, "", rev_v, "A")
 _connect(speed_p, "", rev_v, "B")
@@ -131,7 +141,7 @@ make_decl("rot", rot_v, -3700, 150, C_TM)
 
 # ---- stepA = TAU * Arc / Count  (angle taken by one dot) ----
 tau_u1 = use("TAU", -3150, -950)
-arc_p = scalar_param("Arc", 0.75, 1,
+arc_p = scalar_param("Arc", 0.75, 2,
                      "Fraction of the circle covered by the row of dots (0.75 = 3/4 turn)", -3150, -850)
 tau_arc = expr(unreal.MaterialExpressionMultiply, -2900, -900)
 _connect(tau_u1, "", tau_arc, "A")
@@ -187,7 +197,7 @@ _connect(ca_mul, "", ca_v, "A")
 _connect(rot_u2, "", ca_v, "B")
 make_decl("ca", ca_v, -450, 200, C_UV)
 
-# ---- c = Ring * vec2(cos(ca), sin(ca))  (dot center on the ring) ----
+# ---- c = Radius * vec2(cos(ca), sin(ca))  (dot center on the ring) ----
 ca_u1 = use("ca", -150, 120)
 ca_cos = expr(unreal.MaterialExpressionCosine, 0, 120, period=TAU)   # period 2*PI = radians
 _connect(ca_u1, "", ca_cos, "")
@@ -197,15 +207,15 @@ _connect(ca_u2, "", ca_sin, "")
 dir_v = expr(unreal.MaterialExpressionAppendVector, 150, 180)
 _connect(ca_cos, "", dir_v, "A")
 _connect(ca_sin, "", dir_v, "B")
-# Footprint (material contract): Ring + RMax = 0.8, the reference circle.
-ring_p = scalar_param("Ring", 0.64, 2,
-                      "Radius of the circle the dots sit on (half the shorter widget side = 1.0)", 100, 330)
+# Footprint (material contract): Radius + DotRadiusMax = 0.8, the reference circle.
+radius_p = scalar_param("Radius", 0.64, 1,
+                        "Radius of the circle the dots sit on (half the shorter widget side = 1.0)", 100, 330)
 c_v = expr(unreal.MaterialExpressionMultiply, 350, 230)
-_connect(ring_p, "", c_v, "A")
+_connect(radius_p, "", c_v, "A")
 _connect(dir_v, "", c_v, "B")
 make_decl("c", c_v, 500, 230, C_UV)
 
-# ---- r = mix(RMax, RMin, id / (Count - 1))  (the larger the id, the smaller the dot) ----
+# ---- r = mix(DotRadiusMax, DotRadiusMin, id / (Count - 1))  (the larger the id, the smaller the dot) ----
 id_u2 = use("id", -1050, 800)
 count_u2 = use("Count", -1050, 920)
 count_m1 = expr(unreal.MaterialExpressionSubtract, -900, 920, const_b=1.0)
@@ -213,9 +223,9 @@ _connect(count_u2, "", count_m1, "A")
 id_t = expr(unreal.MaterialExpressionDivide, -750, 850)
 _connect(id_u2, "", id_t, "A")
 _connect(count_m1, "", id_t, "B")
-rmax_p = scalar_param("RMax", 0.16, 3,
-                      "Radius of the leading (largest) dot. Keep below Ring * sin(PI * Arc / Count)", -650, 580)
-rmin_p = scalar_param("RMin", 0.035, 4, "Radius of the trailing (smallest) dot", -650, 680)
+rmax_p = scalar_param("DotRadiusMax", 0.16, 3,
+                      "Radius of the leading (largest) dot. Keep below Radius * sin(PI * Arc / Count)", -650, 580)
+rmin_p = scalar_param("DotRadiusMin", 0.035, 4, "Radius of the trailing (smallest) dot", -650, 680)
 r_v = expr(unreal.MaterialExpressionLinearInterpolate, -400, 700)
 _connect(rmax_p, "", r_v, "A")
 _connect(rmin_p, "", r_v, "B")
@@ -264,7 +274,7 @@ make_decl("mask", m_v, 2750, 250, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 3150, 0,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(0.95, 0.95, 0.95, 1.0),
-                 group=PARAM_GROUP, sort_priority=6, desc="Dot color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Dot color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 3150, 250)
 emissive = expr(unreal.MaterialExpressionMultiply, 3400, 50)
 _connect(primary_p, "", emissive, "A")
@@ -285,7 +295,7 @@ smt.create_comment_in_material(
     -4300, -1100, 550, 230, C_SC)
 smt.create_comment_in_material(
     mat, "const COUNT -> ScalarParameter (used three times -> Named Reroute).\n"
-         "Arc / Ring / RMax / RMin / Speed / PrimaryColor are wired directly at their single use site",
+         "Arc / Radius / DotRadiusMax / DotRadiusMin / Speed / PrimaryColor are wired directly at their single use site",
     -4300, -840, 650, 260, C_SC)
 smt.create_comment_in_material(
     mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
@@ -311,12 +321,12 @@ smt.create_comment_in_material(
          "Angle of the cell center, rotated back to the screen frame",
     -1100, -40, 900, 470, C_UV)
 smt.create_comment_in_material(
-    mat, "c = Ring * vec2(cos(ca), sin(ca))   (dot center on the ring)\n"
+    mat, "c = Radius * vec2(cos(ca), sin(ca))   (dot center on the ring)\n"
          "Sine / Cosine period = 2*PI -> radians",
     -200, -40, 950, 500, C_UV)
 smt.create_comment_in_material(
-    mat, "r = mix(RMax, RMin, id / (Count - 1))\n"
-         "The larger the id, the smaller the dot (leading dot = RMax, trailing dot = RMin)",
+    mat, "r = mix(DotRadiusMax, DotRadiusMin, id / (Count - 1))\n"
+         "The larger the id, the smaller the dot (leading dot = DotRadiusMax, trailing dot = DotRadiusMin)",
     -1100, 460, 1100, 600, C_SDF)
 smt.create_comment_in_material(
     mat, "d = length(p - c) - r   (circle SDF of the dot that owns this cell)",
@@ -331,12 +341,15 @@ smt.create_comment_in_material(
          "Background dropped: mix(bg, fg, m) becomes PrimaryColor with alpha",
     3100, -120, 650, 700, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, param_names, mf_calls = [], {}, [], 0
+decl_names, usage_count, param_names, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -345,27 +358,33 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                         unreal.MaterialExpressionVectorParameter)):
-        param_names.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        param_names.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {sorted(decl_names)}")
 print(f"[TEST] {ASSET_NAME} usages: {dict(sorted(usage_count.items()))}")
 print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
 expected_decls = sorted(["TAU", "Count", "p", "rot", "stepA", "aa", "a", "id", "ca", "c", "r", "d", "mask"])
 expected_usages = {"TAU": 3, "Count": 3, "p": 3, "rot": 2, "stepA": 2, "aa": 1, "a": 1, "id": 3,
                    "ca": 2, "c": 1, "r": 1, "d": 1, "mask": 1}
-expected_params = sorted(["Count", "Arc", "Ring", "RMax", "RMin", "Speed", "PrimaryColor"])
+expected_params = sorted(["Count", "Arc", "Radius", "DotRadiusMax", "DotRadiusMin", "Speed", "PrimaryColor"])
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
+groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 2
 comments_ok = len(smt.get_material_comment_texts(mat)) == 13
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
-passed = (all(results) and decls_ok and usages_ok and params_ok and mf_ok
+passed = (all(results) and decls_ok and usages_ok and params_ok and groups_ok and mf_ok
           and comments_ok and domain_ok and blend_ok and saved)
 print("[TEST] RESULT: " + ("PASS" if passed else "FAIL"))

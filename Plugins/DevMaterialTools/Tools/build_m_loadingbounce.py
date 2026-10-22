@@ -31,7 +31,7 @@ Bouncing ball -> MF_SdEllipse2D + M_LoadingBounce (Material Domain = UI, Translu
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
 
-  ScalarParameter / VectorParameter はグループ "LoadingBounce"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion に分ける(PARAM_GROUPS)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   BallRadius / Floor / ContactFraction / ShadowHeight(各 2 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -54,7 +54,21 @@ MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 PI = 3.14159265359
 TAU = 6.28318530718
 K1_EPSILON = 1e-5
-PARAM_GROUP = "LoadingBounce"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "ShadowOpacity": "Appearance",
+    "BallRadius": "Shape",
+    "Floor": "Shape",
+    "BounceHeight": "Shape",
+    "Squash": "Shape",
+    "ShadowWidth": "Shape",
+    "ShadowHeight": "Shape",
+    "ShadowGap": "Shape",
+    "Speed": "Motion",
+    "ContactFraction": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -234,7 +248,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def append(a, b, x, y):
@@ -276,10 +290,10 @@ make_decl("BallRadius", ballr_p, -3550, -400, C_SC)
 floor_p = scalar_param("Floor", -0.62, 1, "Height of the floor the ball lands on (y, center = 0, up is positive)",
                        -3800, -280)
 make_decl("Floor", floor_p, -3550, -280, C_SC)
-contact_p = scalar_param("ContactFraction", 0.12, 4,
+contact_p = scalar_param("ContactFraction", 0.12, 1,
                          "Share of a cycle the ball spends on the floor, squashed (0..1)", -3800, -160)
 make_decl("ContactFraction", contact_p, -3550, -160, C_SC)
-shadowh_p = scalar_param("ShadowHeight", 0.035, 6, "Half height of the shadow", -3800, -40)
+shadowh_p = scalar_param("ShadowHeight", 0.035, 5, "Half height of the shadow", -3800, -40)
 make_decl("ShadowHeight", shadowh_p, -3550, -40, C_SC)
 
 # ---- u = fract(Time * Speed);  halfC = ContactFraction / 2 ----
@@ -287,7 +301,7 @@ time_n = expr(unreal.MaterialExpressionTime, -3800, 300)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.9, 9, "Bounces per second", -3800, 420)
+speed_p = scalar_param("Speed", 0.9, 0, "Bounces per second", -3800, 420)
 t_speed = expr(unreal.MaterialExpressionMultiply, -3600, 350)
 _connect(time_n, "", t_speed, "A")
 _connect(speed_p, "", t_speed, "B")
@@ -403,7 +417,7 @@ sw_shrink = expr(unreal.MaterialExpressionMultiply, -1200, -650, const_b=-0.5)
 _connect(hgt_u2, "", sw_shrink, "A")
 sw_scale = expr(unreal.MaterialExpressionAdd, -1050, -650, const_b=1.0)
 _connect(sw_shrink, "", sw_scale, "A")
-shadoww_p = scalar_param("ShadowWidth", 0.26, 5, "Half width of the shadow while the ball is on the floor",
+shadoww_p = scalar_param("ShadowWidth", 0.26, 4, "Half width of the shadow while the ball is on the floor",
                          -1200, -770)
 sw_v = expr(unreal.MaterialExpressionMultiply, -900, -700)
 _connect(shadoww_p, "", sw_v, "A")
@@ -419,7 +433,7 @@ make_decl("sh", sh_v, -900, -450, C_SDF)
 sh_u1 = use("sh", -900, -580)
 shadow_r = append(sw_v, sh_u1, -750, -650)
 floor_u2 = use("Floor", -1050, -250)
-gap_p = scalar_param("ShadowGap", 0.06, 7, "How far below the floor the shadow's center lies", -1050, -150)
+gap_p = scalar_param("ShadowGap", 0.06, 6, "How far below the floor the shadow's center lies", -1050, -150)
 shadow_y = expr(unreal.MaterialExpressionSubtract, -900, -200)
 _connect(floor_u2, "", shadow_y, "A")
 _connect(gap_p, "", shadow_y, "B")
@@ -437,7 +451,7 @@ fade_h = expr(unreal.MaterialExpressionMultiply, -550, -1000, const_b=-0.6)
 _connect(hgt_u3, "", fade_h, "A")
 fade_hv = expr(unreal.MaterialExpressionAdd, -400, -1000, const_b=1.0)
 _connect(fade_h, "", fade_hv, "A")
-shadowo_p = scalar_param("ShadowOpacity", 0.35, 8, "Opacity of the shadow while the ball is on the floor (0 hides it)",
+shadowo_p = scalar_param("ShadowOpacity", 0.35, 1, "Opacity of the shadow while the ball is on the floor (0 hides it)",
                          -550, -1120)
 fade_o = expr(unreal.MaterialExpressionMultiply, -250, -1050)
 _connect(shadowo_p, "", fade_o, "A")
@@ -467,7 +481,7 @@ make_decl("mask", mask_max, 1250, -100, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 1450, -250,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Color of the ball and its shadow (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Color of the ball and its shadow (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 1450, 0)
 emissive = expr(unreal.MaterialExpressionMultiply, 1700, -200)
 _connect(primary_p, "", emissive, "A")
@@ -524,13 +538,16 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     1400, -370, 650, 680, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
 def audit(exprs):
-    decl_names, usage_count, params, mf_calls = [], {}, [], 0
+    decl_names, usage_count, params, mf_calls, param_groups = [], {}, [], 0, {}
     for e in exprs:
         if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
             decl_names.append(str(e.get_editor_property("name")))
@@ -539,12 +556,14 @@ def audit(exprs):
             usage_count[nm] = usage_count.get(nm, 0) + 1
         elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                             unreal.MaterialExpressionVectorParameter)):
-            params.append(str(e.get_editor_property("parameter_name")))
+            name = str(e.get_editor_property("parameter_name"))
+            params.append(name)
+            param_groups[name] = str(e.get_editor_property("group"))
         elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
             mf_calls += 1
-    return sorted(decl_names), dict(sorted(usage_count.items())), sorted(params), mf_calls
+    return sorted(decl_names), dict(sorted(usage_count.items())), sorted(params), mf_calls, param_groups
 
-f_decls, f_usages, _, _ = audit(smt.get_material_function_expressions(fn))
+f_decls, f_usages, _, _, _ = audit(smt.get_material_function_expressions(fn))
 print(f"[TEST] {MF_NAME} decls: {f_decls}")
 print(f"[TEST] {MF_NAME} usages: {f_usages}")
 mf_ok = (f_decls == ["P", "R", "k0"]
@@ -552,10 +571,13 @@ mf_ok = (f_decls == ["P", "R", "k0"]
          and len(smt.get_function_comment_texts(fn)) == 2
          and mf_saved)
 
-m_decls, m_usages, m_params, m_calls = audit(smt.get_material_expressions(mat))
+m_decls, m_usages, m_params, m_calls, param_groups = audit(smt.get_material_expressions(mat))
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {m_decls}")
 print(f"[TEST] {ASSET_NAME} usages: {m_usages}")
 print(f"[TEST] {ASSET_NAME} params: {m_params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {m_calls}")
 expected_decls = sorted(["p", "aa", "BallRadius", "Floor", "ContactFraction", "ShadowHeight", "u", "halfC", "hgt",
                          "squash", "ballR", "dBall", "sh", "dShadow", "shadowFade", "mask"])
@@ -566,6 +588,7 @@ expected_params = sorted(["BallRadius", "Floor", "BounceHeight", "Squash", "Cont
                           "ShadowHeight", "ShadowGap", "ShadowOpacity", "Speed", "PrimaryColor"])
 mat_ok = (m_decls == expected_decls and m_usages == dict(sorted(expected_usages.items()))
           and m_params == expected_params and m_calls == 3
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 10
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

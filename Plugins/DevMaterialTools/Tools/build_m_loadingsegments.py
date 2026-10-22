@@ -2,7 +2,7 @@
 Segmented ring that fills and drains -> M_LoadingSegments (Material Domain = UI, Translucent)
 
 リングを Count 個の角丸の弧(区切り)に分け、12 時から時計回りに 1 つずつ点いて全部点くと、同じ順に 1 つずつ消えるロードアイコン。
-消えている区切りは BrightMin の不透明度で薄く残る(1 色)。デザインは 2026-10-11 のスピナー案第 2 弾(Canvas プレビュー)から。
+消えている区切りは OpacityMin の不透明度で薄く残る(1 色)。デザインは 2026-10-11 のスピナー案第 2 弾(Canvas プレビュー)から。
 ピクセルの角度から担当の区切りの番号を求め、その区切りの中心が真上を向くよう座標を回転して x を折り返し、
 iq の sdArc を 1 回だけ評価する(M_LoadingArc と同じ形)。区切りはすべて同じ形なので d はセル境界でも連続。
 点灯は番号の比較だけでループも分岐もない。
@@ -25,13 +25,13 @@ iq の sdArc を 1 回だけ評価する(M_LoadingArc と同じ形)。区切り�
                                                      正 = 時計回りに満ちる)
   lit   = step(id, k) * step(k - Count + 1, id)     (点いている区切りは番号 k - Count + 1 .. k の窓。前半(k < Count)は
                                                      0..k が点いて満ちていき、後半は先頭から消えていく)
-  alpha = lerp(BrightMin, 1, lit)
+  alpha = lerp(OpacityMin, 1, lit)
 
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * alpha * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   デフォルト値は Radius + Thickness/2 = 0.8(材質契約の基準円。1.0 = 短辺の端)に合わせてある。
 
-  ScalarParameter / VectorParameter はグループ "LoadingSegments"。
+  ScalarParameter / VectorParameter のグループは Appearance / Shape / Motion(PARAM_GROUPS、順序は GROUP_ORDER)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   Count(6 箇所)、Radius(3 箇所)、Thickness(2 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -50,7 +50,17 @@ FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 PI = 3.14159265359
 TAU = 6.28318530718
-PARAM_GROUP = "LoadingSegments"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "OpacityMin": "Appearance",
+    "Count": "Shape",
+    "Radius": "Shape",
+    "Thickness": "Shape",
+    "Gap": "Shape",
+    "Speed": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -100,7 +110,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def mask_x(x, y):
@@ -307,7 +317,7 @@ time_n = expr(unreal.MaterialExpressionTime, -3750, 750)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.45, 5,
+speed_p = scalar_param("Speed", 0.45, 0,
                        "Fill-and-drain cycles per second. Positive = the segments fill clockwise", -3750, 870)
 t_speed = expr(unreal.MaterialExpressionMultiply, -3550, 800)
 _connect(time_n, "", t_speed, "A")
@@ -345,11 +355,11 @@ lit_v = expr(unreal.MaterialExpressionMultiply, -1900, 850)
 _connect(lit_hi, "", lit_v, "A")
 _connect(lit_lo, "", lit_v, "B")
 
-# ---- alpha = lerp(BrightMin, 1, lit) ----
-brightmin_p = scalar_param("BrightMin", 0.15, 4, "Opacity of an unlit segment (0 hides it); lit segments are 1",
-                           -1900, 700)
+# ---- alpha = lerp(OpacityMin, 1, lit) ----
+opacitymin_p = scalar_param("OpacityMin", 0.15, 1, "Opacity of an unlit segment (0 hides it); lit segments are 1",
+                            -1900, 700)
 alpha_v = expr(unreal.MaterialExpressionLinearInterpolate, -1700, 800, const_b=1.0)
-_connect(brightmin_p, "", alpha_v, "A")
+_connect(opacitymin_p, "", alpha_v, "A")
 _connect(lit_v, "", alpha_v, "Alpha")
 make_decl("alpha", alpha_v, -1550, 800, C_TM)
 
@@ -357,7 +367,7 @@ make_decl("alpha", alpha_v, -1550, 800, C_TM)
 #      Opacity = mask * alpha * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 2850, -400,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=6, desc="Segment color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Segment color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 2850, -150)
 emissive = expr(unreal.MaterialExpressionMultiply, 3100, -350)
 _connect(primary_p, "", emissive, "A")
@@ -415,19 +425,22 @@ smt.create_comment_in_material(
 smt.create_comment_in_material(
     mat, "lit = step(id, k) * step(k - Count + 1, id): the lit segments are the window k - Count + 1 .. k.\n"
          "While k < Count it is 0..k (filling); after that the first ones go out (draining).\n"
-         "alpha = lerp(BrightMin, 1, lit)",
+         "alpha = lerp(OpacityMin, 1, lit)",
     -2550, 550, 1100, 650, C_TM)
 smt.create_comment_in_material(
     mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
          "Opacity = mask * alpha * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     2800, -520, 650, 800, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, param_names, mf_calls = [], {}, [], 0
+decl_names, usage_count, param_names, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -436,28 +449,34 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                         unreal.MaterialExpressionVectorParameter)):
-        param_names.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        param_names.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {sorted(decl_names)}")
 print(f"[TEST] {ASSET_NAME} usages: {dict(sorted(usage_count.items()))}")
 print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
 expected_decls = sorted(["p", "aa", "Count", "Radius", "Thickness", "id", "c", "s", "q", "sc", "d", "mask", "k",
                          "alpha"])
 expected_usages = {"p": 3, "aa": 1, "Count": 6, "Radius": 3, "Thickness": 2, "id": 3, "c": 2, "s": 2, "q": 4,
                    "sc": 3, "d": 1, "mask": 1, "k": 2, "alpha": 1}
-expected_params = sorted(["Count", "Radius", "Thickness", "Gap", "BrightMin", "Speed", "PrimaryColor"])
+expected_params = sorted(["Count", "Radius", "Thickness", "Gap", "OpacityMin", "Speed", "PrimaryColor"])
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
+groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
 comments_ok = len(smt.get_material_comment_texts(mat)) == 11
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
-passed = (all(results) and decls_ok and usages_ok and params_ok and mf_ok
+passed = (all(results) and decls_ok and usages_ok and params_ok and groups_ok and mf_ok
           and comments_ok and domain_ok and blend_ok and saved)
 print("[TEST] RESULT: " + ("PASS" if passed else "FAIL"))

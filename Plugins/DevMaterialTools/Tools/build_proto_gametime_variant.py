@@ -1,5 +1,5 @@
 """
-Prototype only: duplicates M_LoadingSpinner into /Game/Prototype/M_LoadingSpinner_GameTime with the Time node's
+Prototype only: duplicates M_LoadingDotRing into /Game/Prototype/M_LoadingDotRing_GameTime with the Time node's
 Ignore Pause turned off (= View.GameTime), so the verification prototype can show RealTime and GameTime side by side
 while the game thread is blocked. Run build_all.py first.
 
@@ -11,8 +11,8 @@ import unreal
 # Commandlets start before the asset registry finishes its initial scan (see the builder scripts).
 unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/LoadingFX", "/Game/Prototype"], True)
 
-SRC_PATH = "/LoadingFX/Materials/M_LoadingSpinner"
-DST_PATH = "/Game/Prototype/M_LoadingSpinner_GameTime"
+SRC_PATH = "/LoadingFX/Materials/M_LoadingDotRing"
+DST_PATH = "/Game/Prototype/M_LoadingDotRing_GameTime"
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary

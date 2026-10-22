@@ -36,7 +36,8 @@ clamp(x, 0, 1) は Saturate で書く。枝は M_LoadingBarSlide と同じ(MF_Sp
   Progress のアセット既定値は 0.65(サムネイルとパレットで形が分かるように)。ウィジェットは実行時に上書きする。
   LoadingIconMaterial には向かない(アイコンサブシステムはパラメータを書かないので 0.65 のまま)。
 
-  ScalarParameter / VectorParameter はグループ "LoadingBarFill"。
+  ScalarParameter / VectorParameter はグループ Input / Appearance / Shape / Motion(PARAM_GROUPS、表示順は GROUP_ORDER。
+  Input は実行時に書き込む Progress だけ)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   R / L / xEnd / xL / dTrack / xF / fill / SheenWidth は 2 箇所以上で使うので Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -53,7 +54,17 @@ ASSET_PATH = "/LoadingFX/Materials"
 ASSET_NAME = "M_LoadingBarFill"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
-PARAM_GROUP = "LoadingBarFill"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "Progress": "Input",
+    "PrimaryColor": "Appearance",
+    "TrackOpacity": "Appearance",
+    "SheenWidth": "Appearance",
+    "SheenStrength": "Appearance",
+    "Thickness": "Shape",
+    "Speed": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -104,7 +115,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -129,7 +140,7 @@ _connect(coords, "Extent", ext_x, "")
 # ---- R = Thickness / 2;  L = max(ext.x - 1, 0);  xEnd = L + R;  xL = -xEnd ----
 # Footprint (material contract): the track is inset by (1 - R) on every side, so with Thickness 1.6 it reaches +-0.8
 # across the shorter side and stops 0.2 short of the longer side's edge. Thickness 2 fills the whole widget.
-thick_p = scalar_param("Thickness", 1.6, 1,
+thick_p = scalar_param("Thickness", 1.6, 0,
                        "Height of the bar (half the shorter widget side = 1.0; 2.0 fills the widget). The ends are rounded",
                        -3300, -300)
 r_v = expr(unreal.MaterialExpressionMultiply, -3100, -300, const_b=0.5)
@@ -222,11 +233,11 @@ time_n = expr(unreal.MaterialExpressionTime, -3300, 900)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.5, 2, "Sheen sweeps per second over the filled part. Positive = left to right, 0 = none", -3300, 1020)
+speed_p = scalar_param("Speed", 0.5, 0, "Sheen sweeps per second over the filled part. Positive = left to right, 0 = none", -3300, 1020)
 t_speed = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -3100, 950)
 u_frac = expr(unreal.MaterialExpressionFrac, -2950, 950)
 _connect(t_speed, "", u_frac, "")
-sheenw_p = scalar_param("SheenWidth", 1.5, 3, "Half width of the sheen (half the shorter widget side = 1.0)", -3300, 1200)
+sheenw_p = scalar_param("SheenWidth", 1.5, 2, "Half width of the sheen (half the shorter widget side = 1.0)", -3300, 1200)
 make_decl("SheenWidth", sheenw_p, -3100, 1200, C_TM)
 xl_u3 = use("xL", -2950, 1080)
 sw_u1 = use("SheenWidth", -2950, 1180)
@@ -256,7 +267,7 @@ sheen_ss = expr(unreal.MaterialExpressionSmoothStep, -1450, 1150, const_min=0.0,
 _connect(s_sat, "", sheen_ss, "Value")
 
 # ---- rgb = lerp(PrimaryColor.rgb, 1, sheen * SheenStrength * fill) ----
-sheens_p = scalar_param("SheenStrength", 0.5, 4,
+sheens_p = scalar_param("SheenStrength", 0.5, 3,
                         "How far the sheen pushes the fill toward white (0 = no sheen). Invisible on a white PrimaryColor",
                         -1450, 1300)
 sheen_amt = binary(unreal.MaterialExpressionMultiply, sheen_ss, sheens_p, -1250, 1200)
@@ -264,7 +275,7 @@ fill_u1 = use("fill", -1250, 1320)
 sheen_fill = binary(unreal.MaterialExpressionMultiply, sheen_amt, fill_u1, -1100, 1250)
 primary_p = expr(unreal.MaterialExpressionVectorParameter, -1100, 900,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Bar color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Bar color (alpha scales the opacity)")
 white_c = expr(unreal.MaterialExpressionConstant3Vector, -1100, 1080, constant=unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
 rgb_v = expr(unreal.MaterialExpressionLinearInterpolate, -850, 1050)
 _connect(primary_p, "", rgb_v, "A")
@@ -273,7 +284,7 @@ _connect(sheen_fill, "", rgb_v, "Alpha")
 
 # ---- mask = max(track * TrackOpacity, fill) ----
 track_u1 = use("track", -1000, 450)
-trackop_p = scalar_param("TrackOpacity", 0.25, 5, "Opacity of the unfilled part of the bar (0 hides it)", -1000, 550)
+trackop_p = scalar_param("TrackOpacity", 0.25, 1, "Opacity of the unfilled part of the bar (0 hides it)", -1000, 550)
 track_dim = binary(unreal.MaterialExpressionMultiply, track_u1, trackop_p, -800, 500)
 fill_u2 = use("fill", -800, 650)
 mask_v = binary(unreal.MaterialExpressionMax, track_dim, fill_u2, -650, 550)
@@ -331,12 +342,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     -550, 520, 800, 500, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -345,14 +359,18 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
         params.append(str(e.get_editor_property("parameter_name")))
+        param_groups[params[-1]] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 expected_decls = sorted(["p", "aa", "R", "L", "xEnd", "xL", "dTrack", "track", "xF", "fill", "SheenWidth", "mask"])
 expected_usages = {"p": 3, "aa": 3, "R": 2, "L": 2, "xEnd": 3, "xL": 3, "dTrack": 2, "track": 1, "xF": 2,
@@ -360,6 +378,7 @@ expected_usages = {"p": 3, "aa": 3, "R": 2, "L": 2, "xEnd": 3, "xL": 3, "dTrack"
 expected_params = sorted(["Progress", "Thickness", "Speed", "SheenWidth", "SheenStrength", "TrackOpacity", "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 8
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

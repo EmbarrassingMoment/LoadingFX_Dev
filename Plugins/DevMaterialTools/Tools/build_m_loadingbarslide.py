@@ -17,8 +17,8 @@ Material Design の線形インジケータ風。デザインは 2026-10-16 の�
   dTrack = length((max(abs(p.x) - L, 0), p.y)) - R  (横向きのカプセル。M_LoadingEqualizer の縦カプセルと同じ形)
   track  = saturate(0.5 - dTrack / aa)
   u      = fract(Time * Speed)                      (Speed は往復/秒、正 = 左から右へ)
-  head   = smoothstep(0, 1 - Lag, u)                (帯の先頭。サイクルの前 (1 - Lag) で左端から右端へ)
-  tail   = smoothstep(Lag, 1, u)                    (帯の末尾。Lag だけ遅れて追いかける)
+  head   = smoothstep(0, 1 - TailDelay, u)          (帯の先頭。サイクルの前 (1 - TailDelay) で左端から右端へ)
+  tail   = smoothstep(TailDelay, 1, u)              (帯の末尾。TailDelay だけ遅れて追いかける)
   xA     = lerp(-xEnd, xEnd, tail),  xB = lerp(-xEnd, xEnd, head)
   dSeg   = max(dTrack, max(xA - p.x, p.x - xB))     (枝と、xA..xB の縦帯の交差。max の合成でも勾配は 1 以下なので AA は aa)
   fade   = saturate((xB - xA) / aa)                 (折り返しで幅 0 になる瞬間、距離 0 の線が 0.5 の濃さで残るのを消す。
@@ -26,7 +26,8 @@ Material Design の線形インジケータ風。デザインは 2026-10-16 の�
   seg    = saturate(0.5 - dSeg / aa) * fade
   mask   = max(track * TrackOpacity, seg)
 
-  Lag が大きいほど帯が長い(0.5 でサイクルの中間に枝全体、既定の 0.35 で枝の約 7 割。0 では幅 0 で何も見えない)。
+  TailDelay が大きいほど帯が長い(0.5 でサイクルの中間に枝全体、既定の 0.35 で枝の約 7 割。0 では幅 0 で何も見えない)。
+  M_LoadingLine の TailDelay と同じ意味(末尾が先頭より遅れて動き出す、サイクルに対する割合)。
 
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
@@ -34,7 +35,7 @@ Material Design の線形インジケータ風。デザインは 2026-10-16 の�
   長辺側は同じ 0.2 の余白を残す(Thickness 2 でウィジェットいっぱい)。正方形や縦長のウィジェットでは L = 0 で直径
   Thickness の円になる。LoadingIconMaterial にするときは IconSize を横長(たとえば 192x12)にする。
 
-  ScalarParameter / VectorParameter はグループ "LoadingBarSlide"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion(PARAM_GROUPS、表示順は GROUP_ORDER)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   R / L / xEnd / dTrack / xA / xB は 2 箇所以上で使うので Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -51,7 +52,15 @@ ASSET_PATH = "/LoadingFX/Materials"
 ASSET_NAME = "M_LoadingBarSlide"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
-PARAM_GROUP = "LoadingBarSlide"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "TrackOpacity": "Appearance",
+    "Thickness": "Shape",
+    "Speed": "Motion",
+    "TailDelay": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -102,7 +111,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -177,29 +186,29 @@ time_n = expr(unreal.MaterialExpressionTime, -3300, 200)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.6, 1, "Sweeps per second. Positive = the segment runs left to right", -3300, 320)
+speed_p = scalar_param("Speed", 0.6, 0, "Sweeps per second. Positive = the segment runs left to right", -3300, 320)
 t_speed = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -3100, 250)
 u_frac = expr(unreal.MaterialExpressionFrac, -2950, 250)
 _connect(t_speed, "", u_frac, "")
 make_decl("u", u_frac, -2800, 250, C_TM)
 
-# ---- head = smoothstep(0, 1 - Lag, u);  tail = smoothstep(Lag, 1, u) ----
-lag_p = scalar_param("Lag", 0.35, 2,
-                     "Delay of the segment's tail behind its head, as a fraction of a sweep. Larger = a longer segment "
-                     "(0.5 = the whole track halfway through, 0 = nothing visible)",
-                     -3300, 500)
-make_decl("Lag", lag_p, -3100, 500, C_TM)
-lag_u1 = use("Lag", -2650, 150)
-lag_inv = expr(unreal.MaterialExpressionOneMinus, -2500, 150)
-_connect(lag_u1, "", lag_inv, "")
+# ---- head = smoothstep(0, 1 - TailDelay, u);  tail = smoothstep(TailDelay, 1, u) ----
+delay_p = scalar_param("TailDelay", 0.35, 1,
+                       "Share of a sweep by which the tail starts after the head; higher makes a longer segment "
+                       "(0.5 = the whole track halfway through, 0 = nothing visible)",
+                       -3300, 500)
+make_decl("TailDelay", delay_p, -3100, 500, C_TM)
+delay_u1 = use("TailDelay", -2650, 150)
+delay_inv = expr(unreal.MaterialExpressionOneMinus, -2500, 150)
+_connect(delay_u1, "", delay_inv, "")
 u_u1 = use("u", -2500, 250)
 head_ss = expr(unreal.MaterialExpressionSmoothStep, -2350, 200, const_min=0.0)
-_connect(lag_inv, "", head_ss, "Max")
+_connect(delay_inv, "", head_ss, "Max")
 _connect(u_u1, "", head_ss, "Value")
-lag_u2 = use("Lag", -2500, 450)
+delay_u2 = use("TailDelay", -2500, 450)
 u_u2 = use("u", -2500, 550)
 tail_ss = expr(unreal.MaterialExpressionSmoothStep, -2350, 500, const_max=1.0)
-_connect(lag_u2, "", tail_ss, "Min")
+_connect(delay_u2, "", tail_ss, "Min")
 _connect(u_u2, "", tail_ss, "Value")
 
 # ---- xA = lerp(-xEnd, xEnd, tail);  xB = lerp(-xEnd, xEnd, head) ----
@@ -252,7 +261,7 @@ seg_v = binary(unreal.MaterialExpressionMultiply, seg_sat, fade_sat, -50, 450)
 
 # ---- mask = max(track * TrackOpacity, seg) ----
 track_u1 = use("track", -200, -300)
-trackop_p = scalar_param("TrackOpacity", 0.25, 3, "Opacity of the track behind the segment (0 hides it)", -200, -200)
+trackop_p = scalar_param("TrackOpacity", 0.25, 1, "Opacity of the track behind the segment (0 hides it)", -200, -200)
 track_dim = binary(unreal.MaterialExpressionMultiply, track_u1, trackop_p, 0, -250)
 mask_v = binary(unreal.MaterialExpressionMax, track_dim, seg_v, 150, 0)
 make_decl("mask", mask_v, 300, 0, C_COL)
@@ -260,7 +269,7 @@ make_decl("mask", mask_v, 300, 0, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 600, -300,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Bar color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Bar color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 600, -50)
 emissive = binary(unreal.MaterialExpressionMultiply, primary_p, vcolor, 850, -250)
 results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
@@ -293,9 +302,9 @@ smt.create_comment_in_material(
          "Time ignores pause (real time), so the bar keeps moving while the game thread is blocked",
     -3350, 100, 700, 300, C_TM)
 smt.create_comment_in_material(
-    mat, "head = smoothstep(0, 1 - Lag, u);  tail = smoothstep(Lag, 1, u)   (Arc's trick: two shifted ramps)\n"
+    mat, "head = smoothstep(0, 1 - TailDelay, u);  tail = smoothstep(TailDelay, 1, u)   (Arc's trick: two shifted ramps)\n"
          "xB = lerp(-xEnd, xEnd, head);  xA = lerp(-xEnd, xEnd, tail)   (the segment is xA..xB)\n"
-         "Larger Lag = a longer segment: 0.5 fills the track halfway through, 0 shows nothing",
+         "Larger TailDelay = a longer segment: 0.5 fills the track halfway through, 0 shows nothing",
     -2700, 50, 1400, 650, C_TM)
 smt.create_comment_in_material(
     mat, "dSeg = max(dTrack, max(xA - p.x, p.x - xB))   (the track cut to xA..xB; still 1-Lipschitz, so AA = aa)\n"
@@ -307,12 +316,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     550, -420, 650, 700, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -321,21 +333,26 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
         params.append(str(e.get_editor_property("parameter_name")))
+        param_groups[params[-1]] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
-expected_decls = sorted(["p", "aa", "R", "L", "xEnd", "dTrack", "track", "u", "Lag", "xL", "xB", "xA", "mask"])
-expected_usages = {"p": 2, "aa": 3, "R": 2, "L": 2, "xEnd": 3, "dTrack": 2, "track": 1, "u": 2, "Lag": 2,
+expected_decls = sorted(["p", "aa", "R", "L", "xEnd", "dTrack", "track", "u", "TailDelay", "xL", "xB", "xA", "mask"])
+expected_usages = {"p": 2, "aa": 3, "R": 2, "L": 2, "xEnd": 3, "dTrack": 2, "track": 1, "u": 2, "TailDelay": 2,
                    "xL": 2, "xB": 2, "xA": 2, "mask": 1}
-expected_params = sorted(["Thickness", "Speed", "Lag", "TrackOpacity", "PrimaryColor"])
+expected_params = sorted(["Thickness", "Speed", "TailDelay", "TrackOpacity", "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 7
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

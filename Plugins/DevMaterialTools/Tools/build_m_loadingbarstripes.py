@@ -25,7 +25,7 @@ striped progress bar 風)。デザインは 2026-10-16 のローディングバ�
   デフォルトの外寸は M_LoadingBarSlide と同じ(Thickness 1.6: 上下 ±0.8、両端は ±(ext.x - 0.2))。
   Period は p 単位(枝の高さが 2.0)。既定の 1.6 で縞の周期は高さの 0.8 倍。
 
-  ScalarParameter / VectorParameter はグループ "LoadingBarStripes"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion(PARAM_GROUPS、表示順は GROUP_ORDER)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   R / L / Period は 2 箇所で使うので Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -43,7 +43,16 @@ ASSET_NAME = "M_LoadingBarStripes"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 SQRT2 = 1.41421356237
-PARAM_GROUP = "LoadingBarStripes"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "TrackOpacity": "Appearance",
+    "Thickness": "Shape",
+    "Period": "Shape",
+    "Duty": "Shape",
+    "Speed": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -94,7 +103,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -175,7 +184,7 @@ time_n = expr(unreal.MaterialExpressionTime, -2800, 400)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 1.0, 2, "Stripes passing per second. Positive = the stripes run to the right", -2800, 520)
+speed_p = scalar_param("Speed", 1.0, 0, "Stripes passing per second. Positive = the stripes run to the right", -2800, 520)
 t_speed = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -2600, 450)
 t_v = binary(unreal.MaterialExpressionSubtract, diag_div, t_speed, -2200, 300)
 
@@ -186,7 +195,7 @@ tc_v = expr(unreal.MaterialExpressionSubtract, -1900, 300, const_b=0.5)
 _connect(t_frac, "", tc_v, "A")
 tc_abs = expr(unreal.MaterialExpressionAbs, -1750, 300)
 _connect(tc_v, "", tc_abs, "")
-duty_p = scalar_param("Duty", 0.5, 3, "Width of a stripe as a fraction of Period (0.5 = stripes and gaps alike)", -1900, 450)
+duty_p = scalar_param("Duty", 0.5, 2, "Width of a stripe as a fraction of Period (0.5 = stripes and gaps alike)", -1900, 450)
 duty_half = expr(unreal.MaterialExpressionMultiply, -1700, 450, const_b=0.5)
 _connect(duty_p, "", duty_half, "A")
 dt_v = binary(unreal.MaterialExpressionSubtract, tc_abs, duty_half, -1550, 350)
@@ -204,7 +213,7 @@ stripe_sat = expr(unreal.MaterialExpressionSaturate, -1100, 400)
 _connect(stripe_sub, "", stripe_sat, "")
 
 # ---- mask = track * lerp(TrackOpacity, 1, stripe) ----
-trackop_p = scalar_param("TrackOpacity", 0.25, 4, "Opacity of the bar between the stripes (0 leaves only the stripes)", -1100, 600)
+trackop_p = scalar_param("TrackOpacity", 0.25, 1, "Opacity of the bar between the stripes (0 leaves only the stripes)", -1100, 600)
 level_v = expr(unreal.MaterialExpressionLinearInterpolate, -900, 450, const_b=1.0)
 _connect(trackop_p, "", level_v, "A")
 _connect(stripe_sat, "", level_v, "Alpha")
@@ -215,7 +224,7 @@ make_decl("mask", mask_v, -550, 350, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, -300, -300,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Bar color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Bar color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, -300, -50)
 emissive = binary(unreal.MaterialExpressionMultiply, primary_p, vcolor, -50, -250)
 results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
@@ -257,12 +266,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     -350, -420, 650, 700, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -271,20 +283,25 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
         params.append(str(e.get_editor_property("parameter_name")))
+        param_groups[params[-1]] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 expected_decls = sorted(["p", "aa", "R", "L", "track", "Period", "mask"])
 expected_usages = {"p": 2, "aa": 2, "R": 1, "L": 1, "track": 1, "Period": 2, "mask": 1}
 expected_params = sorted(["Thickness", "Period", "Speed", "Duty", "TrackOpacity", "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 6
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

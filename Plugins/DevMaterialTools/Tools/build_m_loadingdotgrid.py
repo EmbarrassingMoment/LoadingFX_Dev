@@ -1,5 +1,5 @@
 """
-Loading Icon (Shadertoy, loop-free) -> M_LoadingIcon (Material Domain = UI, Translucent)
+Dot grid (Shadertoy, loop-free) -> M_LoadingDotGrid (Material Domain = UI, Translucent)
 
 8 つの球を四角形に配置し、12 時の位置から時計回りに拡大パルスが巡回するロードアイコン。
 ピクセルが属するグリッドセルから担当の球を直接求めるのでループ不要。
@@ -19,7 +19,7 @@ Loading Icon (Shadertoy, loop-free) -> M_LoadingIcon (Material Domain = UI, Tran
   rise     = smoothstep(0, Attack, age)
   fall     = 1 - smoothstep(0, Trail, age - Attack)
   pulse    = rise * fall                             (Attack + Trail <= 8 なら一周の継ぎ目で不連続にならない)
-  r        = RBase + RGrow * pulse
+  r        = DotRadiusMin + (DotRadiusMax - DotRadiusMin) * pulse
   d        = length(uv - cell*Spacing) - r           (sdCircle をインライン展開)
   d       += isCenter * 1e5                          (中央セルは描画しない)
   mask     = clamp(0.5 - d/aa, 0, 1)
@@ -27,15 +27,15 @@ Loading Icon (Shadertoy, loop-free) -> M_LoadingIcon (Material Domain = UI, Tran
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   背景(BG)は不要なので mix は省略。
-  デフォルト値は Spacing + RBase + RGrow = 0.72(材質契約の基準正方形の半幅、パルスのピーク時)に合わせてある。
+  デフォルト値は Spacing + DotRadiusMax = 0.72(材質契約の基準正方形の半幅、パルスのピーク時)に合わせてある。
 
-  const  -> ScalarParameter (Spacing/RBase/RGrow/Speed/Attack/Trail、グループ "LoadingIcon")
+  const  -> ScalarParameter (Spacing/DotRadiusMin/DotRadiusMax/Speed/Attack/Trail、グループ Appearance / Shape / Motion)
   色     -> VectorParameter PrimaryColor(元の Shadertoy は白固定)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   Spacing(2 箇所)と Attack(3 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
 実行例:
-  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingicon.py"
+  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingdotgrid.py"
 """
 import unreal
 
@@ -44,12 +44,22 @@ import unreal
 unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/LoadingFX"], True)
 
 ASSET_PATH = "/LoadingFX/Materials"
-ASSET_NAME = "M_LoadingIcon"
+ASSET_NAME = "M_LoadingDotGrid"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_MOD_PATH = "/LoadingFX/MaterialFunctions/MF_GLSLMod"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 PI = 3.14159265
-PARAM_GROUP = "LoadingIcon"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "Spacing": "Shape",
+    "DotRadiusMin": "Shape",
+    "DotRadiusMax": "Shape",
+    "Speed": "Motion",
+    "Attack": "Motion",
+    "Trail": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -98,11 +108,13 @@ def make_decl(name, src, x, y, color, out_name=""):
 def use(name, x, y):
     return smt.create_named_reroute_usage(mat, decls[name], x, y)
 
-def scalar_param(name, default, x, y):
+def scalar_param(name, default, sort, desc, x, y):
     p_ = expr(unreal.MaterialExpressionScalarParameter, x, y)
     p_.set_editor_property("parameter_name", name)
     p_.set_editor_property("default_value", default)
-    p_.set_editor_property("group", PARAM_GROUP)
+    p_.set_editor_property("group", PARAM_GROUPS[name])
+    p_.set_editor_property("sort_priority", sort)
+    p_.set_editor_property("desc", desc)
     return p_
 
 def constant(value, x, y):
@@ -132,8 +144,9 @@ def glsl_mod(x_src, y_value, x, y):
     return call
 
 # ---- const SPACING (used twice -> Named Reroute) ----
-# Footprint (material contract): Spacing + RBase + RGrow = 0.72, the reference square (grid layout, at the pulse peak).
-spacing_p = scalar_param("Spacing", 0.54, -4300, -300)
+# Footprint (material contract): Spacing + DotRadiusMax = 0.72, the reference square (grid layout, at the pulse peak).
+spacing_p = scalar_param("Spacing", 0.54, 0,
+                         "Distance between neighboring dot centers (half the shorter widget side = 1.0)", -4300, -300)
 make_decl("Spacing", spacing_p, -4100, -300, C_SC)
 
 # ---- uv = MF_SpinnerCoords.P, aa = MF_SpinnerCoords.PixelSize  (centered, y-up, shorter side = -1..1) ----
@@ -199,7 +212,7 @@ time_n = expr(unreal.MaterialExpressionTime, -1900, 900)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.8, -1900, 1000)
+speed_p = scalar_param("Speed", 0.8, 0, "Revolutions of the pulse per second. Positive = clockwise", -1900, 1000)
 t_speed = expr(unreal.MaterialExpressionMultiply, -1750, 950)
 _connect(time_n, "", t_speed, "A")
 _connect(speed_p, "", t_speed, "B")
@@ -211,7 +224,7 @@ _connect(t_frac, "", head_v, "A")
 make_decl("head", head_v, -1300, 950, C_TM)
 
 # ---- const ATTACK (used three times -> Named Reroute) ----
-attack_p = scalar_param("Attack", 0.5, -1900, 1150)
+attack_p = scalar_param("Attack", 0.5, 1, "Dots over which a dot swells before the head reaches it", -1900, 1150)
 make_decl("Attack", attack_p, -1750, 1150, C_TM)
 
 # ---- age = mod(head - idx + Attack, 8)  (0 = starts to swell, Attack = head on the ball, then the trail) ----
@@ -239,7 +252,8 @@ attack_u3 = use("Attack", -250, 1100)
 age_after = expr(unreal.MaterialExpressionSubtract, -100, 1040)
 _connect(age_u2, "", age_after, "A")
 _connect(attack_u3, "", age_after, "B")
-trail_p = scalar_param("Trail", 4.0, -100, 1160)
+trail_p = scalar_param("Trail", 4.0, 2,
+                       "Dots over which a dot shrinks back after the head passed (keep Attack + Trail <= 8)", -100, 1160)
 fall_ss = expr(unreal.MaterialExpressionSmoothStep, 50, 1060)
 fall_ss.set_editor_property("const_min", 0.0)
 _connect(trail_p, "", fall_ss, "Max")
@@ -251,17 +265,23 @@ _connect(rise_ss, "", pulse_v, "A")
 _connect(fall_om, "", pulse_v, "B")
 make_decl("pulse", pulse_v, 450, 930, C_TM)
 
-# ---- r = RBase + RGrow * pulse ----
-pulse_u1 = use("pulse", 600, 830)
-rgrow_p = scalar_param("RGrow", 0.12, 600, 930)
-r_grow = expr(unreal.MaterialExpressionMultiply, 750, 880)
-_connect(rgrow_p, "", r_grow, "A")
+# ---- r = DotRadiusMin + (DotRadiusMax - DotRadiusMin) * pulse ----
+rmin_p = scalar_param("DotRadiusMin", 0.06, 1, "Dot radius at rest", 450, 1080)
+make_decl("DotRadiusMin", rmin_p, 650, 1080, C_SC)
+rmax_p = scalar_param("DotRadiusMax", 0.18, 2, "Dot radius at the peak of the pulse", 450, 980)
+rmin_u1 = use("DotRadiusMin", 600, 1030)
+r_range = expr(unreal.MaterialExpressionSubtract, 750, 980)   # DotRadiusMax - DotRadiusMin
+_connect(rmax_p, "", r_range, "A")
+_connect(rmin_u1, "", r_range, "B")
+pulse_u1 = use("pulse", 750, 880)
+r_grow = expr(unreal.MaterialExpressionMultiply, 900, 920)
+_connect(r_range, "", r_grow, "A")
 _connect(pulse_u1, "", r_grow, "B")
-rbase_p = scalar_param("RBase", 0.06, 750, 780)
-r_v = expr(unreal.MaterialExpressionAdd, 900, 830)
-_connect(rbase_p, "", r_v, "A")
+rmin_u2 = use("DotRadiusMin", 900, 800)
+r_v = expr(unreal.MaterialExpressionAdd, 1050, 850)
+_connect(rmin_u2, "", r_v, "A")
 _connect(r_grow, "", r_v, "B")
-make_decl("r", r_v, 1050, 830, C_SDF)
+make_decl("r", r_v, 1200, 850, C_SDF)
 
 # ---- 4. d = length(uv - cell*Spacing) - r  (sdCircle expanded inline); d += isCenter * 1e5 ----
 cell_u4 = use("cell", 600, 300)
@@ -309,8 +329,9 @@ make_decl("mask", mask_clamp, 2500, 350, C_COL)
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 2700, 100)
 primary_p.set_editor_property("parameter_name", "PrimaryColor")
 primary_p.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
-primary_p.set_editor_property("group", PARAM_GROUP)
-primary_p.set_editor_property("desc", "Ball color (alpha scales the opacity)")
+primary_p.set_editor_property("group", PARAM_GROUPS["PrimaryColor"])
+primary_p.set_editor_property("sort_priority", 0)
+primary_p.set_editor_property("desc", "Dot color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 2700, 350)
 emissive = expr(unreal.MaterialExpressionMultiply, 2950, 150)
 _connect(primary_p, "", emissive, "A")
@@ -327,8 +348,8 @@ results.append(mel.connect_material_property(opacity, "", unreal.MaterialPropert
 
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "const SPACING -> ScalarParameter (used twice -> Named Reroute; ATTACK likewise, three uses).\n"
-         "RBase / RGrow / Speed / Trail / PrimaryColor are wired directly at their single use site",
+    mat, "const SPACING -> ScalarParameter (used twice -> Named Reroute; ATTACK and DotRadiusMin likewise).\n"
+         "DotRadiusMax / Speed / Trail / PrimaryColor are wired directly at their single use site",
     -4350, -400, 650, 250, C_SC)
 smt.create_comment_in_material(
     mat, "uv = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
@@ -358,8 +379,8 @@ smt.create_comment_in_material(
 smt.create_comment_in_material(
     mat, "rise = smoothstep(0, Attack, age)   (quick swell just before the head arrives)\n"
          "fall = 1 - smoothstep(0, Trail, age - Attack)   (slow afterglow behind the head)\n"
-         "pulse = rise * fall; r = RBase + RGrow * pulse   (keep Attack + Trail <= 8 for a seamless wrap)",
-    -300, 700, 1500, 580, C_TM)
+         "pulse = rise * fall; r = DotRadiusMin + (DotRadiusMax - DotRadiusMin) * pulse   (keep Attack + Trail <= 8 for a seamless wrap)",
+    -300, 700, 1650, 580, C_TM)
 smt.create_comment_in_material(
     mat, "4. sdCircle expanded inline: d = length(uv - cell*Spacing) - r\n"
          "d += isCenter * 1e5   (center cell is never drawn)",
@@ -375,12 +396,15 @@ smt.create_comment_in_material(
          "Background dropped: mix(BG, color, mask) becomes PrimaryColor with alpha",
     2650, 0, 600, 700, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, param_names, mf_calls = [], {}, [], 0
+decl_names, usage_count, param_names, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -389,27 +413,33 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                         unreal.MaterialExpressionVectorParameter)):
-        param_names.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        param_names.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {sorted(decl_names)}")
 print(f"[TEST] {ASSET_NAME} usages: {dict(sorted(usage_count.items()))}")
 print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
-expected_decls = sorted(["Spacing", "Attack", "uv", "cell", "isCenter", "a", "idx", "head", "age",
+expected_decls = sorted(["Spacing", "Attack", "DotRadiusMin", "uv", "cell", "isCenter", "a", "idx", "head", "age",
                          "pulse", "r", "d", "aa", "mask"])
-expected_usages = {"Spacing": 2, "Attack": 3, "uv": 2, "cell": 4, "isCenter": 2, "a": 1, "idx": 1,
-                   "head": 1, "age": 2, "pulse": 1, "r": 1, "d": 1, "aa": 1, "mask": 1}
+expected_usages = {"Spacing": 2, "Attack": 3, "DotRadiusMin": 2, "uv": 2, "cell": 4, "isCenter": 2, "a": 1,
+                   "idx": 1, "head": 1, "age": 2, "pulse": 1, "r": 1, "d": 1, "aa": 1, "mask": 1}
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
-params_ok = sorted(param_names) == ["Attack", "PrimaryColor", "RBase", "RGrow", "Spacing", "Speed", "Trail"]
+params_ok = sorted(param_names) == ["Attack", "DotRadiusMax", "DotRadiusMin", "PrimaryColor", "Spacing", "Speed", "Trail"]
+groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 3
 comments_ok = len(smt.get_material_comment_texts(mat)) == 12
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
-passed = (all(results) and decls_ok and usages_ok and params_ok and mf_ok
+passed = (all(results) and decls_ok and usages_ok and params_ok and groups_ok and mf_ok
           and comments_ok and domain_ok and blend_ok and saved)
 print("[TEST] RESULT: " + ("PASS" if passed else "FAIL"))

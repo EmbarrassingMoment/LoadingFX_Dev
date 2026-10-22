@@ -12,19 +12,19 @@ Morphing square -> M_LoadingMorph (Material Domain = UI, Translucent)
     e = smoothstep(0, TurnFraction, u)              (回転の進み 0..1。サイクルの残りは止まる)
     正方形は 90° 回すと元と同じ形なので、角度は e だけで決まる(1 回ごとの累積は要らない)。
     c, s = cos / sin(e * 90°)                       (Sine / Cosine は period 4 = 入力 1 で 1/4 回転)
-    r = lerp(CornerRadius, HalfSize, Morph * sin(e * 180°))   (period 2。回転の中間で最も丸く、Morph 1 なら円)
+    r = lerp(CornerRadius, HalfSize, Roundness * sin(e * 180°))   (period 2。回転の中間で最も丸く、Roundness 1 なら円)
   q = (c * p.x - s * p.y, s * p.x + c * p.y)        (ピクセルを逆向きに回す = 正方形が時計回りに回る)
   d = sdRoundBox(q, (HalfSize, HalfSize), r)        (MF_SdRoundBox2D)
   mask = saturate(0.5 - d / aa)
 
   デフォルトの外寸: 止まっている間は HalfSize = 0.72(材質契約の基準正方形)。回る途中は角が x / y 方向へ出るが、
-  同時に丸まるので最大 0.786(e = 0.16 と 0.84 のとき。基準円 0.8 の内側)。Morph を下げると丸まりが減り、
-  Morph 0 では 45° のときに HalfSize * sqrt(2) - (sqrt(2) - 1) * CornerRadius = 0.964 まで出る。
+  同時に丸まるので最大 0.786(e = 0.16 と 0.84 のとき。基準円 0.8 の内側)。Roundness を下げると丸まりが減り、
+  Roundness 0 では 45° のときに HalfSize * sqrt(2) - (sqrt(2) - 1) * CornerRadius = 0.964 まで出る。
 
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
 
-  ScalarParameter / VectorParameter はグループ "LoadingMorph"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion(PARAM_GROUPS、表示順は GROUP_ORDER)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   HalfSize(2 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -42,7 +42,16 @@ ASSET_NAME = "M_LoadingMorph"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 MF_BOX_PATH = "/LoadingFX/MaterialFunctions/MF_SdRoundBox2D"
-PARAM_GROUP = "LoadingMorph"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "HalfSize": "Shape",
+    "CornerRadius": "Shape",
+    "Roundness": "Shape",
+    "Speed": "Motion",
+    "TurnFraction": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -95,7 +104,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -116,7 +125,7 @@ make_decl("p", coords, -2300, -750, C_UV, "P")
 make_decl("aa", coords, -2300, -630, C_SDF, "PixelSize")
 
 # ---- Shared parameter ----
-# Footprint (material contract): HalfSize = 0.72 at rest; at most 0.786 along x or y while it turns (Morph 1).
+# Footprint (material contract): HalfSize = 0.72 at rest; at most 0.786 along x or y while it turns (Roundness 1).
 half_p = scalar_param("HalfSize", 0.72, 0,
                       "Half width of the square at rest (half the shorter widget side = 1.0)", -2800, -400)
 make_decl("HalfSize", half_p, -2550, -400, C_SC)
@@ -126,13 +135,13 @@ time_n = expr(unreal.MaterialExpressionTime, -2800, 200)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.5, 3,
+speed_p = scalar_param("Speed", 0.5, 0,
                        "Quarter turns per second (each one rounds the square off and back). Positive = clockwise",
                        -2800, 320)
 t_speed = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -2600, 250)
 u_frac = expr(unreal.MaterialExpressionFrac, -2450, 250)
 _connect(t_speed, "", u_frac, "")
-turnf_p = scalar_param("TurnFraction", 0.6, 4,
+turnf_p = scalar_param("TurnFraction", 0.6, 1,
                        "Share of a cycle spent turning; the rest is a pause (above 0, up to 1)", -2450, 380)
 e_ss = expr(unreal.MaterialExpressionSmoothStep, -2250, 300, const_min=0.0)
 _connect(u_frac, "", e_ss, "Value")
@@ -148,14 +157,14 @@ s_sin = expr(unreal.MaterialExpressionSine, -1700, -280, period=4.0)
 _connect(e_u1, "", s_sin, "")
 make_decl("s", s_sin, -1550, -280, C_UV)
 
-# ---- r = lerp(CornerRadius, HalfSize, Morph * sin(e * 180 degrees))  (period 2) ----
+# ---- r = lerp(CornerRadius, HalfSize, Roundness * sin(e * 180 degrees))  (period 2) ----
 e_u2 = use("e", -1850, 350)
 round_sin = expr(unreal.MaterialExpressionSine, -1700, 350, period=2.0)
 _connect(e_u2, "", round_sin, "")
-morph_p = scalar_param("Morph", 1.0, 2,
-                       "How far the square rounds off halfway through a turn: 0 = stays a square, 1 = a full circle. "
-                       "Below 1 the corners reach further out while turning (at 0, HalfSize * 1.414 - CornerRadius * 0.414)", -1700, 470)
-round_amt = binary(unreal.MaterialExpressionMultiply, round_sin, morph_p, -1550, 400)
+roundness_p = scalar_param("Roundness", 1.0, 2,
+                           "How far the square rounds off halfway through a turn: 0 = stays a square, 1 = a full circle. "
+                           "Below 1 the corners reach further out while turning (at 0, HalfSize * 1.414 - CornerRadius * 0.414)", -1700, 470)
+round_amt = binary(unreal.MaterialExpressionMultiply, round_sin, roundness_p, -1550, 400)
 corner_p = scalar_param("CornerRadius", 0.13, 1, "Corner radius of the square at rest", -1550, 200)
 half_u1 = use("HalfSize", -1550, 300)
 r_lerp = expr(unreal.MaterialExpressionLinearInterpolate, -1350, 300)
@@ -203,7 +212,7 @@ make_decl("mask", mask_sat, 950, -150, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 1200, -250,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Color of the shape (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Color of the shape (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 1200, 0)
 emissive = binary(unreal.MaterialExpressionMultiply, primary_p, vcolor, 1450, -200)
 results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
@@ -223,7 +232,7 @@ smt.create_comment_in_material(
     -2650, -870, 700, 400, C_UV)
 smt.create_comment_in_material(
     mat, "HalfSize = 0.72 at rest (the material contract's reference square). While it turns the corners\n"
-         "reach at most 0.786 along x or y with Morph 1 (inside the reference circle)",
+         "reach at most 0.786 along x or y with Roundness 1 (inside the reference circle)",
     -2850, -470, 600, 230, C_SC)
 smt.create_comment_in_material(
     mat, "u = fract(Time * Speed);  e = smoothstep(0, TurnFraction, u)   (turn progress, then a pause)\n"
@@ -234,8 +243,8 @@ smt.create_comment_in_material(
     mat, "c, s = cos / sin(e * 90 degrees)   (Sine / Cosine with period 4: an input of 1 is a quarter turn)",
     -1900, -470, 600, 330, C_UV)
 smt.create_comment_in_material(
-    mat, "r = lerp(CornerRadius, HalfSize, Morph * sin(e * 180 degrees))   (period 2)\n"
-         "Roundest halfway through the turn: a full circle with Morph 1",
+    mat, "r = lerp(CornerRadius, HalfSize, Roundness * sin(e * 180 degrees))   (period 2)\n"
+         "Roundest halfway through the turn: a full circle with Roundness 1",
     -1900, 130, 800, 450, C_SDF)
 smt.create_comment_in_material(
     mat, "q = (c * p.x - s * p.y, s * p.x + c * p.y): the pixel turns the other way, so the square turns clockwise",
@@ -251,12 +260,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     1150, -370, 650, 680, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -265,20 +277,25 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
         params.append(str(e.get_editor_property("parameter_name")))
+        param_groups[params[-1]] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 expected_decls = sorted(["p", "aa", "HalfSize", "e", "c", "s", "d", "mask"])
 expected_usages = {"p": 1, "aa": 1, "HalfSize": 2, "e": 2, "c": 2, "s": 2, "d": 1, "mask": 1}
-expected_params = sorted(["HalfSize", "CornerRadius", "Morph", "Speed", "TurnFraction", "PrimaryColor"])
+expected_params = sorted(["HalfSize", "CornerRadius", "Roundness", "Speed", "TurnFraction", "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 2
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 9
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

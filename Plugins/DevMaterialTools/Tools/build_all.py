@@ -17,13 +17,13 @@ TOOLS_DIR = os.path.join(
 SCRIPTS = [
     "build_mf_glslmod.py",
     "build_mf_spinnercoords.py",
-    "build_m_loadingspinner.py",
-    "build_m_loadingicon.py",
+    "build_m_loadingdotring.py",
+    "build_m_loadingdotgrid.py",
     "build_m_loadingboxes.py",
-    "build_m_loadingbars.py",
+    "build_m_loadingspokes.py",
     "build_m_loadingarc.py",
     "build_m_loadingcomet.py",
-    "build_m_loadingdots.py",
+    "build_m_loadingdotrow.py",
     "build_m_loadingdualarc.py",
     "build_m_loadingsegments.py",
     "build_m_loadingtimer.py",
@@ -36,7 +36,7 @@ SCRIPTS = [
     "build_m_loadingbarslide.py",
     "build_m_loadingbarstripes.py",
     "build_m_loadingbarfill.py",
-    "build_m_loadinglinear.py",
+    "build_m_loadingline.py",
     "build_m_loadingchase.py",
 ]
 

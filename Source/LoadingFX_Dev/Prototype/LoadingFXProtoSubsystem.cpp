@@ -53,17 +53,17 @@ namespace LoadingFXProto
 		const TCHAR* Caption;
 	};
 
-	// Spinner (GameTime) is the same material with the Time node's Ignore Pause off, for an A/B comparison.
+	// DotRing (GameTime) is the same material with the Time node's Ignore Pause off, for an A/B comparison.
 	static const FMaterialEntry MaterialEntries[] =
 	{
-		{ TEXT("/LoadingFX/Materials/M_LoadingSpinner.M_LoadingSpinner"), TEXT("Spinner (RealTime)") },
-		{ TEXT("/Game/Prototype/M_LoadingSpinner_GameTime.M_LoadingSpinner_GameTime"), TEXT("Spinner (GameTime)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingIcon.M_LoadingIcon"), TEXT("Icon (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDotRing.M_LoadingDotRing"), TEXT("DotRing (RealTime)") },
+		{ TEXT("/Game/Prototype/M_LoadingDotRing_GameTime.M_LoadingDotRing_GameTime"), TEXT("DotRing (GameTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDotGrid.M_LoadingDotGrid"), TEXT("DotGrid (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingBoxes.M_LoadingBoxes"), TEXT("Boxes (RealTime)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingBars.M_LoadingBars"), TEXT("Bars (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingSpokes.M_LoadingSpokes"), TEXT("Spokes (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingArc.M_LoadingArc"), TEXT("Arc (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingComet.M_LoadingComet"), TEXT("Comet (RealTime)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingDots.M_LoadingDots"), TEXT("Dots (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDotRow.M_LoadingDotRow"), TEXT("DotRow (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingDualArc.M_LoadingDualArc"), TEXT("DualArc (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingSegments.M_LoadingSegments"), TEXT("Segments (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingTimer.M_LoadingTimer"), TEXT("Timer (RealTime)") },
@@ -76,15 +76,15 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingBarSlide.M_LoadingBarSlide"), TEXT("BarSlide (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingBarStripes.M_LoadingBarStripes"), TEXT("BarStripes (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingBarFill.M_LoadingBarFill"), TEXT("BarFill (RealTime, Progress 0.65)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingLinear.M_LoadingLinear"), TEXT("Linear (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingLine.M_LoadingLine"), TEXT("Line (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingChase.M_LoadingChase"), TEXT("Chase (RealTime)") },
 	};
 
-	/** The bar materials span the widget, so the showcase and the progress bar test draw them wide. M_LoadingBars is the radial one. */
+	/** The bar materials span the widget, so the showcase and the progress bar test draw them wide. */
 	bool IsBarMaterial(const UMaterialInterface* Material)
 	{
 		const FString Name = Material ? Material->GetName() : FString();
-		return Name.StartsWith(TEXT("M_LoadingBar")) && Name != TEXT("M_LoadingBars");
+		return Name.StartsWith(TEXT("M_LoadingBar"));
 	}
 	constexpr float BarAspectRatio = 4.0f;
 
@@ -169,7 +169,7 @@ namespace LoadingFXProto
 		return Handle;
 	}
 
-	/** LFXProto.Loader: a bundled material by name. The test expects them not to be loaded yet (M_LoadingSpinner is the preloaded icon). */
+	/** LFXProto.Loader: a bundled material by name. The test expects them not to be loaded yet (M_LoadingDotRing is the preloaded icon). */
 	FSoftObjectPath LoaderMaterial(const TCHAR* Name)
 	{
 		return FSoftObjectPath(FString::Printf(TEXT("/LoadingFX/Materials/%s.%s"), Name, Name));
@@ -1581,9 +1581,9 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 
 	TArray<FSoftObjectPath> MainPaths =
 	{
-		LoaderMaterial(TEXT("M_LoadingBars")),
+		LoaderMaterial(TEXT("M_LoadingSpokes")),
 		LoaderMaterial(TEXT("M_LoadingComet")),
-		LoaderMaterial(TEXT("M_LoadingDots")),
+		LoaderMaterial(TEXT("M_LoadingDotRow")),
 		LoaderMaterial(TEXT("M_LoadingTimer")),
 		FSoftObjectPath(LoadingFXProto::LoaderMissingPath),
 		FSoftObjectPath(),
@@ -1610,7 +1610,7 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 	SequenceSteps.Add({ 0.2f, [this]()
 	{
 		StartLoaderCase(TEXT("2/13 async: a material that is already loaded (held by load 1)"));
-		LoaderHandles[1] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingBars")) }, TEXT("LFXProto.Loader 2"), nullptr, false);
+		LoaderHandles[1] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingSpokes")) }, TEXT("LFXProto.Loader 2"), nullptr, false);
 		ReportLoaderState(TEXT("after the call"), LoaderHandles[1], TEXT("in progress=1: it completes on a later frame, not inside the call"));
 	} });
 
@@ -1683,8 +1683,8 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 		LoaderIconHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.Loader 8"));
 		LoaderSimulatedSyncSeconds = 1.5f;
 		TArray<UObject*> Loaded;
-		LoaderHandles[0] = Loader->LoadAssetsSync({ LoaderMaterial(TEXT("M_LoadingIcon")) }, TEXT("LFXProto.Loader 8"), nullptr, false, Loaded);
-		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   returned at %.2fs: %s (expect M_LoadingIcon after ~1.5 s; ended with blocking section=1 MoviePlayer playing=1)"),
+		LoaderHandles[0] = Loader->LoadAssetsSync({ LoaderMaterial(TEXT("M_LoadingDotGrid")) }, TEXT("LFXProto.Loader 8"), nullptr, false, Loaded);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   returned at %.2fs: %s (expect M_LoadingDotGrid after ~1.5 s; ended with blocking section=1 MoviePlayer playing=1)"),
 			Tag, LoaderCaseSeconds(), *LoadingFXProto::DescribeObjects(Loaded));
 		IconSubsystem->Release(LoaderIconHandle);
 		Loader->Release(LoaderHandles[0]);
@@ -1730,7 +1730,7 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 	{
 		StartLoaderCase(TEXT("12/13 Load Assets Async action: one asset and one class, owned by this subsystem"));
 		ULoadingFXLoadAssetsAsyncAction* Action = ULoadingFXLoadAssetsAsyncAction::LoadAssetsAsync(GetGameInstance(),
-			{ TSoftObjectPtr<UObject>(LoaderMaterial(TEXT("M_LoadingDots"))) },
+			{ TSoftObjectPtr<UObject>(LoaderMaterial(TEXT("M_LoadingDotRow"))) },
 			{ TSoftClassPtr<UObject>(FSoftObjectPath(LoadingFXProto::LoaderBlueprintClassPath)) },
 			TEXT("LFXProto.Loader 12"), this, false);
 		Action->OnProgress.AddDynamic(this, &ThisClass::HandleLoaderActionProgress);
@@ -1870,7 +1870,7 @@ void ULoadingFXProtoSubsystem::HandleLoaderActionCompleted(FLoadingFXLoadHandle 
 {
 	++LoaderCompletedCount;
 	const ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>();
-	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Completed at %.2fs: progress %.2f, assets: %s / classes: %s, handle active=%d (expect M_LoadingDots / BP_Sky_Sphere_C, 1)"),
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Completed at %.2fs: progress %.2f, assets: %s / classes: %s, handle active=%d (expect M_LoadingDotRow / BP_Sky_Sphere_C, 1)"),
 		LoaderCaseSeconds(), Progress, *LoadingFXProto::DescribeObjects(LoadedAssets), *LoadingFXProto::DescribeObjects(LoadedClasses), Loader->IsHandleActive(Handle) ? 1 : 0);
 }
 

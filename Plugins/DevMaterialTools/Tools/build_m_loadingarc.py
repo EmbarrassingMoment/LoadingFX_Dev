@@ -34,7 +34,7 @@ Stretching arc spinner -> M_LoadingArc (Material Domain = UI, Translucent)
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   デフォルト値は Radius + Thickness/2 = 0.8(材質契約の基準円。1.0 = 短辺の端)に合わせてある。
 
-  ScalarParameter / VectorParameter はグループ "LoadingArc"。
+  ScalarParameter / VectorParameter のグループは Appearance / Shape / Motion(PARAM_GROUPS、順序は GROUP_ORDER)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   Radius(2 箇所)と ArcMin(2 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
@@ -53,7 +53,17 @@ FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 PI = 3.14159265359
 TAU = 6.28318530718
-PARAM_GROUP = "LoadingArc"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "Radius": "Shape",
+    "Thickness": "Shape",
+    "ArcMin": "Shape",
+    "ArcMax": "Shape",
+    "Speed": "Motion",
+    "StretchSpeed": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -103,7 +113,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def mask_x(x, y):
@@ -122,14 +132,14 @@ time_n = expr(unreal.MaterialExpressionTime, -4250, 750)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.3, 4,
+speed_p = scalar_param("Speed", 0.3, 0,
                        "Revolutions per second of the steady rotation. Positive = clockwise "
                        "(the arc itself always stretches clockwise)", -4250, 600)
 rot_v = expr(unreal.MaterialExpressionMultiply, -4050, 650)
 _connect(time_n, "", rot_v, "A")
 _connect(speed_p, "", rot_v, "B")
 make_decl("rot", rot_v, -3900, 650, C_TM)
-stretch_p = scalar_param("StretchSpeed", 0.75, 5, "Stretch cycles per second (one grow and one shrink)",
+stretch_p = scalar_param("StretchSpeed", 0.75, 1, "Stretch cycles per second (one grow and one shrink)",
                          -4250, 870)
 cyc_v = expr(unreal.MaterialExpressionMultiply, -4050, 820)
 _connect(time_n, "", cyc_v, "A")
@@ -337,7 +347,7 @@ make_decl("mask", mask_clamp, 3150, 50, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 3400, -100,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=6, desc="Arc color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Arc color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 3400, 150)
 emissive = expr(unreal.MaterialExpressionMultiply, 3650, -50)
 _connect(primary_p, "", emissive, "A")
@@ -404,12 +414,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     3350, -220, 650, 680, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, param_names, mf_calls = [], {}, [], 0
+decl_names, usage_count, param_names, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -418,12 +431,17 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                         unreal.MaterialExpressionVectorParameter)):
-        param_names.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        param_names.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {sorted(decl_names)}")
 print(f"[TEST] {ASSET_NAME} usages: {dict(sorted(usage_count.items()))}")
 print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
 expected_decls = sorted(["p", "aa", "rot", "k", "u", "shrink", "ArcMin", "ext", "len", "ang", "c", "s", "sc",
@@ -434,12 +452,13 @@ expected_params = sorted(["Radius", "Thickness", "ArcMin", "ArcMax", "Speed", "S
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
+groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
 comments_ok = len(smt.get_material_comment_texts(mat)) == 13
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
-passed = (all(results) and decls_ok and usages_ok and params_ok and mf_ok
+passed = (all(results) and decls_ok and usages_ok and params_ok and groups_ok and mf_ok
           and comments_ok and domain_ok and blend_ok and saved)
 print("[TEST] RESULT: " + ("PASS" if passed else "FAIL"))
