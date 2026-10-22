@@ -461,6 +461,8 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 	HideViewportOverlay();
 	HideGallery();
 	HideUmgSpinners();
+	// The loader may already be deinitialized (it releases every load itself), so do not release through it.
+	ProgressBarLoadHandle.Invalidate();
 	HideProgressBars();
 	HideShowcase();
 	LoadingScreenOverlay.Reset();
