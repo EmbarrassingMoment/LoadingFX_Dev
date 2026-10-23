@@ -221,6 +221,10 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 | `Content/Sample/` | The Blueprint sample map and widgets |
 | `Docs/` | Images for this README |
 
+## Acknowledgements
+
+The spinner shapes are built from 2D signed distance functions published by [Inigo Quilez](https://iquilezles.org/) (MIT): [`sdArc`, `sdPie`, `sdSegment`, `sdEllipse` and `sdRoundBox`](https://iquilezles.org/articles/distfunctions2d/), and the [polynomial smooth minimum](https://iquilezles.org/articles/smin/) that melts the Gooey and Chase dots together.
+
 ## License
 
 [MIT](LICENSE)

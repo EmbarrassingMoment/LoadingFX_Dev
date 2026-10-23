@@ -221,6 +221,10 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 | `Content/Sample/` | Blueprint のサンプルマップとウィジェット |
 | `Docs/` | この README の画像 |
 
+## 謝辞
+
+スピナーの形状は [Inigo Quilez](https://iquilezles.org/) 氏が公開している 2D 符号付き距離関数(MIT)をもとにしています。[`sdArc`、`sdPie`、`sdSegment`、`sdEllipse`、`sdRoundBox`](https://iquilezles.org/articles/distfunctions2d/) と、Gooey / Chase の点を溶け合わせる [多項式 smooth minimum](https://iquilezles.org/articles/smin/) です。
+
 ## ライセンス
 
 [MIT](LICENSE)
