@@ -1,0 +1,18 @@
+Begin Object Class=/Script/UMG.Button Name="TravelButton" ExportPath="/Script/UMG.Button'/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton:WidgetTree.TravelButton'"
+   Begin Object Class=/Script/UMG.ButtonSlot Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton:WidgetTree.TravelButton.ButtonSlot_0'"
+   End Object
+   Begin Object Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton:WidgetTree.TravelButton.ButtonSlot_0'"
+      Parent="/Script/UMG.Button'TravelButton'"
+      Content="/Script/UMG.TextBlock'LabelText'"
+   End Object
+   Slots(0)="/Script/UMG.ButtonSlot'ButtonSlot_0'"
+   DisplayLabel="TravelButton"
+End Object
+Begin Object Class=/Script/UMGEditor.WidgetSlotPair Name="WidgetSlotPair_0" ExportPath="/Script/UMGEditor.WidgetSlotPair'/Engine/Transient.WidgetSlotPair_0'"
+   WidgetName="TravelButton"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="LabelText" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton:WidgetTree.LabelText'"
+   Text=NSLOCTEXT("", "37C0457541AE028454929CA18F792DC1", "Travel")
+   bIsVariable=True
+   DisplayLabel="LabelText"
+End Object
