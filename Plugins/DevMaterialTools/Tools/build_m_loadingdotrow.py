@@ -1,9 +1,9 @@
 """
-Pulsing dot row -> M_LoadingDots (Material Domain = UI, Translucent)
+Pulsing dot row -> M_LoadingDotRow (Material Domain = UI, Translucent)
 
 横一列に並んだ Count 個の点が、左から順に膨らんで明るくなり、また小さく薄く戻るロードアイコン(入力中インジケーター風)。
 ピクセルの x から最も近い点の番号を直接求め、その点の円 SDF を 1 回だけ評価するのでループ不要。
-RMax <= Spacing / 2 なら点が隣のセルにはみ出さないので、最も近い点だけを見れば足りる。
+DotRadiusMax <= Spacing / 2 なら点が隣のセルにはみ出さないので、最も近い点だけを見れば足りる。
 デザインは 2026-10-10 のスピナー案(Canvas プレビュー)でユーザーが選んだもの。
 
   p      = MF_SpinnerCoords.P                       (中心 (0,0)、y 上向き、短辺が -1..1。非正方形でも中央に収まる)
@@ -15,26 +15,26 @@ RMax <= Spacing / 2 なら点が隣のセルにはみ出さないので、最も
                                                      正 = 波が左から右へ進む)
   pulse  = (1 - cos(TAU * saturate(phase / PulseWidth))) / 2
                                                     (サイクルの先頭 PulseWidth の間に 0 -> 1 -> 0、残りは 0 で休む)
-  r      = lerp(RMin, RMax, pulse)
+  r      = lerp(DotRadiusMin, DotRadiusMax, pulse)
   cx     = (id - half) * Spacing                    (点の中心の x)
   d      = length((p.x - cx, p.y)) - r
   mask   = clamp(0.5 - d / aa, 0, 1)
-  alpha  = lerp(BrightMin, 1, pulse)
+  alpha  = lerp(OpacityMin, 1, pulse)
 
-  点ごとに半径が違うので d はセル境界で不連続。AA 幅は fwidth(d) ではなく PixelSize を使う(M_LoadingIcon と同じ)。
+  点ごとに半径が違うので d はセル境界で不連続。AA 幅は fwidth(d) ではなく PixelSize を使う(M_LoadingDotGrid と同じ)。
 
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * alpha * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
-  デフォルト値は (Count - 1) / 2 * Spacing + RMax = 0.72(材質契約の基準正方形の半幅、パルスのピーク時)に合わせてある。
+  デフォルト値は (Count - 1) / 2 * Spacing + DotRadiusMax = 0.72(材質契約の基準正方形の半幅、パルスのピーク時)に合わせてある。
   Count を増やすときは Spacing を小さくしないと列がウィジェットからはみ出す。
 
-  ScalarParameter / VectorParameter はグループ "LoadingDots"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion(並びはグループ内の Sort Priority)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   Spacing(2 箇所)は Declaration 化、Count - 1 は 1 つのノードから half と clamp の Max へ直接配線、
   他のパラメータは 1 箇所なので直接配線。
 
 実行例:
-  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingdots.py"
+  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingdotrow.py"
 """
 import unreal
 
@@ -43,11 +43,23 @@ import unreal
 unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/LoadingFX"], True)
 
 ASSET_PATH = "/LoadingFX/Materials"
-ASSET_NAME = "M_LoadingDots"
+ASSET_NAME = "M_LoadingDotRow"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 TAU = 6.28318530718
-PARAM_GROUP = "LoadingDots"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "OpacityMin": "Appearance",
+    "Count": "Shape",
+    "Spacing": "Shape",
+    "DotRadiusMin": "Shape",
+    "DotRadiusMax": "Shape",
+    "Speed": "Motion",
+    "Stagger": "Motion",
+    "PulseWidth": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -97,7 +109,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def mask_x(x, y):
@@ -119,7 +131,7 @@ half_v = expr(unreal.MaterialExpressionMultiply, -2900, -350, const_b=0.5)
 _connect(count_m1, "", half_v, "A")
 make_decl("half", half_v, -2750, -350, C_SC)
 
-# Footprint (material contract): (Count - 1) / 2 * Spacing + RMax = 0.72, the reference square, at the pulse peak.
+# Footprint (material contract): (Count - 1) / 2 * Spacing + DotRadiusMax = 0.72, the reference square, at the pulse peak.
 spacing_p = scalar_param("Spacing", 0.52, 1,
                          "Distance between neighboring dot centers (half the shorter widget side = 1.0)",
                          -3250, -100)
@@ -149,13 +161,13 @@ time_n = expr(unreal.MaterialExpressionTime, -3250, 350)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 1.1, 5, "Pulse cycles per second. Positive = the wave runs left to right",
+speed_p = scalar_param("Speed", 1.1, 0, "Pulse cycles per second. Positive = the wave runs left to right",
                        -3250, 470)
 t_speed = expr(unreal.MaterialExpressionMultiply, -3050, 400)
 _connect(time_n, "", t_speed, "A")
 _connect(speed_p, "", t_speed, "B")
 id_u1 = use("id", -3050, 550)
-stagger_p = scalar_param("Stagger", 0.16, 6, "Delay between neighboring dots, as a fraction of a cycle",
+stagger_p = scalar_param("Stagger", 0.16, 1, "Delay between neighboring dots, as a fraction of a cycle",
                          -3050, 650)
 id_lag = expr(unreal.MaterialExpressionMultiply, -2900, 600)
 _connect(id_u1, "", id_lag, "A")
@@ -167,7 +179,7 @@ phase_frac = expr(unreal.MaterialExpressionFrac, -2600, 450)
 _connect(phase_sub, "", phase_frac, "")
 
 # ---- pulse = (1 - cos(TAU * saturate(phase / PulseWidth))) / 2  (0 -> 1 -> 0, then rest) ----
-pulsew_p = scalar_param("PulseWidth", 0.55, 7,
+pulsew_p = scalar_param("PulseWidth", 0.55, 2,
                         "Length of one dot's pulse, as a fraction of a cycle (the rest of the cycle is a pause)",
                         -2600, 580)
 pw_div = expr(unreal.MaterialExpressionDivide, -2400, 500)
@@ -185,7 +197,7 @@ pulse_v = expr(unreal.MaterialExpressionMultiply, -1650, 500, const_b=0.5)
 _connect(pw_inv, "", pulse_v, "A")
 make_decl("pulse", pulse_v, -1500, 500, C_TM)
 
-# ---- cx = (id - half) * Spacing;  d = length((p.x - cx, p.y)) - lerp(RMin, RMax, pulse) ----
+# ---- cx = (id - half) * Spacing;  d = length((p.x - cx, p.y)) - lerp(DotRadiusMin, DotRadiusMax, pulse) ----
 id_u2 = use("id", -1250, -300)
 half_u2 = use("half", -1250, -200)
 cx_sub = expr(unreal.MaterialExpressionSubtract, -1100, -250)
@@ -208,8 +220,8 @@ _connect(dx_v, "", q_v, "A")
 _connect(p_y2, "", q_v, "B")
 q_len = expr(unreal.MaterialExpressionLength, -500, -450)
 _connect(q_v, "", q_len, "")
-rmin_p = scalar_param("RMin", 0.1, 2, "Dot radius at rest", -1250, 100)
-rmax_p = scalar_param("RMax", 0.2, 3,
+rmin_p = scalar_param("DotRadiusMin", 0.1, 2, "Dot radius at rest", -1250, 100)
+rmax_p = scalar_param("DotRadiusMax", 0.2, 3,
                       "Dot radius at the peak of its pulse (at most Spacing / 2, or a dot is cut at the cell border)",
                       -1250, 200)
 pulse_u1 = use("pulse", -1250, 300)
@@ -234,11 +246,11 @@ mask_clamp = expr(unreal.MaterialExpressionClamp, 550, -200, min_default=0.0, ma
 _connect(half_minus, "", mask_clamp, "")
 make_decl("mask", mask_clamp, 700, -200, C_COL)
 
-# ---- alpha = lerp(BrightMin, 1, pulse) ----
-brightmin_p = scalar_param("BrightMin", 0.35, 4, "Opacity of a dot at rest; 1 at the peak of its pulse", 100, 100)
+# ---- alpha = lerp(OpacityMin, 1, pulse) ----
+opacitymin_p = scalar_param("OpacityMin", 0.35, 1, "Opacity of a dot at rest; 1 at the peak of its pulse", 100, 100)
 pulse_u2 = use("pulse", 100, 220)
 alpha_v = expr(unreal.MaterialExpressionLinearInterpolate, 350, 150, const_b=1.0)
-_connect(brightmin_p, "", alpha_v, "A")
+_connect(opacitymin_p, "", alpha_v, "A")
 _connect(pulse_u2, "", alpha_v, "Alpha")
 make_decl("alpha", alpha_v, 550, 150, C_TM)
 
@@ -246,7 +258,7 @@ make_decl("alpha", alpha_v, 550, 150, C_TM)
 #      Opacity = mask * alpha * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 1000, -300,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=8, desc="Dot color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Dot color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 1000, -50)
 emissive = expr(unreal.MaterialExpressionMultiply, 1250, -250)
 _connect(primary_p, "", emissive, "A")
@@ -272,13 +284,13 @@ smt.create_comment_in_material(
     -3300, -820, 900, 400, C_UV)
 smt.create_comment_in_material(
     mat, "half = (Count - 1) / 2   (Count - 1 also caps id below)\n"
-         "(Count - 1) / 2 * Spacing + RMax = 0.72 by default (the material contract's reference square).\n"
+         "(Count - 1) / 2 * Spacing + DotRadiusMax = 0.72 by default (the material contract's reference square).\n"
          "Raise Count only together with a smaller Spacing, or the row leaves the widget",
     -3300, -420, 650, 450, C_SC)
 smt.create_comment_in_material(
     mat, "id = clamp(round(p.x / Spacing + half), 0, Count - 1)\n"
          "Nearest dot (0 = leftmost). Pixels beyond the row go to the end dots.\n"
-         "One circle SDF per pixel is enough while RMax <= Spacing / 2",
+         "One circle SDF per pixel is enough while DotRadiusMax <= Spacing / 2",
     -2500, -320, 1050, 380, C_UV)
 smt.create_comment_in_material(
     mat, "phase = fract(Time * Speed - id * Stagger)   (Speed in cycles per second; positive runs left to right)\n"
@@ -289,26 +301,29 @@ smt.create_comment_in_material(
          "0 -> 1 -> 0 over the first PulseWidth of the cycle, then 0 (rest) until the cycle ends",
     -2650, 380, 1300, 330, C_TM)
 smt.create_comment_in_material(
-    mat, "cx = (id - half) * Spacing   (center of dot id);  d = length((p.x - cx, p.y)) - lerp(RMin, RMax, pulse)\n"
+    mat, "cx = (id - half) * Spacing   (center of dot id);  d = length((p.x - cx, p.y)) - lerp(DotRadiusMin, DotRadiusMax, pulse)\n"
          "Radii differ per dot, so d jumps at cell borders: AA uses PixelSize, not fwidth(d)",
     -1300, -620, 1250, 1000, C_SDF)
 smt.create_comment_in_material(
     mat, "mask = clamp(0.5 - d / aa, 0, 1)   (1px-wide coverage approximation at the edge)",
     50, -330, 800, 300, C_COL)
 smt.create_comment_in_material(
-    mat, "alpha = lerp(BrightMin, 1, pulse)   (a dot brightens as it grows)",
+    mat, "alpha = lerp(OpacityMin, 1, pulse)   (a dot brightens as it grows)",
     50, 20, 650, 300, C_TM)
 smt.create_comment_in_material(
     mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
          "Opacity = mask * alpha * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     950, -420, 650, 800, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, param_names, mf_calls = [], {}, [], 0
+decl_names, usage_count, param_names, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -317,27 +332,33 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                         unreal.MaterialExpressionVectorParameter)):
-        param_names.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        param_names.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {sorted(decl_names)}")
 print(f"[TEST] {ASSET_NAME} usages: {dict(sorted(usage_count.items()))}")
 print(f"[TEST] {ASSET_NAME} params: {sorted(param_names)}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 
 expected_decls = sorted(["p", "aa", "half", "Spacing", "id", "pulse", "d", "mask", "alpha"])
 expected_usages = {"p": 2, "aa": 1, "half": 2, "Spacing": 2, "id": 2, "pulse": 2, "d": 1, "mask": 1, "alpha": 1}
-expected_params = sorted(["Count", "Spacing", "RMin", "RMax", "BrightMin", "Speed", "Stagger", "PulseWidth",
-                          "PrimaryColor"])
+expected_params = sorted(["Count", "Spacing", "DotRadiusMin", "DotRadiusMax", "OpacityMin", "Speed", "Stagger",
+                          "PulseWidth", "PrimaryColor"])
 decls_ok = sorted(decl_names) == expected_decls
 usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
+groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
 comments_ok = len(smt.get_material_comment_texts(mat)) == 9
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
-passed = (all(results) and decls_ok and usages_ok and params_ok and mf_ok
+passed = (all(results) and decls_ok and usages_ok and params_ok and groups_ok and mf_ok
           and comments_ok and domain_ok and blend_ok and saved)
 print("[TEST] RESULT: " + ("PASS" if passed else "FAIL"))

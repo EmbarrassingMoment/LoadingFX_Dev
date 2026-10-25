@@ -87,4 +87,14 @@ public:
 	 *  MaterialEditingLibrary only gained an equivalent after UE 5.5. */
 	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
 	static TArray<UMaterialExpression*> GetMaterialFunctionExpressions(UMaterialFunction* MaterialFunction);
+
+	/** Replaces the material's parameter group sort order (UMaterialEditorOnlyData::ParameterGroupData, which the
+	 *  material instance editor reads; lower comes first, groups without an entry sort as 0 and then by name).
+	 *  UMaterialEditorOnlyData is not exposed to Python, so this is done here. Returns false if the arrays differ in length. */
+	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
+	static bool SetParameterGroupSortPriorities(UMaterial* Material, const TArray<FString>& GroupNames, const TArray<int32>& SortPriorities);
+
+	/** Returns the material's parameter group sort order as group name -> priority (for verification). */
+	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
+	static TMap<FString, int32> GetParameterGroupSortPriorities(UMaterial* Material);
 };

@@ -95,6 +95,38 @@ UMaterialExpressionComment* UDevMaterialTools::CreateCommentInMaterial(
 	return Comment;
 }
 
+bool UDevMaterialTools::SetParameterGroupSortPriorities(UMaterial* Material, const TArray<FString>& GroupNames, const TArray<int32>& SortPriorities)
+{
+	UMaterialEditorOnlyData* EditorOnlyData = Material ? Material->GetEditorOnlyData() : nullptr;
+	if (!EditorOnlyData || GroupNames.Num() != SortPriorities.Num())
+	{
+		return false;
+	}
+
+	EditorOnlyData->ParameterGroupData.Reset();
+	for (int32 Index = 0; Index < GroupNames.Num(); ++Index)
+	{
+		FParameterGroupData& GroupData = EditorOnlyData->ParameterGroupData.AddDefaulted_GetRef();
+		GroupData.GroupName = GroupNames[Index];
+		GroupData.GroupSortPriority = SortPriorities[Index];
+	}
+	Material->MarkPackageDirty();
+	return true;
+}
+
+TMap<FString, int32> UDevMaterialTools::GetParameterGroupSortPriorities(UMaterial* Material)
+{
+	TMap<FString, int32> Priorities;
+	if (const UMaterialEditorOnlyData* EditorOnlyData = Material ? Material->GetEditorOnlyData() : nullptr)
+	{
+		for (const FParameterGroupData& GroupData : EditorOnlyData->ParameterGroupData)
+		{
+			Priorities.Add(GroupData.GroupName, GroupData.GroupSortPriority);
+		}
+	}
+	return Priorities;
+}
+
 TArray<FString> UDevMaterialTools::GetMaterialCommentTexts(UMaterial* Material)
 {
 	TArray<FString> Texts;

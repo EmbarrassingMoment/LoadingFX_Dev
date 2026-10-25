@@ -34,7 +34,7 @@ clamp(x, 0, 1) は Saturate で書く。
   デフォルトの外寸: 横は (Count - 1) / 2 * Spacing + Thickness / 2 = 0.72、縦はパルスのピークで HeightMax = 0.72
   (どちらも材質契約の基準正方形の半幅)。Count を増やすときは Spacing を小さくしないと列がウィジェットからはみ出す。
 
-  ScalarParameter / VectorParameter はグループ "LoadingEqualizer"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion に分ける(PARAM_GROUPS)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   Spacing(2 箇所)は Declaration 化、Count - 1 は 1 つのノードから half と clamp の Max へ直接配線、
   Thickness は capR として Declaration 化、他のパラメータは 1 箇所なので直接配線。
@@ -53,7 +53,19 @@ ASSET_NAME = "M_LoadingEqualizer"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 TAU = 6.28318530718
-PARAM_GROUP = "LoadingEqualizer"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "Count": "Shape",
+    "Spacing": "Shape",
+    "Thickness": "Shape",
+    "HeightMin": "Shape",
+    "HeightMax": "Shape",
+    "Speed": "Motion",
+    "Stagger": "Motion",
+    "PulseWidth": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -104,7 +116,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -158,11 +170,11 @@ time_n = expr(unreal.MaterialExpressionTime, -3250, 350)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 1.0, 5, "Pulse cycles per second. Positive = the wave runs left to right",
+speed_p = scalar_param("Speed", 1.0, 0, "Pulse cycles per second. Positive = the wave runs left to right",
                        -3250, 470)
 t_speed = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -3050, 400)
 id_u1 = use("id", -3050, 550)
-stagger_p = scalar_param("Stagger", 0.12, 6, "Delay between neighboring bars, as a fraction of a cycle",
+stagger_p = scalar_param("Stagger", 0.12, 1, "Delay between neighboring bars, as a fraction of a cycle",
                          -3050, 650)
 id_lag = binary(unreal.MaterialExpressionMultiply, id_u1, stagger_p, -2900, 600)
 phase_sub = binary(unreal.MaterialExpressionSubtract, t_speed, id_lag, -2750, 450)
@@ -170,7 +182,7 @@ phase_frac = expr(unreal.MaterialExpressionFrac, -2600, 450)
 _connect(phase_sub, "", phase_frac, "")
 
 # ---- pulse = (1 - cos(TAU * saturate(phase / PulseWidth))) / 2  (0 -> 1 -> 0, then rest) ----
-pulsew_p = scalar_param("PulseWidth", 1.0, 7,
+pulsew_p = scalar_param("PulseWidth", 1.0, 2,
                         "Length of one bar's pulse, as a fraction of a cycle (the rest of the cycle is a pause; "
                         "1 = a continuous wave)", -2600, 580)
 pw_div = binary(unreal.MaterialExpressionDivide, phase_frac, pulsew_p, -2400, 500)
@@ -244,7 +256,7 @@ make_decl("mask", mask_sat, 1050, -200, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 1300, -300,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Bar color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Bar color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 1300, -50)
 emissive = binary(unreal.MaterialExpressionMultiply, primary_p, vcolor, 1550, -250)
 results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
@@ -297,12 +309,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     1250, -420, 650, 700, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, mf_calls, param_groups = [], {}, [], 0, {}
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -310,15 +325,20 @@ for e in smt.get_material_expressions(mat):
         nm = smt.get_named_reroute_usage_display_name(e)
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
-        params.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        params.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 expected_decls = sorted(["p", "aa", "half", "Spacing", "id", "pulse", "capR", "d", "mask"])
 expected_usages = {"p": 2, "aa": 1, "half": 2, "Spacing": 2, "id": 2, "pulse": 1, "capR": 2, "d": 1, "mask": 1}
@@ -326,6 +346,7 @@ expected_params = sorted(["Count", "Spacing", "Thickness", "HeightMin", "HeightM
                           "PulseWidth", "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 9
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

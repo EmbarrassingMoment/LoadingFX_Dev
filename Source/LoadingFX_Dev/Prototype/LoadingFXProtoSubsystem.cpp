@@ -9,6 +9,7 @@
 #include "LoadingFXIconSubsystem.h"
 #include "LoadingFXLoadAssetsAsyncAction.h"
 #include "LoadingFXLoaderSubsystem.h"
+#include "LoadingFXProgressBar.h"
 #include "LoadingFXSettings.h"
 #include "LoadingFXSpinner.h"
 
@@ -52,17 +53,17 @@ namespace LoadingFXProto
 		const TCHAR* Caption;
 	};
 
-	// Spinner (GameTime) is the same material with the Time node's Ignore Pause off, for an A/B comparison.
+	// DotRing (GameTime) is the same material with the Time node's Ignore Pause off, for an A/B comparison.
 	static const FMaterialEntry MaterialEntries[] =
 	{
-		{ TEXT("/LoadingFX/Materials/M_LoadingSpinner.M_LoadingSpinner"), TEXT("Spinner (RealTime)") },
-		{ TEXT("/Game/Prototype/M_LoadingSpinner_GameTime.M_LoadingSpinner_GameTime"), TEXT("Spinner (GameTime)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingIcon.M_LoadingIcon"), TEXT("Icon (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDotRing.M_LoadingDotRing"), TEXT("DotRing (RealTime)") },
+		{ TEXT("/Game/Prototype/M_LoadingDotRing_GameTime.M_LoadingDotRing_GameTime"), TEXT("DotRing (GameTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDotGrid.M_LoadingDotGrid"), TEXT("DotGrid (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingBoxes.M_LoadingBoxes"), TEXT("Boxes (RealTime)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingBars.M_LoadingBars"), TEXT("Bars (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingSpokes.M_LoadingSpokes"), TEXT("Spokes (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingArc.M_LoadingArc"), TEXT("Arc (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingComet.M_LoadingComet"), TEXT("Comet (RealTime)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingDots.M_LoadingDots"), TEXT("Dots (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDotRow.M_LoadingDotRow"), TEXT("DotRow (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingDualArc.M_LoadingDualArc"), TEXT("DualArc (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingSegments.M_LoadingSegments"), TEXT("Segments (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingTimer.M_LoadingTimer"), TEXT("Timer (RealTime)") },
@@ -72,9 +73,20 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingEqualizer.M_LoadingEqualizer"), TEXT("Equalizer (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingGooey.M_LoadingGooey"), TEXT("Gooey (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingMorph.M_LoadingMorph"), TEXT("Morph (RealTime)") },
-		{ TEXT("/LoadingFX/Materials/M_LoadingLinear.M_LoadingLinear"), TEXT("Linear (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingBarSlide.M_LoadingBarSlide"), TEXT("BarSlide (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingBarStripes.M_LoadingBarStripes"), TEXT("BarStripes (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingBarFill.M_LoadingBarFill"), TEXT("BarFill (RealTime, Progress 0.65)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingLine.M_LoadingLine"), TEXT("Line (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingChase.M_LoadingChase"), TEXT("Chase (RealTime)") },
 	};
+
+	/** The bar materials span the widget, so the showcase and the progress bar test draw them wide. */
+	bool IsBarMaterial(const UMaterialInterface* Material)
+	{
+		const FString Name = Material ? Material->GetName() : FString();
+		return Name.StartsWith(TEXT("M_LoadingBar"));
+	}
+	constexpr float BarAspectRatio = 4.0f;
 
 	static const TCHAR* const TravelTestMap = TEXT("/Engine/Maps/Entry");
 	constexpr int32 ViewportOverlayZOrder = 10000;
@@ -157,7 +169,7 @@ namespace LoadingFXProto
 		return Handle;
 	}
 
-	/** LFXProto.Loader: a bundled material by name. The test expects them not to be loaded yet (M_LoadingSpinner is the preloaded icon). */
+	/** LFXProto.Loader: a bundled material by name. The test expects them not to be loaded yet (M_LoadingDotRing is the preloaded icon). */
 	FSoftObjectPath LoaderMaterial(const TCHAR* Name)
 	{
 		return FSoftObjectPath(FString::Printf(TEXT("/LoadingFX/Materials/%s.%s"), Name, Name));
@@ -309,6 +321,17 @@ namespace LoadingFXProto
 			}
 		}));
 
+	static FAutoConsoleCommandWithWorldAndArgs ProgressBarCommand(
+		TEXT("LFXProto.ProgressBar"),
+		TEXT("Verification prototype: show ULoadingFXProgressBar widgets (loader-driven, smoothing, hairline values, tint, bar materials). Args: [shot] [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunProgressBarTest(Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
+			}
+		}));
+
 	static FAutoConsoleCommandWithWorldAndArgs PreloadCommand(
 		TEXT("LFXProto.Preload"),
 		TEXT("Verification prototype: check the icon material preload (in memory before Acquire, no sync load, PSOs precached in packaged builds). Args: [shot] [quit]"),
@@ -438,6 +461,9 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 	HideViewportOverlay();
 	HideGallery();
 	HideUmgSpinners();
+	// The loader may already be deinitialized (it releases every load itself), so do not release through it.
+	ProgressBarLoadHandle.Invalidate();
+	HideProgressBars();
 	HideShowcase();
 	LoadingScreenOverlay.Reset();
 
@@ -757,6 +783,221 @@ void ULoadingFXProtoSubsystem::RunUmgSpinnerTest(bool bTakeScreenshot, bool bQui
 	StartSequence();
 }
 
+void ULoadingFXProtoSubsystem::RunProgressBarTest(bool bTakeScreenshot, bool bQuitWhenDone)
+{
+	if (ProgressBarRoot.IsValid() && !bTakeScreenshot && !bQuitWhenDone)
+	{
+		HideProgressBars();
+		return;
+	}
+
+	UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+	if (!ViewportClient)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("No game viewport: cannot show the progress bars"));
+		return;
+	}
+	HideProgressBars();
+
+	static const TCHAR* const Tag = TEXT("[ProgressBar]");
+	const FVector2D BarSize(320.0, 16.0);
+	TSharedRef<SVerticalBox> Rows = SNew(SVerticalBox);
+
+	// Each case is a UMG widget created at runtime (no widget blueprint needed), hosted as Slate under a caption.
+	auto AddRow = [this, &Rows](const TCHAR* Caption, TFunctionRef<void(SHorizontalBox&)> Fill)
+	{
+		TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
+		Fill(Row.Get());
+		Rows->AddSlot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(STextBlock).Text(FText::FromString(Caption)).Font(FCoreStyle::GetDefaultFontStyle("Regular", 10))
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f, 0.0f, 0.0f)
+			[
+				Row
+			]
+		];
+	};
+	auto AddBar = [this, BarSize](SHorizontalBox& Row, TFunctionRef<void(ULoadingFXProgressBar*)> Setup) -> ULoadingFXProgressBar*
+	{
+		ULoadingFXProgressBar* Bar = NewObject<ULoadingFXProgressBar>(this);
+		Bar->SetSize(BarSize);
+		Setup(Bar);
+		ProgressBarWidgets.Add(Bar);
+		Row.AddSlot().AutoWidth().Padding(0.0f, 0.0f, 12.0f, 0.0f)[Bar->TakeWidget()];
+		return Bar;
+	};
+	auto AddSpinner = [this, BarSize](SHorizontalBox& Row, const TCHAR* MaterialPath)
+	{
+		ULoadingFXSpinner* Spinner = NewObject<ULoadingFXSpinner>(this);
+		Spinner->SetMaterial(LoadObject<UMaterialInterface>(nullptr, MaterialPath));
+		Spinner->SetSize(BarSize);
+		ProgressBarWidgets.Add(Spinner);
+		Row.AddSlot().AutoWidth().Padding(0.0f, 0.0f, 12.0f, 0.0f)[Spinner->TakeWidget()];
+	};
+
+	// 1. Driven by a real load of the prototype's material list: On Progress -> Set Progress, as a Blueprint would do.
+	TWeakObjectPtr<ULoadingFXProgressBar> LoaderBar;
+	AddRow(TEXT("1. loader-driven: Load Assets Async of the material list -> Set Progress (default material, SmoothingTime 0.25)"), [&](SHorizontalBox& Row)
+	{
+		LoaderBar = AddBar(Row, [](ULoadingFXProgressBar*) {});
+	});
+	// 2. Scripted increases: the displayed value lags the target for SmoothingTime, then matches it.
+	TWeakObjectPtr<ULoadingFXProgressBar> ScriptedBar;
+	AddRow(TEXT("2. scripted: 0 -> 0.25 -> 0.6 -> 1 one second apart, SmoothingTime 0.5 (the fill slides)"), [&](SHorizontalBox& Row)
+	{
+		ScriptedBar = AddBar(Row, [](ULoadingFXProgressBar* Bar) { Bar->SetSmoothingTime(0.5f); });
+	});
+	// 3. A decrease is applied at once.
+	TWeakObjectPtr<ULoadingFXProgressBar> DecreaseBar;
+	AddRow(TEXT("3. decrease: 0.8, then 0.2 after 0.7 s (shown at once, SmoothingTime 0.5)"), [&](SHorizontalBox& Row)
+	{
+		DecreaseBar = AddBar(Row, [](ULoadingFXProgressBar* Bar) { Bar->SetSmoothingTime(0.5f); });
+	});
+	// 4. Fixed values: the hairline fade near 0 (0.003 of 320 px is about one pixel), and the ends.
+	AddRow(TEXT("4. fixed, SmoothingTime 0: Progress 0 / 0.003 / 0.02 / 0.5 / 1"), [&](SHorizontalBox& Row)
+	{
+		for (const float Value : { 0.0f, 0.003f, 0.02f, 0.5f, 1.0f })
+		{
+			AddBar(Row, [Value](ULoadingFXProgressBar* Bar) { Bar->SetSmoothingTime(0.0f); Bar->SetProgress(Value); });
+		}
+	});
+	// 5. The dynamic instance is separate from Material, and PrimaryColor can be changed on it (the sheen is visible on a colored bar).
+	AddRow(TEXT("5. Get Dynamic Material: PrimaryColor blue, Progress 0.65 (sheen visible); Material stays empty"), [&](SHorizontalBox& Row)
+	{
+		AddBar(Row, [](ULoadingFXProgressBar* Bar)
+		{
+			Bar->SetProgress(0.65f);
+			UMaterialInstanceDynamic* Dynamic = Bar->GetDynamicMaterial();
+			if (Dynamic)
+			{
+				Dynamic->SetVectorParameterValue(TEXT("PrimaryColor"), FLinearColor(0.18f, 0.5f, 0.88f));
+			}
+			UE_LOG(LogLoadingFXProto, Display, TEXT("%s 5: GetMaterial=%s (expect <null>: the instance never replaces Material), dynamic=%s parent=%s, second call returns the same: %d (expect 1)"),
+				Tag, Bar->GetMaterial() ? *Bar->GetMaterial()->GetName() : TEXT("<null>"),
+				Dynamic ? *Dynamic->GetName() : TEXT("<null>"), Dynamic && Dynamic->Parent ? *Dynamic->Parent->GetName() : TEXT("<null>"),
+				Bar->GetDynamicMaterial() == Dynamic ? 1 : 0);
+		});
+	});
+	// 6. A material without the Progress parameter in the progress bar widget: the write is harmless, the bar animates on its own.
+	AddRow(TEXT("6. Material = M_LoadingBarStripes in the progress bar widget (Progress has no effect) / 7. square 48x48, Progress 0.5"), [&](SHorizontalBox& Row)
+	{
+		AddBar(Row, [](ULoadingFXProgressBar* Bar)
+		{
+			Bar->SetMaterial(LoadObject<UMaterialInterface>(nullptr, TEXT("/LoadingFX/Materials/M_LoadingBarStripes.M_LoadingBarStripes")));
+			Bar->SetProgress(0.5f);
+		});
+		AddBar(Row, [](ULoadingFXProgressBar* Bar) { Bar->SetSize(FVector2D(48.0, 48.0)); Bar->SetProgress(0.5f); });
+	});
+	// 8. The indeterminate bars through the plain spinner widget.
+	AddRow(TEXT("8. ULoadingFXSpinner: M_LoadingBarSlide / M_LoadingBarStripes at 320x16"), [&](SHorizontalBox& Row)
+	{
+		AddSpinner(Row, TEXT("/LoadingFX/Materials/M_LoadingBarSlide.M_LoadingBarSlide"));
+		AddSpinner(Row, TEXT("/LoadingFX/Materials/M_LoadingBarStripes.M_LoadingBarStripes"));
+	});
+
+	ProgressBarRoot = SNew(SBox)
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Center)
+		.Visibility(EVisibility::HitTestInvisible)
+		[
+			SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f))
+			.Padding(12.0f)
+			[
+				Rows
+			]
+		];
+	ViewportClient->AddViewportWidgetContent(ProgressBarRoot.ToSharedRef(), LoadingFXProto::ViewportOverlayZOrder + 2);
+
+	// The loader-driven bar: every entry of the material list. Entries already in memory finish at once (one step each),
+	// the rest as they load; in a fresh process most of them load now.
+	if (ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>())
+	{
+		TArray<FSoftObjectPath> Paths;
+		for (const LoadingFXProto::FMaterialEntry& Entry : LoadingFXProto::MaterialEntries)
+		{
+			Paths.Add(FSoftObjectPath(Entry.Path));
+		}
+		const double StartSeconds = FPlatformTime::Seconds();
+		ProgressBarLoadHandle = Loader->LoadAssetsAsync(Paths, TEXT("LFXProto.ProgressBar"), this, false,
+			FLoadingFXLoadCompleted::CreateWeakLambda(this, [LoaderBar, StartSeconds](FLoadingFXLoadHandle, const TArray<UObject*>& LoadedAssets)
+			{
+				UE_LOG(LogLoadingFXProto, Display, TEXT("%s 1: load completed after %.2f s, %d asset(s); displayed progress %.2f (reaches 1 within SmoothingTime)"),
+					Tag, FPlatformTime::Seconds() - StartSeconds, LoadedAssets.Num(), LoaderBar.IsValid() ? LoaderBar->GetDisplayedProgress() : -1.0f);
+			}),
+			FLoadingFXLoadProgressChanged::CreateWeakLambda(this, [LoaderBar, StartSeconds](FLoadingFXLoadHandle, float Progress)
+			{
+				if (LoaderBar.IsValid())
+				{
+					LoaderBar->SetProgress(Progress);
+				}
+				UE_LOG(LogLoadingFXProto, Display, TEXT("%s 1: progress %.2f at %.2f s -> Set Progress"), Tag, Progress, FPlatformTime::Seconds() - StartSeconds);
+			}));
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s 1: Load Assets Async of %d paths started"), Tag, Paths.Num());
+	}
+
+	SequenceSteps.Reset();
+	auto LogDisplayed = [ScriptedBar](const TCHAR* When, const TCHAR* Expect)
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s 2: %s displayed=%.3f target=%.2f (expect %s)"), Tag, When,
+			ScriptedBar.IsValid() ? ScriptedBar->GetDisplayedProgress() : -1.0f, ScriptedBar.IsValid() ? ScriptedBar->GetProgress() : -1.0f, Expect);
+	};
+	SequenceSteps.Add({ 0.5f, [DecreaseBar]() { if (DecreaseBar.IsValid()) { DecreaseBar->SetProgress(0.8f); } } });
+	SequenceSteps.Add({ 0.5f, [ScriptedBar, LogDisplayed]() { if (ScriptedBar.IsValid()) { ScriptedBar->SetProgress(0.25f); } LogDisplayed(TEXT("right after Set Progress 0.25"), TEXT("displayed still 0")); } });
+	SequenceSteps.Add({ 0.2f, [DecreaseBar]()
+	{
+		if (DecreaseBar.IsValid())
+		{
+			DecreaseBar->SetProgress(0.2f);
+			UE_LOG(LogLoadingFXProto, Display, TEXT("%s 3: Set Progress 0.2 after 0.8: displayed=%.3f right away (expect 0.200: a decrease is not animated)"), Tag, DecreaseBar->GetDisplayedProgress());
+		}
+	} });
+	SequenceSteps.Add({ 0.05f, [LogDisplayed]() { LogDisplayed(TEXT("0.25 s later"), TEXT("between 0 and 0.25")); } });
+	SequenceSteps.Add({ 0.45f, [LogDisplayed]() { LogDisplayed(TEXT("0.7 s later"), TEXT("0.250")); } });
+	SequenceSteps.Add({ 0.3f, [ScriptedBar]() { if (ScriptedBar.IsValid()) { ScriptedBar->SetProgress(0.6f); } } });
+	SequenceSteps.Add({ 0.25f, [LogDisplayed]() { LogDisplayed(TEXT("0.25 s after Set Progress 0.6"), TEXT("about 0.425")); } });
+	SequenceSteps.Add({ 0.75f, [ScriptedBar, LogDisplayed]() { LogDisplayed(TEXT("1 s after Set Progress 0.6"), TEXT("0.600")); if (ScriptedBar.IsValid()) { ScriptedBar->SetProgress(1.0f); } } });
+	SequenceSteps.Add({ 0.7f, [LogDisplayed]() { LogDisplayed(TEXT("0.7 s after Set Progress 1"), TEXT("1.000")); } });
+	if (bTakeScreenshot)
+	{
+		// Leaves time for the bar materials' shaders to compile on a first run; case 2 is complete by then.
+		SequenceSteps.Add({ 1.0f, []() { LoadingFXProto::RequestScreenshot(TEXT("ProgressBar"), TEXT("LFXProto_ProgressBar.png")); } });
+	}
+	if (bQuitWhenDone)
+	{
+		SequenceSteps.Add({ 1.5f, []() { FPlatformMisc::RequestExit(false, TEXT("LFXProto.ProgressBar")); } });
+	}
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::HideProgressBars()
+{
+	if (ProgressBarRoot.IsValid())
+	{
+		if (UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient())
+		{
+			ViewportClient->RemoveViewportWidgetContent(ProgressBarRoot.ToSharedRef());
+		}
+	}
+	ProgressBarRoot.Reset();
+	if (ProgressBarLoadHandle.IsValid())
+	{
+		if (ULoadingFXLoaderSubsystem* Loader = GetGameInstance() ? GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>() : nullptr)
+		{
+			Loader->Release(ProgressBarLoadHandle);
+		}
+		ProgressBarLoadHandle.Invalidate();
+	}
+	ProgressBarWidgets.Reset();
+}
+
 void ULoadingFXProtoSubsystem::HideUmgSpinners()
 {
 	if (UmgRoot.IsValid())
@@ -946,7 +1187,7 @@ void ULoadingFXProtoSubsystem::ShowShowcase(float TileSize, bool bShowReference)
 	{
 		if (Material && Material->GetPathName().StartsWith(TEXT("/LoadingFX/")))
 		{
-			Tiles.Add({ Material, Material->GetName() });
+			Tiles.Add({ Material, Material->GetName(), LoadingFXProto::IsBarMaterial(Material) ? LoadingFXProto::BarAspectRatio : 1.0f });
 		}
 	}
 	UE_LOG(LogLoadingFXProto, Display, TEXT("[Showcase] %d materials at %.0f px, reference shapes=%d"), Tiles.Num(), TileSize, bShowReference ? 1 : 0);
@@ -1340,9 +1581,9 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 
 	TArray<FSoftObjectPath> MainPaths =
 	{
-		LoaderMaterial(TEXT("M_LoadingBars")),
+		LoaderMaterial(TEXT("M_LoadingSpokes")),
 		LoaderMaterial(TEXT("M_LoadingComet")),
-		LoaderMaterial(TEXT("M_LoadingDots")),
+		LoaderMaterial(TEXT("M_LoadingDotRow")),
 		LoaderMaterial(TEXT("M_LoadingTimer")),
 		FSoftObjectPath(LoadingFXProto::LoaderMissingPath),
 		FSoftObjectPath(),
@@ -1369,7 +1610,7 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 	SequenceSteps.Add({ 0.2f, [this]()
 	{
 		StartLoaderCase(TEXT("2/13 async: a material that is already loaded (held by load 1)"));
-		LoaderHandles[1] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingBars")) }, TEXT("LFXProto.Loader 2"), nullptr, false);
+		LoaderHandles[1] = LoadAsyncForTest({ LoaderMaterial(TEXT("M_LoadingSpokes")) }, TEXT("LFXProto.Loader 2"), nullptr, false);
 		ReportLoaderState(TEXT("after the call"), LoaderHandles[1], TEXT("in progress=1: it completes on a later frame, not inside the call"));
 	} });
 
@@ -1442,8 +1683,8 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 		LoaderIconHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.Loader 8"));
 		LoaderSimulatedSyncSeconds = 1.5f;
 		TArray<UObject*> Loaded;
-		LoaderHandles[0] = Loader->LoadAssetsSync({ LoaderMaterial(TEXT("M_LoadingIcon")) }, TEXT("LFXProto.Loader 8"), nullptr, false, Loaded);
-		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   returned at %.2fs: %s (expect M_LoadingIcon after ~1.5 s; ended with blocking section=1 MoviePlayer playing=1)"),
+		LoaderHandles[0] = Loader->LoadAssetsSync({ LoaderMaterial(TEXT("M_LoadingDotGrid")) }, TEXT("LFXProto.Loader 8"), nullptr, false, Loaded);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("%s   returned at %.2fs: %s (expect M_LoadingDotGrid after ~1.5 s; ended with blocking section=1 MoviePlayer playing=1)"),
 			Tag, LoaderCaseSeconds(), *LoadingFXProto::DescribeObjects(Loaded));
 		IconSubsystem->Release(LoaderIconHandle);
 		Loader->Release(LoaderHandles[0]);
@@ -1489,7 +1730,7 @@ void ULoadingFXProtoSubsystem::RunLoaderTest(bool bQuitWhenDone)
 	{
 		StartLoaderCase(TEXT("12/13 Load Assets Async action: one asset and one class, owned by this subsystem"));
 		ULoadingFXLoadAssetsAsyncAction* Action = ULoadingFXLoadAssetsAsyncAction::LoadAssetsAsync(GetGameInstance(),
-			{ TSoftObjectPtr<UObject>(LoaderMaterial(TEXT("M_LoadingDots"))) },
+			{ TSoftObjectPtr<UObject>(LoaderMaterial(TEXT("M_LoadingDotRow"))) },
 			{ TSoftClassPtr<UObject>(FSoftObjectPath(LoadingFXProto::LoaderBlueprintClassPath)) },
 			TEXT("LFXProto.Loader 12"), this, false);
 		Action->OnProgress.AddDynamic(this, &ThisClass::HandleLoaderActionProgress);
@@ -1629,7 +1870,7 @@ void ULoadingFXProtoSubsystem::HandleLoaderActionCompleted(FLoadingFXLoadHandle 
 {
 	++LoaderCompletedCount;
 	const ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>();
-	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Completed at %.2fs: progress %.2f, assets: %s / classes: %s, handle active=%d (expect M_LoadingDots / BP_Sky_Sphere_C, 1)"),
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Completed at %.2fs: progress %.2f, assets: %s / classes: %s, handle active=%d (expect M_LoadingDotRow / BP_Sky_Sphere_C, 1)"),
 		LoaderCaseSeconds(), Progress, *LoadingFXProto::DescribeObjects(LoadedAssets), *LoadingFXProto::DescribeObjects(LoadedClasses), Loader->IsHandleActive(Handle) ? 1 : 0);
 }
 

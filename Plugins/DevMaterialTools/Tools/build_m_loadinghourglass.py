@@ -18,7 +18,7 @@ Hourglass -> MF_SdSegment2D + M_LoadingHourglass (Material Domain = UI, Transluc
   aaQ    = aa / scale                               (q での距離は p の距離 / scale なので、AA 幅も aa / scale)
   f      = abs(q)                                   (ガラスは上下左右対称なので両軸を折り返す)
   dGlass = min(sdSegment(f, (Neck, 0), (HalfWidth, HalfHeight)),
-               sdSegment(f, (0, HalfHeight), (HalfWidth + CapExtra, HalfHeight))) - Thickness / 2
+               sdSegment(f, (0, HalfHeight), (HalfWidth + CapOverhang, HalfHeight))) - Thickness / 2
                                                     (斜めの辺 1 本と蓋 1 本。sdSegment は MF_SdSegment2D)
   inset  = Thickness / 2 + SandGap
   outward = normalize((HalfHeight, Neck - HalfWidth))   (右の斜めの辺の外向き法線。v / length(v))
@@ -45,7 +45,7 @@ Hourglass -> MF_SdSegment2D + M_LoadingHourglass (Material Domain = UI, Transluc
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
 
-  ScalarParameter / VectorParameter はグループ "LoadingHourglass"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion(PARAM_GROUPS、表示順は GROUP_ORDER)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   HalfHeight(6 箇所)、HalfWidth(3 箇所)、Neck(2 箇所)、StreamWidth(2 箇所)、Thickness / 2(2 箇所)は
   Declaration 化、他のパラメータは 1 箇所なので直接配線。
@@ -68,7 +68,21 @@ MF_FULL_PATH = f"{MF_PATH}/{MF_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 PI = 3.14159265359
 TAU = 6.28318530718
-PARAM_GROUP = "LoadingHourglass"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "HalfHeight": "Shape",
+    "HalfWidth": "Shape",
+    "Neck": "Shape",
+    "CapOverhang": "Shape",
+    "Thickness": "Shape",
+    "SandGap": "Shape",
+    "StreamWidth": "Shape",
+    "Speed": "Motion",
+    "FlipFraction": "Motion",
+    "FlipShrink": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -233,7 +247,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def const(value, x, y):
@@ -292,7 +306,7 @@ time_n = expr(unreal.MaterialExpressionTime, -4550, 850)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.35, 7,
+speed_p = scalar_param("Speed", 0.35, 0,
                        "Cycles per second (the sand runs out, then the glass turns over). Positive = turns clockwise",
                        -4550, 970)
 t_speed = expr(unreal.MaterialExpressionMultiply, -4350, 900)
@@ -301,7 +315,7 @@ _connect(speed_p, "", t_speed, "B")
 u_frac = expr(unreal.MaterialExpressionFrac, -4200, 900)
 _connect(t_speed, "", u_frac, "")
 make_decl("u", u_frac, -4050, 900, C_TM)
-flipf_p = scalar_param("FlipFraction", 0.2, 8, "Share of a cycle spent turning over (0..1)", -4550, 1100)
+flipf_p = scalar_param("FlipFraction", 0.2, 1, "Share of a cycle spent turning over (0..1)", -4550, 1100)
 flow_end = expr(unreal.MaterialExpressionOneMinus, -4350, 1100)
 _connect(flipf_p, "", flow_end, "")
 make_decl("flowEnd", flow_end, -4200, 1100, C_TM)
@@ -329,7 +343,7 @@ ang_sin = expr(unreal.MaterialExpressionSine, -3350, 1270, period=TAU)
 _connect(ang_v, "", ang_sin, "")
 make_decl("s", ang_sin, -3200, 1270, C_UV)
 s_u1 = use("s", -3050, 1250)
-shrink_p = scalar_param("FlipShrink", 0.3, 9,
+shrink_p = scalar_param("FlipShrink", 0.3, 2,
                         "Shrink at the sideways moment, so the turning glass stays close to its resting size",
                         -3050, 1350)
 shrink_v = expr(unreal.MaterialExpressionMultiply, -2900, 1300)
@@ -374,7 +388,7 @@ _connect(q_u1, "", f_abs, "")
 make_decl("f", f_abs, -1750, -350, C_UV)
 
 # ---- dGlass = min(sdSegment(f, (Neck, 0), (HalfWidth, HalfHeight)),
-#                   sdSegment(f, (0, HalfHeight), (HalfWidth + CapExtra, HalfHeight))) - Thickness / 2 ----
+#                   sdSegment(f, (0, HalfHeight), (HalfWidth + CapOverhang, HalfHeight))) - Thickness / 2 ----
 neck_u1 = use("Neck", -1500, -1450)
 neck_pt = append(neck_u1, const(0.0, -1500, -1350), -1350, -1400)
 make_decl("neckPt", neck_pt, -1200, -1400, C_UV)
@@ -387,7 +401,7 @@ seg_side = segment(f_u1, neckpt_u1, side_end, -800, -1400)
 hh_u2 = use("HalfHeight", -1150, -1050)
 cap_start = append(const(0.0, -1150, -1130), hh_u2, -1000, -1080)
 hw_u2 = use("HalfWidth", -1450, -950)
-capx_p = scalar_param("CapExtra", 0.1, 3, "How far the caps reach past the glass on each side", -1450, -850)
+capx_p = scalar_param("CapOverhang", 0.1, 3, "How far the caps reach past the glass on each side", -1450, -850)
 cap_x = expr(unreal.MaterialExpressionAdd, -1300, -900)
 _connect(hw_u2, "", cap_x, "A")
 _connect(capx_p, "", cap_x, "B")
@@ -555,7 +569,7 @@ make_decl("mask", mask_max, 2250, 0, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 2450, -150,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Color of the glass and the sand (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Color of the glass and the sand (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 2450, 100)
 emissive = expr(unreal.MaterialExpressionMultiply, 2700, -100)
 _connect(primary_p, "", emissive, "A")
@@ -595,7 +609,7 @@ smt.create_comment_in_material(
     -3350, -700, 1750, 800, C_UV)
 smt.create_comment_in_material(
     mat, "dGlass = min(sdSegment(f, (Neck, 0), (HalfWidth, HalfHeight)),\n"
-         "              sdSegment(f, (0, HalfHeight), (HalfWidth + CapExtra, HalfHeight))) - Thickness / 2\n"
+         "              sdSegment(f, (0, HalfHeight), (HalfWidth + CapOverhang, HalfHeight))) - Thickness / 2\n"
          "One slanted side and one cap draw the whole frame after the fold (sdSegment = MF_SdSegment2D)",
     -1550, -1600, 1400, 950, C_SDF)
 smt.create_comment_in_material(
@@ -622,13 +636,16 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     2400, -270, 650, 680, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
 def audit(exprs):
-    decl_names, usage_count, params, mf_calls = [], {}, [], 0
+    decl_names, usage_count, params, param_groups, mf_calls = [], {}, [], {}, 0
     for e in exprs:
         if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
             decl_names.append(str(e.get_editor_property("name")))
@@ -638,11 +655,12 @@ def audit(exprs):
         elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                             unreal.MaterialExpressionVectorParameter)):
             params.append(str(e.get_editor_property("parameter_name")))
+            param_groups[params[-1]] = str(e.get_editor_property("group"))
         elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
             mf_calls += 1
-    return sorted(decl_names), dict(sorted(usage_count.items())), sorted(params), mf_calls
+    return sorted(decl_names), dict(sorted(usage_count.items())), sorted(params), param_groups, mf_calls
 
-f_decls, f_usages, _, _ = audit(smt.get_material_function_expressions(fn))
+f_decls, f_usages, _, _, _ = audit(smt.get_material_function_expressions(fn))
 print(f"[TEST] {MF_NAME} decls: {f_decls}")
 print(f"[TEST] {MF_NAME} usages: {f_usages}")
 mf_ok = (f_decls == ["A", "B", "P", "ba", "pa"]
@@ -650,10 +668,13 @@ mf_ok = (f_decls == ["A", "B", "P", "ba", "pa"]
          and len(smt.get_function_comment_texts(fn)) == 2
          and mf_saved)
 
-m_decls, m_usages, m_params, m_calls = audit(smt.get_material_expressions(mat))
+m_decls, m_usages, m_params, m_groups, m_calls = audit(smt.get_material_expressions(mat))
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {m_decls}")
 print(f"[TEST] {ASSET_NAME} usages: {m_usages}")
 print(f"[TEST] {ASSET_NAME} params: {m_params}")
+print(f"[TEST] {ASSET_NAME} groups: {m_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {m_calls}")
 expected_decls = sorted(["p", "aa", "HalfHeight", "HalfWidth", "Neck", "halfT", "u", "flowEnd", "flow", "c", "s",
                          "scale", "q", "aaQ", "f", "neckPt", "dGlass", "inset", "dChamber", "level", "dSand",
@@ -662,10 +683,11 @@ expected_usages = {"p": 2, "aa": 1, "HalfHeight": 6, "HalfWidth": 3, "Neck": 2, 
                    "flow": 2, "c": 2, "s": 3, "scale": 2, "q": 3, "aaQ": 4, "f": 4, "neckPt": 2, "dGlass": 1,
                    "inset": 2, "dChamber": 2, "level": 3, "dSand": 1, "StreamWidth": 2, "wStream": 2,
                    "dStream": 1, "streamFade": 1, "mask": 1}
-expected_params = sorted(["HalfHeight", "HalfWidth", "Neck", "CapExtra", "Thickness", "SandGap", "StreamWidth",
+expected_params = sorted(["HalfHeight", "HalfWidth", "Neck", "CapOverhang", "Thickness", "SandGap", "StreamWidth",
                           "Speed", "FlipFraction", "FlipShrink", "PrimaryColor"])
 mat_ok = (m_decls == expected_decls and m_usages == dict(sorted(expected_usages.items()))
           and m_params == expected_params and m_calls == 4
+          and m_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 11
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

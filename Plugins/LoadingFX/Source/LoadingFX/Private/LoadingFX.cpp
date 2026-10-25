@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Kurorekishi (EmbarrassingMoment).
 
 #include "LoadingFX.h"
+#include "LoadingFXProgressBar.h"
 #include "LoadingFXSettings.h"
+#include "UObject/SoftObjectPath.h"
 #if WITH_EDITOR
 #include "GameDelegates.h"
 #endif
@@ -37,6 +39,11 @@ void FLoadingFXModule::ShutdownModule()
 #if WITH_EDITOR
 void FLoadingFXModule::OnModifyCook(TConstArrayView<const ITargetPlatform*> TargetPlatforms, TArray<FName>& PackagesToCook, TArray<FName>& PackagesToNeverCook)
 {
+	// The progress bar widget draws this material when none is set, referenced by path alone as well.
+	const FName BarPackageName = FSoftObjectPath(ULoadingFXProgressBar::GetDefaultMaterialPath()).GetLongPackageFName();
+	PackagesToCook.AddUnique(BarPackageName);
+	UE_LOG(LogLoadingFX, Display, TEXT("Added the default progress bar material package %s to the cook."), *BarPackageName.ToString());
+
 	const FSoftObjectPath MaterialPath = GetDefault<ULoadingFXSettings>()->LoadingIconMaterial.ToSoftObjectPath();
 	if (MaterialPath.IsNull())
 	{

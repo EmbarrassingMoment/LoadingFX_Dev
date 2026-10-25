@@ -1,5 +1,5 @@
 """
-Indeterminate linear bar -> M_LoadingLinear (Material Domain = UI, Translucent)
+Indeterminate linear bar -> M_LoadingLine (Material Domain = UI, Translucent)
 
 横長のトラック(薄い角丸の棒)の中を、明るい区間が左から伸びて右へ抜けていくロードアイコン(1 色)。
 デザインは 2026-10-16 のスピナー案第 4 弾の 1 番。プレビューは区間の両端を smoothstep で動かし、トラックの外まで
@@ -35,12 +35,12 @@ Indeterminate linear bar -> M_LoadingLinear (Material Domain = UI, Translucent)
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
 
-  ScalarParameter / VectorParameter はグループ "LoadingLinear"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion(PARAM_GROUPS、表示順は GROUP_ORDER)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   HalfWidth(3 箇所)と TailDelay(2 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
 
 実行例:
-  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadinglinear.py"
+  UnrealEditor-Cmd.exe LoadingFX_Dev.uproject -run=pythonscript -script="<repo>/Plugins/DevMaterialTools/Tools/build_m_loadingline.py"
 """
 import unreal
 
@@ -49,10 +49,19 @@ import unreal
 unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/LoadingFX"], True)
 
 ASSET_PATH = "/LoadingFX/Materials"
-ASSET_NAME = "M_LoadingLinear"
+ASSET_NAME = "M_LoadingLine"
 FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
-PARAM_GROUP = "LoadingLinear"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "TrackOpacity": "Appearance",
+    "HalfWidth": "Shape",
+    "Thickness": "Shape",
+    "Speed": "Motion",
+    "TailDelay": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -103,7 +112,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -188,13 +197,13 @@ time_n = expr(unreal.MaterialExpressionTime, -3000, 200)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.6, 3,
+speed_p = scalar_param("Speed", 0.6, 0,
                        "Sweeps per second. Positive = left to right, negative = right to left", -3000, 320)
 t_speed = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -2800, 250)
 u_frac = expr(unreal.MaterialExpressionFrac, -2650, 250)
 _connect(t_speed, "", u_frac, "")
 make_decl("u", u_frac, -2500, 250, C_TM)
-delay_p = scalar_param("TailDelay", 0.35, 4,
+delay_p = scalar_param("TailDelay", 0.35, 1,
                        "Share of a sweep by which the tail starts after the head; higher makes a longer bar "
                        "(0 to below 1)", -3000, 500)
 make_decl("TailDelay", delay_p, -2750, 500, C_SC)
@@ -251,7 +260,7 @@ make_decl("dBar", d_bar, 1150, 450, C_SDF)
 # ---- mask = max(saturate(0.5 - dBar / aa), saturate(0.5 - dTrack / aa) * TrackOpacity) ----
 bar_cov = coverage("dBar", 1350, 450)
 track_cov = coverage("dTrack", 1350, -550)
-track_op_p = scalar_param("TrackOpacity", 0.2, 2, "Opacity of the track behind the bar (0 hides it)", 1650, -400)
+track_op_p = scalar_param("TrackOpacity", 0.2, 1, "Opacity of the track behind the bar (0 hides it)", 1650, -400)
 track_mask = binary(unreal.MaterialExpressionMultiply, track_cov, track_op_p, 1950, -500)
 mask_max = binary(unreal.MaterialExpressionMax, bar_cov, track_mask, 2100, 0)
 make_decl("mask", mask_max, 2250, 0, C_COL)
@@ -259,7 +268,7 @@ make_decl("mask", mask_max, 2250, 0, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 2500, -100,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10,
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0,
                  desc="Color of the bar and the track (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 2500, 150)
 emissive = binary(unreal.MaterialExpressionMultiply, primary_p, vcolor, 2750, -50)
@@ -310,12 +319,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     2450, -220, 650, 680, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, param_groups, mf_calls = [], {}, [], {}, 0
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -324,14 +336,18 @@ for e in smt.get_material_expressions(mat):
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
         params.append(str(e.get_editor_property("parameter_name")))
+        param_groups[params[-1]] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 expected_decls = sorted(["p", "aa", "px", "py", "HalfWidth", "r", "reach", "dTrack", "u", "TailDelay", "dur",
                          "head", "tail", "x0", "x1", "dBar", "mask"])
@@ -340,6 +356,7 @@ expected_usages = {"p": 2, "aa": 2, "px": 4, "py": 2, "HalfWidth": 3, "r": 5, "r
 expected_params = sorted(["HalfWidth", "Thickness", "TrackOpacity", "Speed", "TailDelay", "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 9
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

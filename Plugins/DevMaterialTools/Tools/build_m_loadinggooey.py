@@ -32,7 +32,7 @@ clamp(x, 0, 1) は Saturate で書く。
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
 
-  ScalarParameter / VectorParameter はグループ "LoadingGooey"。
+  ScalarParameter / VectorParameter はグループ Appearance / Shape / Motion に分ける(PARAM_GROUPS)。
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   DropletRadius(2 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
   smooth min は smin() で 2 回、滴の距離は droplet() で 2 回作る。
@@ -53,7 +53,18 @@ MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
 TAU = 6.28318530718
 SMOOTH_EPSILON = 1e-4
 AA_EPSILON = 1e-5
-PARAM_GROUP = "LoadingGooey"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "Count": "Shape",
+    "CoreRadius": "Shape",
+    "DropletRadius": "Shape",
+    "Radius": "Shape",
+    "Smoothness": "Shape",
+    "Speed": "Motion",
+    "SpreadSpeed": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -104,7 +115,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 def binary(cls, a, b, x, y):
@@ -143,10 +154,10 @@ time_n = expr(unreal.MaterialExpressionTime, -3800, 300)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 0.25, 5, "Revolutions per second. Positive = clockwise", -3800, 420)
+speed_p = scalar_param("Speed", 0.25, 0, "Revolutions per second. Positive = clockwise", -3800, 420)
 rot_v = binary(unreal.MaterialExpressionMultiply, time_n, speed_p, -3600, 350)
 make_decl("rot", rot_v, -3450, 350, C_TM)
-spread_p = scalar_param("SpreadSpeed", 0.5, 6,
+spread_p = scalar_param("SpreadSpeed", 0.5, 1,
                         "Out-and-back cycles per second of the droplets (0 keeps them melted into the core)",
                         -3800, 600)
 spread_t = binary(unreal.MaterialExpressionMultiply, time_n, spread_p, -3600, 550)
@@ -264,7 +275,7 @@ make_decl("mask", mask_sat, 2900, 250, C_COL)
 # ---- Output: FinalColor = PrimaryColor.rgb * VertexColor.rgb, Opacity = mask * PrimaryColor.a * VertexColor.a ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 3300, -250,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=10, desc="Color of the core and the droplets (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Color of the core and the droplets (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 3300, 0)
 emissive = binary(unreal.MaterialExpressionMultiply, primary_p, vcolor, 3550, -200)
 results.append(mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR))
@@ -319,12 +330,15 @@ smt.create_comment_in_material(
          "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
     3250, -370, 650, 680, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
-decl_names, usage_count, params, mf_calls = [], {}, [], 0
+decl_names, usage_count, params, mf_calls, param_groups = [], {}, [], 0, {}
 for e in smt.get_material_expressions(mat):
     if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
         decl_names.append(str(e.get_editor_property("name")))
@@ -332,15 +346,20 @@ for e in smt.get_material_expressions(mat):
         nm = smt.get_named_reroute_usage_display_name(e)
         usage_count[nm] = usage_count.get(nm, 0) + 1
     elif isinstance(e, (unreal.MaterialExpressionScalarParameter, unreal.MaterialExpressionVectorParameter)):
-        params.append(str(e.get_editor_property("parameter_name")))
+        name = str(e.get_editor_property("parameter_name"))
+        params.append(name)
+        param_groups[name] = str(e.get_editor_property("group"))
     elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
         mf_calls += 1
 decl_names.sort()
 usage_count = dict(sorted(usage_count.items()))
 params.sort()
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {decl_names}")
 print(f"[TEST] {ASSET_NAME} usages: {usage_count}")
 print(f"[TEST] {ASSET_NAME} params: {params}")
+print(f"[TEST] {ASSET_NAME} groups: {param_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {mf_calls}")
 expected_decls = sorted(["p", "DropletRadius", "k", "kInv4", "rot", "dist", "step", "angA", "dA", "dB", "d", "aa",
                          "mask"])
@@ -350,6 +369,7 @@ expected_params = sorted(["Count", "CoreRadius", "DropletRadius", "Radius", "Smo
                           "PrimaryColor"])
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
+          and param_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 10
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

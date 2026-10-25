@@ -11,14 +11,14 @@
   d      = sdRoundBox(abs(p) - 0.5*(BoxSize + BoxGap), vec2(0.5*BoxSize), BoxRound)   (MF_SdRoundBox2D)
   mask   = 1 - smoothstep(-aa, aa, d)
   phase  = fract(Time * Speed + idx * 0.25)          (Speed は明滅サイクル/秒)
-  bright = mix(BrightMax, BrightMin, pow(phase, FadeCurve))
+  bright = mix(OpacityMax, OpacityMin, pow(phase, FadeCurve))
 
   出力: FinalColor(Emissive) = PrimaryColor.rgb * VertexColor.rgb、
         Opacity = mask * bright * PrimaryColor.a * VertexColor.a(UMG の ColorAndOpacity / RenderOpacity / フェードが乗る)。
   背景(BG_COLOR)は不要なので mix(BG, BOX, mask*bright) は PrimaryColor + アルファに置き換え(黒背景上では同一)。
   デフォルト値は BoxSize + BoxGap/2 = 0.36(p 単位。P 単位では 0.72 = 材質契約の基準正方形の半幅)に合わせてある。
 
-  const -> ScalarParameter / VectorParameter(グループ "LoadingBoxes"、並びは GLSL の宣言順)
+  const -> ScalarParameter / VectorParameter(グループ Appearance / Shape / Motion、並びはグループ内の Sort Priority)
   ローカル変数 -> Named Reroute Declaration、再利用箇所 -> Usage。
   BoxSize(2 箇所)は Declaration 化、他のパラメータは 1 箇所なので直接配線。
   MF_SdRoundBox2D の FunctionInput も同名の Declaration を経由する。
@@ -39,7 +39,18 @@ FULL_PATH = f"{ASSET_PATH}/{ASSET_NAME}"
 MF_PATH = "/LoadingFX/MaterialFunctions"
 MF_FULL_PATH = f"{MF_PATH}/{MF_NAME}"
 MF_COORDS_PATH = "/LoadingFX/MaterialFunctions/MF_SpinnerCoords"
-PARAM_GROUP = "LoadingBoxes"
+# Parameter groups: sections in the material instance editor, in this order (Input only on determinate materials)
+GROUP_ORDER = ["Input", "Appearance", "Shape", "Motion"]
+PARAM_GROUPS = {  # every parameter of this material -> its group
+    "PrimaryColor": "Appearance",
+    "OpacityMax": "Appearance",
+    "OpacityMin": "Appearance",
+    "BoxSize": "Shape",
+    "BoxGap": "Shape",
+    "BoxRound": "Shape",
+    "Speed": "Motion",
+    "FadeCurve": "Motion",
+}
 
 mel = unreal.MaterialEditingLibrary
 lib = unreal.EditorAssetLibrary
@@ -209,7 +220,7 @@ def use(name, x, y):
 
 def scalar_param(name, default, sort, desc, x, y):
     return expr(unreal.MaterialExpressionScalarParameter, x, y,
-                parameter_name=name, default_value=default, group=PARAM_GROUP,
+                parameter_name=name, default_value=default, group=PARAM_GROUPS[name],
                 sort_priority=sort, desc=desc)
 
 # ---- const BOX_SIZE (used twice -> Named Reroute) ----
@@ -302,7 +313,7 @@ time_n = expr(unreal.MaterialExpressionTime, -1250, 250)
 # Ignore Pause -> View.RealTime (FPlatformTime at draw time). The default GameTime is FApp::CurrentTime,
 # which only the game thread advances, so it freezes during blocking loads even while MoviePlayer keeps drawing.
 time_n.set_editor_property("ignore_pause", True)
-speed_p = scalar_param("Speed", 1.0, 3, "Brightness cycles per second", -1300, 350)
+speed_p = scalar_param("Speed", 1.0, 0, "Brightness cycles per second", -1300, 350)
 t_speed = expr(unreal.MaterialExpressionMultiply, -1050, 300)
 _connect(time_n, "", t_speed, "A")
 _connect(speed_p, "", t_speed, "B")
@@ -316,19 +327,19 @@ t_frac = expr(unreal.MaterialExpressionFrac, -750, 400)
 _connect(t_sum, "", t_frac, "")
 make_decl("phase", t_frac, -600, 400, C_TM)
 
-# ---- bright = mix(BrightMax, BrightMin, pow(phase, FadeCurve))  (MAX -> MIN once per cycle) ----
+# ---- bright = mix(OpacityMax, OpacityMin, pow(phase, FadeCurve))  (MAX -> MIN once per cycle) ----
 phase_u1 = use("phase", -350, 330)
 fadecurve_p = scalar_param(
-    "FadeCurve", 0.5, 4,
+    "FadeCurve", 0.5, 1,
     "Decay curve (1: linear / < 1: fades quickly / > 1: stays bright longer). Must be > 0", -400, 430)
 curve = expr(unreal.MaterialExpressionPower, -150, 360)
 _connect(phase_u1, "", curve, "Base")
 _connect(fadecurve_p, "", curve, "Exp")
-brightmax_p = scalar_param("BrightMax", 1.0, 5, "Brightest box", -150, 130)
-brightmin_p = scalar_param("BrightMin", 0.1, 6, "Faintest box (depth of the fade)", -150, 230)
+opacitymax_p = scalar_param("OpacityMax", 1.0, 1, "Opacity of the brightest box", -150, 130)
+opacitymin_p = scalar_param("OpacityMin", 0.1, 2, "Opacity of the faintest box (depth of the fade)", -150, 230)
 bright_v = expr(unreal.MaterialExpressionLinearInterpolate, 100, 250)
-_connect(brightmax_p, "", bright_v, "A")
-_connect(brightmin_p, "", bright_v, "B")
+_connect(opacitymax_p, "", bright_v, "A")
+_connect(opacitymin_p, "", bright_v, "B")
 _connect(curve, "", bright_v, "Alpha")
 make_decl("bright", bright_v, 250, 250, C_TM)
 
@@ -336,7 +347,7 @@ make_decl("bright", bright_v, 250, 250, C_TM)
 #      Opacity = mask * bright * PrimaryColor.a * VertexColor.a  (BG dropped) ----
 primary_p = expr(unreal.MaterialExpressionVectorParameter, 450, -550,
                  parameter_name="PrimaryColor", default_value=unreal.LinearColor(1.0, 1.0, 1.0, 1.0),
-                 group=PARAM_GROUP, sort_priority=7, desc="Box color (alpha scales the opacity)")
+                 group=PARAM_GROUPS["PrimaryColor"], sort_priority=0, desc="Box color (alpha scales the opacity)")
 vcolor = expr(unreal.MaterialExpressionVertexColor, 450, -350)
 emissive = expr(unreal.MaterialExpressionMultiply, 700, -500)
 _connect(primary_p, "", emissive, "A")
@@ -358,7 +369,7 @@ results.append(mel.connect_material_property(opacity, "", unreal.MaterialPropert
 # ---- Comments (English) ----
 smt.create_comment_in_material(
     mat, "const BOX_SIZE -> ScalarParameter (used twice -> Named Reroute).\n"
-         "BoxGap / BoxRound / Speed / FadeCurve / BrightMax / BrightMin / PrimaryColor are wired directly",
+         "BoxGap / BoxRound / Speed / FadeCurve / OpacityMax / OpacityMin / PrimaryColor are wired directly",
     -3500, -800, 600, 220, C_SC)
 smt.create_comment_in_material(
     mat, "p = MF_SpinnerCoords.P * 0.5   (centered, y-up, shorter side spans -0.5..0.5: fits a non-square widget)\n"
@@ -380,7 +391,7 @@ smt.create_comment_in_material(
          "phase = fract(Time * Speed + idx * 0.25)   (Speed in cycles per second)",
     -1350, 150, 900, 520, C_TM)
 smt.create_comment_in_material(
-    mat, "bright = mix(BrightMax, BrightMin, pow(phase, FadeCurve))\n"
+    mat, "bright = mix(OpacityMax, OpacityMin, pow(phase, FadeCurve))\n"
          "Decays MAX -> MIN once per cycle; FadeCurve must be > 0",
     -420, 30, 850, 560, C_TM)
 smt.create_comment_in_material(
@@ -390,13 +401,16 @@ smt.create_comment_in_material(
          "(identical over a black background)",
     400, -680, 700, 660, C_COL)
 
+used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
+smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
+
 mel.recompile_material(mat)
 saved = lib.save_asset(FULL_PATH)
 print(f"[TEST] Saved: {FULL_PATH} -> {saved}")
 
 # ---- Verification ----
 def audit(exprs):
-    decl_names, usage_count, params, mf_calls = [], {}, [], 0
+    decl_names, usage_count, params, param_groups, mf_calls = [], {}, [], {}, 0
     for e in exprs:
         if isinstance(e, unreal.MaterialExpressionNamedRerouteDeclaration):
             decl_names.append(str(e.get_editor_property("name")))
@@ -405,12 +419,14 @@ def audit(exprs):
             usage_count[nm] = usage_count.get(nm, 0) + 1
         elif isinstance(e, (unreal.MaterialExpressionScalarParameter,
                             unreal.MaterialExpressionVectorParameter)):
-            params.append(str(e.get_editor_property("parameter_name")))
+            name = str(e.get_editor_property("parameter_name"))
+            params.append(name)
+            param_groups[name] = str(e.get_editor_property("group"))
         elif isinstance(e, unreal.MaterialExpressionMaterialFunctionCall):
             mf_calls += 1
-    return sorted(decl_names), dict(sorted(usage_count.items())), sorted(params), mf_calls
+    return sorted(decl_names), dict(sorted(usage_count.items())), sorted(params), param_groups, mf_calls
 
-f_decls, f_usages, _, _ = audit(smt.get_material_function_expressions(fn))
+f_decls, f_usages, _, _, _ = audit(smt.get_material_function_expressions(fn))
 print(f"[TEST] {MF_NAME} decls: {f_decls}")
 print(f"[TEST] {MF_NAME} usages: {f_usages}")
 mf_ok = (f_decls == ["B", "P", "R", "d"]
@@ -418,18 +434,22 @@ mf_ok = (f_decls == ["B", "P", "R", "d"]
          and len(smt.get_function_comment_texts(fn)) == 3
          and mf_saved)
 
-m_decls, m_usages, m_params, m_calls = audit(smt.get_material_expressions(mat))
+m_decls, m_usages, m_params, m_groups, m_calls = audit(smt.get_material_expressions(mat))
+group_prios = dict(smt.get_parameter_group_sort_priorities(mat))
+expected_prios = {g: i for i, g in enumerate(used_groups)}
 print(f"[TEST] {ASSET_NAME} decls: {m_decls}")
 print(f"[TEST] {ASSET_NAME} usages: {m_usages}")
 print(f"[TEST] {ASSET_NAME} params: {m_params}")
+print(f"[TEST] {ASSET_NAME} groups: {m_groups} order: {group_prios}")
 print(f"[TEST] {ASSET_NAME} MF calls: {m_calls}")
 expected_decls = sorted(["BoxSize", "p", "q", "idx", "d", "aa", "mask", "phase", "bright"])
 expected_usages = {"BoxSize": 2, "aa": 1, "bright": 1, "d": 1, "idx": 1, "mask": 1,
                    "p": 2, "phase": 1, "q": 3}
 expected_params = sorted(["BoxSize", "BoxGap", "BoxRound", "Speed", "FadeCurve",
-                          "BrightMax", "BrightMin", "PrimaryColor"])
+                          "OpacityMax", "OpacityMin", "PrimaryColor"])
 mat_ok = (m_decls == expected_decls and m_usages == dict(sorted(expected_usages.items()))
           and m_params == expected_params and m_calls == 2
+          and m_groups == PARAM_GROUPS and group_prios == expected_prios
           and len(smt.get_material_comment_texts(mat)) == 8
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT

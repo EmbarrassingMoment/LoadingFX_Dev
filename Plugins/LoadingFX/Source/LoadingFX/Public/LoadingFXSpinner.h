@@ -54,7 +54,7 @@ public:
 	 * on, so parameters such as PrimaryColor or Speed can be changed per widget at runtime.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "LoadingFX")
-	UMaterialInstanceDynamic* GetDynamicMaterial();
+	virtual UMaterialInstanceDynamic* GetDynamicMaterial();
 
 	//~ Begin UWidget Interface
 	virtual void SynchronizeProperties() override;
@@ -70,8 +70,11 @@ protected:
 	//~ End UWidget Interface
 
 	/** Material, or the project's loading icon material when none is set. Records it in DrawnMaterial. */
-	UMaterialInterface* ResolveMaterial();
-	void ApplyMaterial();
+	virtual UMaterialInterface* ResolveMaterial();
+	/** Hands the resolved material to the Slate widget. */
+	virtual void ApplyMaterial();
+	/** Warns once per material if it is not a UI-domain material, which Slate cannot draw. */
+	void CheckMaterialDomain(const UMaterialInterface* Resolved) const;
 
 	/**
 	 * Spinner material: any UI-domain material that follows the material contract. Leave empty to draw the

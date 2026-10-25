@@ -4,7 +4,7 @@
 #include "Materials/MaterialInterface.h"
 
 ULoadingFXSettings::ULoadingFXSettings()
-	: LoadingIconMaterial(FSoftObjectPath(TEXT("/LoadingFX/Materials/M_LoadingSpinner.M_LoadingSpinner")))
+	: LoadingIconMaterial(FSoftObjectPath(TEXT("/LoadingFX/Materials/M_LoadingDotRing.M_LoadingDotRing")))
 {
 }
 

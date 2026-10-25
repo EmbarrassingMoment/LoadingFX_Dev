@@ -7,6 +7,8 @@ UI スピナー共通の座標系を Material Function 化 -> MF_SpinnerCoords�
   m         = max(fw.x, fw.y)                  (= 1 / 短辺ピクセル数)
   P         = (2*uv - 1) * (m / fw) * (1,-1)   (中心 (0,0)、y 上向き、短辺が -1..1。非正方形でも真円のまま中央に収まる)
   PixelSize = 2 * m                            (1 ピクセルを P 単位で。AA 幅用)
+  Extent    = m / fw                           (ウィジェットの半幅・半高を P 単位で。短辺側は 1、長辺側は縦横比。
+                                                横に伸びるバー系のマテリアルが幅いっぱいに描くために使う。2026-10-16 追加)
 
 fw は回転(RenderTransform)しても縦横比が保たれる(|cos|+|sin| が両軸で共通)。
 
@@ -37,7 +39,9 @@ fn = tools.create_asset(MF_NAME, MF_PATH, unreal.MaterialFunction, unreal.Materi
 fn.set_editor_property("description",
     "Coordinates for UI spinner materials. P: y-up, (0,0) at the widget center, the shorter side spans -1..1, "
     "so shapes stay round and fit inside a non-square widget. PixelSize: one screen pixel in P units "
-    "(anti-aliasing width). The widget size comes from the UV screen derivatives: no parameters needed.")
+    "(anti-aliasing width). Extent: the widget's half extents in P units (1 on the shorter side, the aspect "
+    "ratio on the longer one), for shapes that stretch along the widget such as bars. "
+    "The widget size comes from the UV screen derivatives: no parameters needed.")
 fn.set_editor_property("expose_to_library", True)
 
 results = []
@@ -111,7 +115,7 @@ sub1 = fnode(unreal.MaterialExpressionSubtract, -850, 100, const_b=1.0)
 _connect(mul2, "", sub1, "A")
 m_u1 = fuse("m", -300, 200)
 fw_u3 = fuse("fw", -300, 300)
-aspect = fnode(unreal.MaterialExpressionDivide, -150, 250)
+aspect = fnode(unreal.MaterialExpressionDivide, -150, 250)   # m / fw: also the Extent output below
 _connect(m_u1, "", aspect, "A")
 _connect(fw_u3, "", aspect, "B")
 scaled = fnode(unreal.MaterialExpressionMultiply, 0, 150)
@@ -133,6 +137,11 @@ px_out = fnode(unreal.MaterialExpressionFunctionOutput, 450, -200, output_name="
                description="One screen pixel in P units (anti-aliasing width)")
 _connect(px_v, "", px_out, "")
 
+# ---- Extent = m / fw  (half extents of the widget in P units: 1 on the shorter side, width / height or height / width on the longer) ----
+ext_out = fnode(unreal.MaterialExpressionFunctionOutput, 350, 450, output_name="Extent", sort_priority=2,
+                description="Half extents of the widget in P units: (1, 1) when square, the aspect ratio on the longer side. For bars that span the widget")
+_connect(aspect, "", ext_out, "")
+
 # ---- Comments (English) ----
 smt.create_comment_in_function(
     fn, "fw = abs(ddx(uv)) + abs(ddy(uv)) = (1 / width, 1 / height) in pixels\n"
@@ -148,6 +157,10 @@ smt.create_comment_in_function(
 smt.create_comment_in_function(
     fn, "PixelSize = 2 * m   (P spans 2.0 over the shorter side)",
     130, -280, 520, 220, C_SDF)
+smt.create_comment_in_function(
+    fn, "Extent = m / fw   (half extents in P units: the shorter side is 1, the longer side is the aspect ratio)\n"
+        "Bars span the widget: their ends sit at +-(Extent.x - 1 + Thickness / 2), see the bar materials",
+    130, 420, 900, 200, C_UV)
 
 mel.update_material_function(fn)
 saved = lib.save_asset(FULL_PATH)
@@ -169,8 +182,8 @@ print(f"[TEST] {MF_NAME} outputs: {sorted(outputs)}")
 
 decls_ok = sorted(decl_names) == ["fw", "m", "uv"]
 usages_ok = usage_count == {"uv": 3, "fw": 3, "m": 2}
-outputs_ok = sorted(outputs) == ["P", "PixelSize"]
-comments_ok = len(smt.get_function_comment_texts(fn)) == 4
+outputs_ok = sorted(outputs) == ["Extent", "P", "PixelSize"]
+comments_ok = len(smt.get_function_comment_texts(fn)) == 5
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
 passed = all(results) and decls_ok and usages_ok and outputs_ok and comments_ok and saved

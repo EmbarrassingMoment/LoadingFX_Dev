@@ -79,8 +79,6 @@ void SLoadingFXProtoShowcase::Construct(const FArguments& InArgs)
 	const FSlateBrush* WhiteBrush = FCoreStyle::Get().GetBrush("WhiteBrush");
 	const FSlateFontInfo CaptionFont = FCoreStyle::GetDefaultFontStyle("Regular", 12);
 	const FLinearColor CaptionColor(0.7f, 0.7f, 0.7f, 1.0f);
-	const FVector2D TileSize(InArgs._TileSize, InArgs._TileSize);
-
 	// Tiles wrap to the next line when the window is too narrow for one row.
 	TSharedRef<SWrapBox> Tiles = SNew(SWrapBox)
 		.UseAllottedSize(true)
@@ -88,6 +86,7 @@ void SLoadingFXProtoShowcase::Construct(const FArguments& InArgs)
 
 	for (const FTile& Tile : InArgs._Tiles)
 	{
+		const FVector2D TileSize(InArgs._TileSize, InArgs._TileSize / FMath::Max(Tile.AspectRatio, 0.01f));
 		TSharedRef<SOverlay> TileContent = SNew(SOverlay)
 			+ SOverlay::Slot()
 			[

@@ -28,6 +28,11 @@ class UMaterialInterface;
  *                                 screenshots to Saved/Screenshots/LFXProto_Gallery_*.png, 'quit' exits afterwards.
  *   LFXProto.IconTravel [Map] [Sec] [quit]  Exercise ULoadingFXIconSubsystem: acquire, owner auto-release, OpenLevel under the icon, release.
  *   LFXProto.UmgSpinner [shot] [quit]  Show a row of ULoadingFXSpinner UMG widgets (project default, tint, dynamic parameters, opacity, non-square).
+ *   LFXProto.ProgressBar [shot] [quit]  Show ULoadingFXProgressBar UMG widgets: one driven by a real Load Assets Async of the
+ *                                 prototype's material list (run it in a fresh process to see the steps), scripted increases
+ *                                 (smoothing), a decrease (applied at once), fixed values near 0 (hairline check), a tinted
+ *                                 bar (sheen), a bar drawing an indeterminate material, and the bar materials in spinners.
+ *                                 'shot' saves Saved/Screenshots/LFXProto_ProgressBar.png.
  *   LFXProto.Showcase [Size] [ref] [shot] [quit]  Toggle a full-screen showcase of every bundled spinner material on black, Size px
  *                                 each (default 256). 'ref' overlays the material contract's reference circle and square,
  *                                 'shot' saves Saved/Screenshots/LFXProto_Showcase.png, 'quit' exits afterwards.
@@ -67,6 +72,7 @@ public:
 	void RunGallery(bool bTakeScreenshots, bool bQuitWhenDone);
 	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bQuitWhenDone);
 	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
+	void RunProgressBarTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunPreloadTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunMinDisplayTest(bool bQuitWhenDone);
@@ -96,6 +102,7 @@ private:
 	void ShowGallery();
 	void HideGallery();
 	void HideUmgSpinners();
+	void HideProgressBars();
 	void ShowShowcase(float TileSize, bool bShowReference);
 	void HideShowcase();
 	void StartSequence();
@@ -178,6 +185,12 @@ private:
 	TArray<TObjectPtr<UWidget>> UmgSpinners;
 	TSharedPtr<SWidget> UmgRoot;
 	TSharedPtr<SWidget> ShowcaseRoot;
+
+	/** UMG widgets created by LFXProto.ProgressBar, kept alive here, and the load that drives the first bar. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWidget>> ProgressBarWidgets;
+	TSharedPtr<SWidget> ProgressBarRoot;
+	FLoadingFXLoadHandle ProgressBarLoadHandle;
 
 	/** The overlay handed to MoviePlayer for the current / last test. Only replaced while MoviePlayer is idle. */
 	TSharedPtr<SLoadingFXProtoOverlay> LoadingScreenOverlay;
