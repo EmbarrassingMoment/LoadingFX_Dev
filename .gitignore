@@ -16,6 +16,10 @@ Build/
 .vscode/
 .vsconfig
 
+# Per-user engine config overrides and MCP client config (machine-specific)
+Config/User*.ini
+.mcp.json
+
 # Plugins specific (プラグイン内の中間ファイルも除外)
 Plugins/*/Binaries/
 Plugins/*/Intermediate/

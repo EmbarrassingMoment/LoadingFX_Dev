@@ -11,7 +11,7 @@ Reply to the user in Japanese. Code, comments, commit messages and the docs in t
 LoadingFX is an Unreal Engine 5 plugin: a library of material-based loading spinners, a loading icon display that keeps animating during blocking loads, and a lightweight asset loader. This repository is the development and sample project (`LoadingFX_Dev`). It is published on GitHub (MIT), and the plugin is distributed **for free** on Fab.
 
 - **Target engines:** UE 5.5 – 5.8 (one Fab package per version).
-- **Authoring engine: UE 5.5.** Content (`.uasset` / `.umap`) must stay loadable in 5.5, so never open or save this project's content with a newer engine. Use 5.6 – 5.8 only for compile checks of the plugin (RunUAT `BuildPlugin`).
+- **Authoring engine: UE 5.5.** Content (`.uasset` / `.umap`) must stay loadable in 5.5, so never open or save this checkout's content with a newer engine. Use 5.6 – 5.8 for compile checks of the plugin (RunUAT `BuildPlugin`), and 5.8 for the MCP workbench, a separate worktree whose content is never committed (see UE 5.8 workbench below).
 - **Platform:** Win64 (initial scope).
 
 ## Build & Setup
@@ -30,6 +30,16 @@ Plugin compile check (any engine from 5.5 to 5.8). Keep `-Package` short, such a
 ```
 <UE_5.x>\Engine\Build\BatchFiles\RunUAT.bat BuildPlugin -Plugin="<repo>\Plugins\LoadingFX\LoadingFX.uplugin" -Package="<short dir>" -TargetPlatforms=Win64 -Rocket -unattended -utf8output -nop4
 ```
+
+### UE 5.8 workbench and live editor access (set up 2026-10-25)
+
+UE 5.5 has no MCP server (the engine's `ModelContextProtocol` plugin and its `ToolsetRegistry` arrive later and depend on modules 5.5 lacks, and they are NoRedist engine code, so they cannot live in this public repository). The work that wants MCP runs in a second checkout opened with UE 5.8; the 5.5 editor is reached through the Python plugin's remote execution.
+
+- **Workbench:** a git worktree on branch `workbench/ue58` next to this checkout (`..\LoadingFX_Dev_UE58`), opened with `powershell -ExecutionPolicy Bypass -File Tools\Open-Workbench.ps1` (`-Build` compiles the editor target with 5.8 first, needed after C++ changes). The script starts UE 5.8 with `-EnablePlugins=ModelContextProtocol,AllToolsets -ModelContextProtocolStartServer`, so the `.uproject` stays as it is. The server listens on `http://127.0.0.1:8000/mcp` (55 toolsets, reached through `list_toolsets` / `describe_toolset` / `call_tool`), and an `.mcp.json` in both checkouts (ignored by git; Claude Code reads it at session start) points there. The worktree has its own Binaries, Intermediate and DDC. Use it to explore and draft: inspect assets, try a material change live, draft Blueprints and widgets, Slate Inspector, automation tests. Commit only text from it (C++, Python, docs).
+- **Content saved there is 5.8-only** (`FileVersionUE5` 1018 from 5.8.3, against 1013 from 5.5), and nothing converts it back. A material change goes into its builder script and is regenerated with UE 5.5 here. A Blueprint or widget drafted there is rebuilt in 5.5; copying nodes and widgets as text and pasting them into the 5.5 editor is the way across, checked paste by paste.
+- **pre-commit hook** (`Tools/GitHooks/pre-commit`, installed into the repository's common `.git/hooks`, so it covers every worktree): rejects a staged `.uasset` / `.umap` whose `FileVersionUE5` is above 1013, reading LFS-tracked content from the local object store. Checked on 2026-10-25 with a material saved by 5.8.3 in the workbench, and in throwaway repositories with and without LFS. After a fresh clone, install it again: `cp Tools/GitHooks/pre-commit "$(git rev-parse --git-common-dir)/hooks/pre-commit"`.
+- **5.5 live access:** `Config/UserEngine.ini` (per user, ignored by git, a config layer above `DefaultEngine.ini`) sets `bRemoteExecution=True` for the Python plugin, which listens on the local host only (bind 127.0.0.1, TTL 0). `Tools/ue_exec.py` (any Python 3; it loads the engine's own `remote_execution.py`, found through the Epic Games Launcher's install list) runs a file with arguments, `-c` code (`-c -` reads stdin) or a `-e` expression in the 5.5 editor that has this checkout open. It prints the output in order, with warnings marked `[Warning]`, and exits with 1 when the command fails. A builder runs in the open editor in seconds, with its `[TEST]` lines on stdout: `python Tools/ue_exec.py Plugins/DevMaterialTools/Tools/build_m_loadingarc.py`. `--wait 300` waits for an editor that is still starting. The script replaces the engine client's receive loop, which stops at the first short `recv()` and so cut long results (checked with a 1.4 MB result). The editor runs the command on its game thread, so it does not answer anything else meanwhile, and every log line costs it about 15 ms. Viewport screenshots did not come out this way (`HighResShot` and `AutomationLibrary.take_high_res_screenshot` wrote nothing); use the `LFXProto` screenshots in `-game`.
+- `Tools/` is dev-only and excluded from the sample project zip (`release.yml`).
 
 ## Architecture
 
