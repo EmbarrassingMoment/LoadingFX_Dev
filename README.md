@@ -186,7 +186,10 @@ The section takes over MoviePlayer only while the icon is requested and no other
 
 This repository is the development project; open `LoadingFX_Dev.uproject` with UE 5.5.
 
-**Blueprint sample (`Content/Sample`).** `L_LFXSample_Hub` has a widget with travel buttons: each one acquires the loading icon and opens `L_LFXSample_Destination`, which releases it once it is up. Play it with *Standalone Game* (not in the editor viewport, where MoviePlayer is unavailable) to see the icon keep spinning on the loading screen during travel.
+**Blueprint sample (`Content/Sample`).** Two levels, all logic in Blueprint; the editor opens `L_LFXSample_Hub`. Play it with *Standalone Game*: in the editor viewport MoviePlayer is unavailable, so the icon freezes while a level loads.
+
+- `L_LFXSample_Hub`: the *Loading Icon* page requests the icon for 0.3 s, 0.8 s or 3 s and logs when it really appears and hides, so the show delay and the minimum display time can be seen at work. The *Asset Loader* page loads the bundled materials with *Load Assets Async* into a *LoadingFX Progress Bar*, with Cancel and Release. *Open the Gallery level* acquires the icon, owned by the player controller so that the travel releases it, and opens the Gallery.
+- `L_LFXSample_Gallery` simulates a heavy level (the game thread sleeps for 2 s inside the level load, so the icon keeps spinning on the loading screen), then loads its materials with *Load Assets Async* and *Show Loading Icon* and shows all 21 in *LoadingFX Spinner* widgets. Pick one to change its `PrimaryColor` and `Speed` through *Get Dynamic Material*.
 
 **Console commands (prototype).** The `LFXProto.*` commands in `Source/LoadingFX_Dev/Prototype` show every material and exercise the plugin. Run the project outside the editor and pass a command:
 
@@ -217,8 +220,9 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 |---|---|
 | `Plugins/LoadingFX/` | The plugin (what is distributed on Fab) |
 | `Plugins/DevMaterialTools/` | Local editor tooling that builds the material assets from Python scripts (not distributed) |
+| `Plugins/DevSampleTools/` | Local editor tooling that builds the Blueprint sample from text (not distributed) |
 | `Source/LoadingFX_Dev/` | The sample project module, with the `LFXProto.*` verification commands |
-| `Content/Sample/` | The Blueprint sample map and widgets |
+| `Content/Sample/` | The Blueprint sample maps and widgets |
 | `Docs/` | Images for this README |
 
 ## Acknowledgements

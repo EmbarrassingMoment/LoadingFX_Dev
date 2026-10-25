@@ -5,10 +5,11 @@ with the text it was built from.
 
 Each asset is a folder under Plugins/DevSampleTools/Sample/ named after the asset:
 
-  Asset.json        path, kind, parent class and graph names
-  Variables.txt     UBlueprint::NewVariables as property text (defaults taken from the CDO)
+  Asset.json        path, kind (WidgetBlueprint, Blueprint or Level), parent class, function and event graph names
+  Variables.txt     UBlueprint::NewVariables as property text (defaults taken from the CDO); a map's Level Blueprint's
   WidgetTree.t3d    the widget tree as UMG designer copy text (widget blueprints only)
-  <Graph>.t3d       every node of the graph as graph editor copy text
+  Actors.t3d        the level's actors as level editor copy text (maps only)
+  <Graph>.t3d       every node of a function or event graph as graph editor copy text
 """
 import json
 import os
@@ -48,18 +49,20 @@ def list_assets():
 
 # --- T3D parsing -------------------------------------------------------------------------
 
-_BEGIN = re.compile(r'^Begin Object(?: Class=(\S+))? Name="([^"]+)"')
+_BEGIN = re.compile(r'^Begin (?:Object|Actor)(?: Class=(\S+))? Name="?([^"\s]+)"?')
+_FRAME = {"Begin Map", "End Map", "Begin Level", "End Level", "Begin Surface", "End Surface"}
 
 
 def parse_t3d(text):
     """Top-level objects of copy text as [{"class", "name", "props": [line], "children": [...]}].
     A "Begin Object Name=..." without a class reopens a sibling declared before it (how subobjects
-    get their properties), so its lines are merged into that sibling."""
+    get their properties), so its lines are merged into that sibling. Level text's Map / Level / Surface
+    frames are skipped, so its actors come out as the top-level objects."""
     root = {"class": None, "name": None, "props": [], "children": []}
     stack = [root]
     for raw in text.splitlines():
         line = raw.strip()
-        if not line:
+        if not line or line in _FRAME:
             continue
         m = _BEGIN.match(line)
         if m:
@@ -70,7 +73,7 @@ def parse_t3d(text):
                 obj = {"class": cls, "name": name, "props": [], "children": []}
                 parent["children"].append(obj)
             stack.append(obj)
-        elif line == "End Object":
+        elif line in ("End Object", "End Actor"):
             stack.pop()
         else:
             stack[-1]["props"].append(line)
@@ -144,6 +147,39 @@ def widget_summary(text):
         for child in obj["children"]:
             widgets[f'{obj["name"]}/{child["name"]}'] = (short_class(child["class"]), frozenset(child["props"]))
     return widgets
+
+
+# Lines that differ between engine versions without the level being different, left out of level comparisons:
+# cached derived data, the empty CustomProperties line 5.8 writes for a mesh component, 5.8's name for the cloud
+# material property (5.5 calls it Material; the template's cloud uses the default material in both), and the
+# spawn collision setting, which only applies when an actor is spawned at runtime.
+_VERSION_LINES = ("StaticMeshDerivedDataKey=", "MaterialLifetimePtr=", "SpawnCollisionHandlingMethod=")
+
+
+def _level_props(obj):
+    """An actor's or component's property lines without the version-dependent ones. A line that only points at one of
+    the actor's own components (SpriteComponent="Sprite") is left out too: whether it is written depends on the
+    version's defaults, and the components themselves are compared on their own."""
+    children = {child["name"] for child in obj["children"]}
+    props = []
+    for p in obj["props"]:
+        value = p.split("=", 1)[1].strip('"') if "=" in p else None
+        if p.startswith(_VERSION_LINES) or p.strip() == "CustomProperties" or value in children:
+            continue
+        props.append(p)
+    return frozenset(props)
+
+
+def level_summary(text):
+    """Maps actor label -> (class, frozenset of its property lines), and "<label>/<component>" -> the
+    component's (class, property lines). Pasting may rename actors, so labels are the keys."""
+    actors = {}
+    for obj in parse_t3d(text):
+        label = next((p.split("=", 1)[1].strip('"') for p in obj["props"] if p.startswith("ActorLabel=")), obj["name"])
+        actors[label] = (short_class(obj["class"]), _level_props(obj))
+        for child in obj["children"]:
+            actors[f"{label}/{child['name']}"] = (short_class(child["class"]), _level_props(child))
+    return actors
 
 
 def split_top_level(text):

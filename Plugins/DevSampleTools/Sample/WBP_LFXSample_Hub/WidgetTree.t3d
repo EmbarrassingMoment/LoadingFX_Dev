@@ -1,0 +1,179 @@
+Begin Object Class=/Script/UMG.CanvasPanel Name="Root" ExportPath="/Script/UMG.CanvasPanel'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Root'"
+   Begin Object Class=/Script/UMG.CanvasPanelSlot Name="CanvasPanelSlot_0" ExportPath="/Script/UMG.CanvasPanelSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Root.CanvasPanelSlot_0'"
+   End Object
+   Begin Object Name="CanvasPanelSlot_0" ExportPath="/Script/UMG.CanvasPanelSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Root.CanvasPanelSlot_0'"
+      LayoutData=(Anchors=(Minimum=(X=0.500000,Y=0.100000),Maximum=(X=0.500000,Y=0.100000)),Alignment=(X=0.500000,Y=0.000000))
+      bAutoSize=True
+      Parent="/Script/UMG.CanvasPanel'Root'"
+      Content="/Script/UMG.Border'Panel'"
+   End Object
+   Slots(0)="/Script/UMG.CanvasPanelSlot'CanvasPanelSlot_0'"
+   DisplayLabel="Root"
+End Object
+Begin Object Class=/Script/UMGEditor.WidgetSlotPair Name="WidgetSlotPair_0" ExportPath="/Script/UMGEditor.WidgetSlotPair'/Engine/Transient.WidgetSlotPair_0'"
+   WidgetName="Root"
+End Object
+Begin Object Class=/Script/UMG.Border Name="Panel" ExportPath="/Script/UMG.Border'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Panel'"
+   Begin Object Class=/Script/UMG.BorderSlot Name="BorderSlot_0" ExportPath="/Script/UMG.BorderSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Panel.BorderSlot_0'"
+   End Object
+   Begin Object Name="BorderSlot_0" ExportPath="/Script/UMG.BorderSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Panel.BorderSlot_0'"
+      Padding=(Left=32.000000,Top=28.000000,Right=32.000000,Bottom=28.000000)
+      Parent="/Script/UMG.Border'Panel'"
+      Content="/Script/UMG.VerticalBox'Content'"
+   End Object
+   Padding=(Left=32.000000,Top=28.000000,Right=32.000000,Bottom=28.000000)
+   BrushColor=(R=0.000000,G=0.000000,B=0.000000,A=0.780000)
+   Slots(0)="/Script/UMG.BorderSlot'BorderSlot_0'"
+   DisplayLabel="Panel"
+End Object
+Begin Object Class=/Script/UMG.VerticalBox Name="Content" ExportPath="/Script/UMG.VerticalBox'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content'"
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_5" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_5'"
+   End Object
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_4" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_4'"
+   End Object
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_3" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_3'"
+   End Object
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_2" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_2'"
+   End Object
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_1" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_1'"
+   End Object
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_0" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_0'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_5" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_5'"
+      Padding=(Top=8.000000)
+      Parent="/Script/UMG.VerticalBox'Content'"
+      Content="/Script/UMG.TextBlock'TravelInfo'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_4" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_4'"
+      Padding=(Top=24.000000)
+      HorizontalAlignment=HAlign_Left
+      Parent="/Script/UMG.VerticalBox'Content'"
+      Content="/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton_C'GalleryButton'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_3" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_3'"
+      Padding=(Top=16.000000)
+      Parent="/Script/UMG.VerticalBox'Content'"
+      Content="/Script/UMG.WidgetSwitcher'Pages'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_2" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_2'"
+      Padding=(Top=20.000000)
+      Parent="/Script/UMG.VerticalBox'Content'"
+      Content="/Script/UMG.HorizontalBox'Tabs'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_1" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_1'"
+      Padding=(Top=4.000000)
+      Parent="/Script/UMG.VerticalBox'Content'"
+      Content="/Script/UMG.TextBlock'Subtitle'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_0" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Content.VerticalBoxSlot_0'"
+      Parent="/Script/UMG.VerticalBox'Content'"
+      Content="/Script/UMG.TextBlock'Title'"
+   End Object
+   Slots(0)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_0'"
+   Slots(1)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_1'"
+   Slots(2)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_2'"
+   Slots(3)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_3'"
+   Slots(4)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_4'"
+   Slots(5)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_5'"
+   DisplayLabel="Content"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="Title" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Title'"
+   Text=NSLOCTEXT("", "67B309B94A61AB67B04B5D9EDDA5662C", "LoadingFX Sample")
+   Font=(Size=28.000000)
+   DisplayLabel="Title"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="Subtitle" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Subtitle'"
+   Text=NSLOCTEXT("", "889E34DE438AB4417D4CC4909DB0477C", "Play this level as a Standalone Game: in the editor\'s viewport (PIE) the loading icon freezes while a level loads, because MoviePlayer is not available there.")
+   Font=(TypefaceFontName="Regular",Size=14.000000)
+   WrapTextAt=720.000000
+   DisplayLabel="Subtitle"
+End Object
+Begin Object Class=/Script/UMG.HorizontalBox Name="Tabs" ExportPath="/Script/UMG.HorizontalBox'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Tabs'"
+   Begin Object Class=/Script/UMG.HorizontalBoxSlot Name="HorizontalBoxSlot_1" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Tabs.HorizontalBoxSlot_1'"
+   End Object
+   Begin Object Class=/Script/UMG.HorizontalBoxSlot Name="HorizontalBoxSlot_0" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Tabs.HorizontalBoxSlot_0'"
+   End Object
+   Begin Object Name="HorizontalBoxSlot_1" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Tabs.HorizontalBoxSlot_1'"
+      Padding=(Left=8.000000)
+      Parent="/Script/UMG.HorizontalBox'Tabs'"
+      Content="/Script/UMG.Button'LoaderTab'"
+   End Object
+   Begin Object Name="HorizontalBoxSlot_0" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Tabs.HorizontalBoxSlot_0'"
+      Parent="/Script/UMG.HorizontalBox'Tabs'"
+      Content="/Script/UMG.Button'IconTab'"
+   End Object
+   Slots(0)="/Script/UMG.HorizontalBoxSlot'HorizontalBoxSlot_0'"
+   Slots(1)="/Script/UMG.HorizontalBoxSlot'HorizontalBoxSlot_1'"
+   DisplayLabel="Tabs"
+End Object
+Begin Object Class=/Script/UMG.Button Name="IconTab" ExportPath="/Script/UMG.Button'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.IconTab'"
+   Begin Object Class=/Script/UMG.ButtonSlot Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.IconTab.ButtonSlot_0'"
+   End Object
+   Begin Object Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.IconTab.ButtonSlot_0'"
+      Padding=(Left=12.000000,Top=4.000000,Right=12.000000,Bottom=4.000000)
+      Parent="/Script/UMG.Button'IconTab'"
+      Content="/Script/UMG.TextBlock'IconTabLabel'"
+   End Object
+   BackgroundColor=(R=0.100000,G=0.120000,B=0.160000,A=1.000000)
+   Slots(0)="/Script/UMG.ButtonSlot'ButtonSlot_0'"
+   DisplayLabel="IconTab"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="IconTabLabel" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.IconTabLabel'"
+   Text=NSLOCTEXT("", "B5E3FA8E4F0F87517FD6319CAC663ABC", "Loading Icon")
+   Font=(TypefaceFontName="Regular",Size=14.000000)
+   DisplayLabel="IconTabLabel"
+End Object
+Begin Object Class=/Script/UMG.Button Name="LoaderTab" ExportPath="/Script/UMG.Button'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.LoaderTab'"
+   Begin Object Class=/Script/UMG.ButtonSlot Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.LoaderTab.ButtonSlot_0'"
+   End Object
+   Begin Object Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.LoaderTab.ButtonSlot_0'"
+      Padding=(Left=12.000000,Top=4.000000,Right=12.000000,Bottom=4.000000)
+      Parent="/Script/UMG.Button'LoaderTab'"
+      Content="/Script/UMG.TextBlock'LoaderTabLabel'"
+   End Object
+   BackgroundColor=(R=0.100000,G=0.120000,B=0.160000,A=1.000000)
+   Slots(0)="/Script/UMG.ButtonSlot'ButtonSlot_0'"
+   DisplayLabel="LoaderTab"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="LoaderTabLabel" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.LoaderTabLabel'"
+   Text=NSLOCTEXT("", "446A680C4EF39A335FD397ACFE53B7AA", "Asset Loader")
+   Font=(TypefaceFontName="Regular",Size=14.000000)
+   DisplayLabel="LoaderTabLabel"
+End Object
+Begin Object Class=/Script/UMG.WidgetSwitcher Name="Pages" ExportPath="/Script/UMG.WidgetSwitcher'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Pages'"
+   Begin Object Class=/Script/UMG.WidgetSwitcherSlot Name="WidgetSwitcherSlot_1" ExportPath="/Script/UMG.WidgetSwitcherSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Pages.WidgetSwitcherSlot_1'"
+   End Object
+   Begin Object Class=/Script/UMG.WidgetSwitcherSlot Name="WidgetSwitcherSlot_0" ExportPath="/Script/UMG.WidgetSwitcherSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Pages.WidgetSwitcherSlot_0'"
+   End Object
+   Begin Object Name="WidgetSwitcherSlot_1" ExportPath="/Script/UMG.WidgetSwitcherSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Pages.WidgetSwitcherSlot_1'"
+      Parent="/Script/UMG.WidgetSwitcher'Pages'"
+      Content="/Game/Sample/UI/WBP_LFXSample_LoaderPage.WBP_LFXSample_LoaderPage_C'LoaderPage'"
+   End Object
+   Begin Object Name="WidgetSwitcherSlot_0" ExportPath="/Script/UMG.WidgetSwitcherSlot'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.Pages.WidgetSwitcherSlot_0'"
+      Parent="/Script/UMG.WidgetSwitcher'Pages'"
+      Content="/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage_C'IconPage'"
+   End Object
+   Slots(0)="/Script/UMG.WidgetSwitcherSlot'WidgetSwitcherSlot_0'"
+   Slots(1)="/Script/UMG.WidgetSwitcherSlot'WidgetSwitcherSlot_1'"
+   DisplayLabel="Pages"
+End Object
+Begin Object Class=/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage_C Name="IconPage" ExportPath="/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage_C'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.IconPage'"
+   bIsVariable=False
+   DisplayLabel="IconPage"
+End Object
+Begin Object Class=/Game/Sample/UI/WBP_LFXSample_LoaderPage.WBP_LFXSample_LoaderPage_C Name="LoaderPage" ExportPath="/Game/Sample/UI/WBP_LFXSample_LoaderPage.WBP_LFXSample_LoaderPage_C'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.LoaderPage'"
+   bIsVariable=False
+   DisplayLabel="LoaderPage"
+End Object
+Begin Object Class=/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton_C Name="GalleryButton" ExportPath="/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton_C'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.GalleryButton'"
+   Label=NSLOCTEXT("", "09B486B9493E3825400EEEB76AB9D4D4", "Open the Gallery level")
+   TargetLevel="/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery"
+   bIsVariable=False
+   DisplayLabel="GalleryButton"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="TravelInfo" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_Hub.WBP_LFXSample_Hub:WidgetTree.TravelInfo'"
+   Text=NSLOCTEXT("", "CF6B28C545CA32F6514F6998C277890A", "Travel acquires the loading icon and opens the Gallery, which takes about 2 s to load (it simulates a heavy level), so the icon keeps spinning on the loading screen.")
+   Font=(TypefaceFontName="Regular",Size=14.000000)
+   WrapTextAt=720.000000
+   DisplayLabel="TravelInfo"
+End Object

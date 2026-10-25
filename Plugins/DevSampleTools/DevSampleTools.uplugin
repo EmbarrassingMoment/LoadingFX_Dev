@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.1",
 	"FriendlyName": "Dev Sample Tools (Local)",
-	"Description": "Local-only editor helpers that move Blueprint graphs, member variables and widget trees as copy text, so content drafted in the UE 5.8 workbench can be rebuilt in UE 5.5 by the sample builder scripts in Tools/. Not part of the LoadingFX distribution.",
+	"Description": "Local-only editor helpers that move Blueprint graphs, member variables, widget trees and level actors as copy text, so content drafted in the UE 5.8 workbench can be rebuilt in UE 5.5 by the sample builder scripts in Tools/. Not part of the LoadingFX distribution.",
 	"Category": "Developer",
 	"CreatedBy": "Kurorekishi",
 	"EnabledByDefault": true,

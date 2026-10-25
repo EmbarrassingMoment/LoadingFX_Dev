@@ -2,6 +2,7 @@
   "path": "/Game/Sample/UI/WBP_LFXSample_TravelButton",
   "kind": "WidgetBlueprint",
   "parent": "/Script/UMG.UserWidget",
+  "functions": [],
   "graphs": [
     "EventGraph"
   ],

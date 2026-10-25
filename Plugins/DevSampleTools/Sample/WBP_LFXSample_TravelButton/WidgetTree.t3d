@@ -2,9 +2,11 @@ Begin Object Class=/Script/UMG.Button Name="TravelButton" ExportPath="/Script/UM
    Begin Object Class=/Script/UMG.ButtonSlot Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton:WidgetTree.TravelButton.ButtonSlot_0'"
    End Object
    Begin Object Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton:WidgetTree.TravelButton.ButtonSlot_0'"
+      Padding=(Left=12.000000,Top=4.000000,Right=12.000000,Bottom=4.000000)
       Parent="/Script/UMG.Button'TravelButton'"
       Content="/Script/UMG.TextBlock'LabelText'"
    End Object
+   BackgroundColor=(R=0.100000,G=0.120000,B=0.160000,A=1.000000)
    Slots(0)="/Script/UMG.ButtonSlot'ButtonSlot_0'"
    DisplayLabel="TravelButton"
 End Object
@@ -13,6 +15,7 @@ Begin Object Class=/Script/UMGEditor.WidgetSlotPair Name="WidgetSlotPair_0" Expo
 End Object
 Begin Object Class=/Script/UMG.TextBlock Name="LabelText" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_TravelButton.WBP_LFXSample_TravelButton:WidgetTree.LabelText'"
    Text=NSLOCTEXT("", "37C0457541AE028454929CA18F792DC1", "Travel")
+   Font=(TypefaceFontName="Regular",Size=14.000000)
    bIsVariable=True
    DisplayLabel="LabelText"
 End Object

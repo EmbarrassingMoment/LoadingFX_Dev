@@ -2,17 +2,28 @@
 
 #include "DevSampleTools.h"
 
+#include "ActorEditorUtils.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Widget.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraphUtilities.h"
+#include "Editor/UnrealEdEngine.h"
 #include "Engine/Blueprint.h"
+#include "Engine/Level.h"
+#include "Engine/LevelScriptActor.h"
+#include "Engine/LevelScriptBlueprint.h"
+#include "Engine/World.h"
+#include "Factories.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/WorldSettings.h"
+#include "K2Node_FunctionTerminator.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/CompilerResultsLog.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectHash.h"
+#include "UnrealEdGlobals.h"
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintEditorUtils.h"
 
@@ -48,6 +59,61 @@ namespace DevSampleTools
 		Text.ParseIntoArrayLines(Lines);
 		return Lines;
 	}
+
+	/** FEdGraphUtilities::ImportNodesFromText's factory, except that a function's entry and result nodes are created
+	 *  too (a paste skips nodes that cannot be duplicated): the graph is replaced as a whole, terminators included. */
+	struct FGraphTextFactory : public FCustomizableTextObjectFactory
+	{
+		const UEdGraph* DestinationGraph;
+		TSet<UEdGraphNode*> SpawnedNodes;
+
+		explicit FGraphTextFactory(const UEdGraph* InDestinationGraph)
+			: FCustomizableTextObjectFactory(GWarn)
+			, DestinationGraph(InDestinationGraph)
+		{
+		}
+
+	protected:
+		virtual bool CanCreateClass(UClass* ObjectClass, bool& bOmitSubObjs) const override
+		{
+			const UEdGraphNode* DefaultNode = Cast<UEdGraphNode>(ObjectClass->GetDefaultObject());
+			if (!DefaultNode)
+			{
+				return false;
+			}
+			bOmitSubObjs = true;
+			return (DefaultNode->CanDuplicateNode() || DefaultNode->IsA<UK2Node_FunctionTerminator>())
+				&& DefaultNode->CanCreateUnderSpecifiedSchema(DestinationGraph->GetSchema());
+		}
+
+		virtual void ProcessConstructedObject(UObject* CreatedObject) override
+		{
+			if (UEdGraphNode* Node = Cast<UEdGraphNode>(CreatedObject))
+			{
+				SpawnedNodes.Add(Node);
+				Node->GetGraph()->Nodes.Add(Node);
+			}
+		}
+	};
+
+	TArray<AActor*> GetLevelActors(UWorld* World)
+	{
+		TArray<AActor*> Actors;
+		if (World && World->PersistentLevel)
+		{
+			for (AActor* Actor : World->PersistentLevel->Actors)
+			{
+				// The same actors that UUnrealEdEngine::CopyActors leaves out, plus transient ones and the Level
+				// Blueprint's actor, which belongs to the level (its Blueprint travels through the graph functions).
+				if (Actor && !Actor->HasAnyFlags(RF_Transient) && !Actor->IsA<AWorldSettings>() && !Actor->IsA<ALevelScriptActor>()
+					&& !FActorEditorUtils::IsABuilderBrush(Actor))
+				{
+					Actors.Add(Actor);
+				}
+			}
+		}
+		return Actors;
+	}
 }
 
 FString UDevSampleTools::ExportGraphNodes(UBlueprint* Blueprint, FName GraphName)
@@ -58,11 +124,12 @@ FString UDevSampleTools::ExportGraphNodes(UBlueprint* Blueprint, FName GraphName
 		return FString();
 	}
 
-	// Same as Ctrl+C in the graph editor (FBlueprintEditor::CopySelectedNodes) with every node selected.
+	// Same as Ctrl+C in the graph editor (FBlueprintEditor::CopySelectedNodes) with every node selected,
+	// plus a function's entry and result nodes, which carry its signature.
 	TSet<UObject*> Nodes;
 	for (UEdGraphNode* Node : Graph->Nodes)
 	{
-		if (Node && !Node->IsAutomaticallyPlacedGhostNode() && Node->CanDuplicateNode())
+		if (Node && !Node->IsAutomaticallyPlacedGhostNode() && (Node->CanDuplicateNode() || Node->IsA<UK2Node_FunctionTerminator>()))
 		{
 			Node->PrepareForCopying();
 			Nodes.Add(Node);
@@ -89,13 +156,32 @@ int32 UDevSampleTools::ReplaceGraphNodes(UBlueprint* Blueprint, FName GraphName,
 		FBlueprintEditorUtils::RemoveNode(Blueprint, Node, /*bDontRecompile*/ true);
 	}
 
-	// Same as Ctrl+V (FBlueprintEditor::PasteNodesHere), except that the nodes keep their positions and GUIDs,
-	// so a rebuilt graph matches the one it was exported from.
-	TSet<UEdGraphNode*> ImportedNodes;
-	FEdGraphUtilities::ImportNodesFromText(Graph, Text, ImportedNodes);
+	// Same as Ctrl+V (FBlueprintEditor::PasteNodesHere through FEdGraphUtilities::ImportNodesFromText), except that
+	// function terminators come along and the nodes keep their positions and GUIDs, so a rebuilt graph matches the
+	// one it was exported from.
+	DevSampleTools::FGraphTextFactory Factory(Graph);
+	Factory.ProcessBuffer(Graph, RF_Transactional, Text);
+	FEdGraphUtilities::PostProcessPastedNodes(Factory.SpawnedNodes);
+	UEdGraphPin::ResolveAllPinReferences();
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
-	return ImportedNodes.Num();
+	return Factory.SpawnedNodes.Num();
+}
+
+TArray<FName> UDevSampleTools::GetFunctionGraphNames(UBlueprint* Blueprint)
+{
+	TArray<FName> Names;
+	if (Blueprint)
+	{
+		for (const UEdGraph* Graph : Blueprint->FunctionGraphs)
+		{
+			if (Graph)
+			{
+				Names.Add(Graph->GetFName());
+			}
+		}
+	}
+	return Names;
 }
 
 FString UDevSampleTools::ExportMemberVariables(UBlueprint* Blueprint)
@@ -177,8 +263,9 @@ bool UDevSampleTools::ReplaceWidgetTree(UWidgetBlueprint* WidgetBlueprint, const
 	Tree->Modify();
 	Tree->RootWidget = nullptr;
 	Tree->NamedSlotBindings.Empty();
+	// Widgets are outered to the tree; the nested objects (panel slots) are skipped by the cast.
 	TArray<UObject*> OldObjects;
-	GetObjectsWithOuter(Tree, OldObjects, /*bIncludeNestedObjects*/ false);
+	GetObjectsWithOuter(Tree, OldObjects);
 	for (UObject* Object : OldObjects)
 	{
 		if (UWidget* Widget = Cast<UWidget>(Object))
@@ -234,4 +321,38 @@ TArray<FString> UDevSampleTools::CompileBlueprintWithMessages(UBlueprint* Bluepr
 		}
 	}
 	return Messages;
+}
+
+UBlueprint* UDevSampleTools::GetLevelBlueprint(UWorld* World)
+{
+	return World && World->PersistentLevel ? World->PersistentLevel->GetLevelScriptBlueprint(/*bDontCreate*/ false) : nullptr;
+}
+
+FString UDevSampleTools::ExportLevelActors(UWorld* World)
+{
+	if (!GUnrealEd || !World)
+	{
+		return FString();
+	}
+
+	FString Text;
+	GUnrealEd->CopyActors(DevSampleTools::GetLevelActors(World), World, &Text);
+	return Text;
+}
+
+int32 UDevSampleTools::ReplaceLevelActors(UWorld* World, const FString& Text)
+{
+	if (!GUnrealEd || !World)
+	{
+		return 0;
+	}
+
+	for (AActor* Actor : DevSampleTools::GetLevelActors(World))
+	{
+		World->EditorDestroyActor(Actor, /*bShouldModifyLevel*/ true);
+	}
+
+	TArray<AActor*> PastedActors;
+	GUnrealEd->PasteActors(PastedActors, World, FVector::ZeroVector, /*bDuplicate*/ false, /*bWarnIfHidden*/ false, &Text);
+	return PastedActors.Num();
 }
