@@ -1,0 +1,63 @@
+#!/bin/bash
+# Rejects .uasset / .umap files saved by an engine newer than UE 5.5.
+#
+# This project's content must stay loadable in UE 5.5 (see CLAUDE.md). The UE 5.8
+# workbench worktree opens the same content in 5.8, so anything saved there must
+# never reach a commit. Hooks live in the repository's common directory, so one
+# install covers every worktree:
+#
+#   cp Tools/GitHooks/pre-commit "$(git rev-parse --git-common-dir)/hooks/pre-commit"
+
+# FPackageFileSummary::FileVersionUE5 written by UE 5.5
+# (EUnrealEngineObjectUE5Version::ASSETREGISTRY_PACKAGEBUILDDEPENDENCIES).
+MAX_UE5_VERSION=1013
+
+# FPackageFileSummary::Tag (PACKAGE_FILE_TAG, 0x9E2A83C1) read as a signed int32.
+PACKAGE_FILE_TAG=-1641380927
+
+COMMON_DIR=$(git rev-parse --git-common-dir)
+
+# Prints the first five int32 of the staged package: Tag, LegacyFileVersion,
+# LegacyUE3Version, FileVersionUE4, FileVersionUE5. LFS-tracked files are staged
+# as pointers, so the content is read from the local LFS object store.
+read_header() {
+	local path=$1 pointer oid object
+	pointer=$(git cat-file blob ":$path" 2>/dev/null | head -c 200 | tr -d '\0')
+	if [[ $pointer == "version https://git-lfs.github.com/spec/"* ]]; then
+		oid=$(printf '%s\n' "$pointer" | sed -n 's/^oid sha256:\([0-9a-f]\{64\}\)$/\1/p')
+		object="$COMMON_DIR/lfs/objects/${oid:0:2}/${oid:2:2}/$oid"
+		[[ -n $oid && -f $object ]] || return 1
+		od -An -t d4 --endian=little -N 20 "$object"
+	else
+		git cat-file blob ":$path" 2>/dev/null | od -An -t d4 --endian=little -N 20
+	fi
+}
+
+status=0
+while IFS= read -r -d '' path; do
+	case $path in
+		*.uasset|*.umap) ;;
+		*) continue ;;
+	esac
+
+	read -r tag legacy v2 v3 v4 <<< "$(read_header "$path" | tr '\n' ' ')"
+	if [[ $tag != "$PACKAGE_FILE_TAG" ]]; then
+		echo "pre-commit: $path: cannot read the package header (not an Unreal package, or its LFS object is missing)." >&2
+		status=1
+		continue
+	fi
+
+	# LegacyUE3Version is present unless LegacyFileVersion is -4; FileVersionUE5
+	# exists from LegacyFileVersion -8 on (every UE5 package).
+	if (( legacy == -4 )); then ue5=$v3; else ue5=$v4; fi
+	if (( legacy <= -8 && ue5 > MAX_UE5_VERSION )); then
+		echo "pre-commit: $path was saved by an engine newer than UE 5.5 (FileVersionUE5 $ue5 > $MAX_UE5_VERSION)." >&2
+		status=1
+	fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if (( status != 0 )); then
+	echo "pre-commit: commit content saved in UE 5.5 only. To regenerate a material, run its builder with UE 5.5;" >&2
+	echo "pre-commit: to drop the change, run: git restore --staged --worktree -- <path>" >&2
+fi
+exit $status

@@ -44,4 +44,10 @@ Run them with **UE 5.5** so the saved assets stay loadable in 5.5:
 <UE_5.5>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe <repo>\LoadingFX_Dev.uproject -run=pythonscript -script="<repo>\Plugins\DevMaterialTools\Tools\build_all.py" -unattended -nosplash
 ```
 
+With the UE 5.5 editor already open on this project, run a builder in it instead (remote execution, see `Tools/ue_exec.py`):
+
+```
+python <repo>\Tools\ue_exec.py <repo>\Plugins\DevMaterialTools\Tools\build_m_loadingarc.py
+```
+
 Each script prints `[TEST] RESULT: PASS` when the graph matches its expected structure.
