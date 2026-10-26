@@ -196,3 +196,4 @@ Verified 2026-10-08 with a throwaway probe (a `UDeveloperSettings` class holding
 - `PCHUsage = UseExplicitOrSharedPCHs`; always include the module's own header explicitly.
 - Use `Category = "LoadingFX"` for `UFUNCTION` / `UPROPERTY`.
 - The plugin must work in both Blueprint-only and C++ projects.
+- `Plugins/LoadingFX/AGENTS.md` is the usage guide for AI agents in users' projects (shipped with the plugin, listed in `FilterPlugin.ini`; `Plugins/LoadingFX/CLAUDE.md` only imports it). It is not about developing the plugin. Update it with any change to the public API, the settings, the bundled materials or their parameters, and the known pitfalls (it names issue #5).

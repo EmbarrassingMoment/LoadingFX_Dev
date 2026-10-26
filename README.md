@@ -203,6 +203,33 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 | `LFXProto.Loader quit` | The asset loader and the icon bridge, 13 logged cases. |
 | `LoadingFX.Icon.Show` / `Hide` / `Dump`, `LoadingFX.Loader.Dump` | Plugin console commands, usable in any project: show or hide the icon by hand, list the active requests and loads. |
 
+## Using LoadingFX with AI coding agents
+
+The plugin folder ships an `AGENTS.md` (`Plugins/LoadingFX/AGENTS.md`) written for AI coding agents such as Claude Code, Codex, Cursor, GitHub Copilot and Gemini CLI: the public Blueprint and C++ API, the settings and their defaults, every bundled material with its parameters, the map travel pattern, how to verify the loading screen, and the pitfalls. A `CLAUDE.md` next to it imports the same file for Claude Code.
+
+Agents only read files inside your project, so when the plugin is installed to the engine from Fab (`<EngineDir>/Engine/Plugins/Marketplace/LoadingFX`) they never find it on their own. Even with the plugin in your project's `Plugins` folder, a pointer is the safe choice. Paste this into the instruction file at the root of **your** project and adjust the path:
+
+```markdown
+## LoadingFX (loading icon, spinners, asset loader)
+
+This project uses the LoadingFX plugin. Before writing or changing loading icon, spinner,
+progress bar, map travel loading or asset loading code, read the plugin's agent guide:
+
+- Project install: `Plugins/LoadingFX/AGENTS.md`
+- Engine install:  `<EngineDir>/Engine/Plugins/Marketplace/LoadingFX/AGENTS.md`
+  (online copy: https://github.com/EmbarrassingMoment/LoadingFX_Dev/blob/main/Plugins/LoadingFX/AGENTS.md)
+
+Do not edit assets inside the plugin folder; make material instances in the project.
+```
+
+| Tool | File at your project root |
+|---|---|
+| Claude Code | `CLAUDE.md` (or a line with just `@Plugins/LoadingFX/AGENTS.md` to import the whole guide) |
+| Codex, Cursor, Gemini CLI and others | `AGENTS.md` |
+| GitHub Copilot | `AGENTS.md`, or `.github/copilot-instructions.md` |
+
+The guide is in English only; agents read it fine whatever language you prompt in.
+
 ## Limitations
 
 - **Editor and PIE:** MoviePlayer is unavailable there, so the loading icon freezes during blocking loads. Everything else works. Use `-game`, *Standalone Game* or a packaged build to see the icon spin through a block.
@@ -216,6 +243,7 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 | Path | Contents |
 |---|---|
 | `Plugins/LoadingFX/` | The plugin (what is distributed on Fab) |
+| `Plugins/LoadingFX/AGENTS.md` | The usage guide for AI coding agents, shipped with the plugin |
 | `Plugins/DevMaterialTools/` | Local editor tooling that builds the material assets from Python scripts (not distributed) |
 | `Source/LoadingFX_Dev/` | The sample project module, with the `LFXProto.*` verification commands |
 | `Content/Sample/` | The Blueprint sample map and widgets |

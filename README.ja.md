@@ -203,6 +203,33 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 | `LFXProto.Loader quit` | アセットローダーとアイコン連携の 13 ケースをログに出す。 |
 | `LoadingFX.Icon.Show` / `Hide` / `Dump`、`LoadingFX.Loader.Dump` | プラグインのコンソールコマンド。どのプロジェクトでも使えます。アイコンを手で出す・消す、要求とロードの一覧を出す。 |
 
+## AI コーディングエージェントで使う
+
+プラグインフォルダには、Claude Code、Codex、Cursor、GitHub Copilot、Gemini CLI などの AI コーディングエージェント向けの `AGENTS.md`（`Plugins/LoadingFX/AGENTS.md`）が入っています。Blueprint と C++ の公開 API、設定と既定値、同梱マテリアルとそのパラメータ、マップ遷移のパターン、ローディング画面の確かめ方、落とし穴をまとめたものです。隣の `CLAUDE.md` は Claude Code 向けに同じファイルを読み込みます。
+
+エージェントはプロジェクト内のファイルしか読まないため、Fab からエンジンにインストールした場合（`<EngineDir>/Engine/Plugins/Marketplace/LoadingFX`）は自分では見つけられません。プロジェクトの `Plugins` フォルダに置いた場合も、案内を書いておくのが確実です。**あなたの**プロジェクトのルートにある指示ファイルに次を貼り、パスを合わせてください:
+
+```markdown
+## LoadingFX (loading icon, spinners, asset loader)
+
+This project uses the LoadingFX plugin. Before writing or changing loading icon, spinner,
+progress bar, map travel loading or asset loading code, read the plugin's agent guide:
+
+- Project install: `Plugins/LoadingFX/AGENTS.md`
+- Engine install:  `<EngineDir>/Engine/Plugins/Marketplace/LoadingFX/AGENTS.md`
+  (online copy: https://github.com/EmbarrassingMoment/LoadingFX_Dev/blob/main/Plugins/LoadingFX/AGENTS.md)
+
+Do not edit assets inside the plugin folder; make material instances in the project.
+```
+
+| ツール | プロジェクトのルートに置くファイル |
+|---|---|
+| Claude Code | `CLAUDE.md`（`@Plugins/LoadingFX/AGENTS.md` だけの行を書くとガイド全体を読み込みます） |
+| Codex、Cursor、Gemini CLI など | `AGENTS.md` |
+| GitHub Copilot | `AGENTS.md` または `.github/copilot-instructions.md` |
+
+ガイドは英語のみですが、どの言語で指示してもエージェントは問題なく読めます。
+
 ## 制限事項
 
 - **エディタと PIE**: MoviePlayer が使えないため、ブロッキングロード中はローディングアイコンが止まります。ほかの機能は動きます。ブロック中も回る様子は `-game`、*Standalone Game*、パッケージ版で確認してください。
@@ -216,6 +243,7 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 | パス | 内容 |
 |---|---|
 | `Plugins/LoadingFX/` | プラグイン本体（Fab で配布するもの） |
+| `Plugins/LoadingFX/AGENTS.md` | AI コーディングエージェント向けの使い方ガイド（プラグインに同梱） |
 | `Plugins/DevMaterialTools/` | マテリアルアセットを Python スクリプトから生成するローカルのエディタツール（配布しません） |
 | `Source/LoadingFX_Dev/` | サンプルプロジェクトのモジュール。`LFXProto.*` の検証コマンドを含む |
 | `Content/Sample/` | Blueprint のサンプルマップとウィジェット |
