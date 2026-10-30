@@ -80,7 +80,7 @@ protected:
 	 * Spinner material: any UI-domain material that follows the material contract. Leave empty to draw the
 	 * project's loading icon material (Project Settings > Plugins > LoadingFX).
 	 */
-	UPROPERTY(EditAnywhere, BlueprintGetter = GetMaterial, BlueprintSetter = SetMaterial, Category = "LoadingFX")
+	UPROPERTY(EditAnywhere, BlueprintGetter = GetMaterial, BlueprintSetter = SetMaterial, Category = "LoadingFX", meta = (ForceShowPluginContent))
 	TObjectPtr<UMaterialInterface> Material;
 
 	/** Reaches the material as VertexColor; alpha fades the spinner. */

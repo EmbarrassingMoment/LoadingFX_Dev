@@ -117,7 +117,7 @@ IconPadding=(Left=32.000000,Top=32.000000,Right=32.000000,Bottom=32.000000)
 IconTint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000)  ; multiplied into the material (VertexColor); alpha fades it
 IconShowDelay=0.500000            ; seconds from the first request until the icon appears; 0 = at once
 IconMinimumDisplayTime=1.000000   ; seconds the icon stays once it appeared; 0 = hide at the last release
-IconZOrder=1000                   ; among viewport widgets (UMG Add to Viewport uses ZOrder + 10)
+IconZOrder=10010                  ; among viewport widgets (UMG Add to Viewport uses ZOrder + 10)
 ```
 
 The values above are the defaults; write only the keys you change. A one-off override for a test run: `-ini:Game:[/Script/LoadingFX.LoadingFXSettings]:IconShowDelay=0`.
@@ -252,7 +252,7 @@ Never depend on `LoadingFXBridge`; it has no API.
 
 ## Pitfalls
 
-- **Full-screen overlays above the icon.** The icon sits at `IconZOrder` 1000 among viewport widgets. Anything added at a higher Z-order covers it, for example TransitionFX's widget-layer presets (`WidgetZOrder` 10000): the icon is hidden under a held fade. Raise `IconZOrder` above the overlay (e.g. 10010).
+- **Full-screen overlays above the icon.** The icon sits at `IconZOrder` 10010 among viewport widgets, just above TransitionFX's widget-layer presets (`WidgetZOrder` 10000), so it shows over a held fade. Anything added at a higher Z-order covers it (a preset whose `WidgetZOrder` was raised, or another plugin's overlay): raise `IconZOrder` above that overlay.
 - **Acquiring in the same frame as `Open Level` with a show delay** may leave the loading screen plain black (the icon is not drawn on the MoviePlayer screen if it has never been drawn on the game viewport before; https://github.com/EmbarrassingMoment/LoadingFX_Dev/issues/5, open). Until it is fixed, acquire a little earlier, or use `IconShowDelay=0` for travel-heavy projects.
 - **First run in an uncooked project:** right after the plugin is added, the material's shaders may still be compiling, and nothing processes the results while the game thread is blocked, so the first run can show no icon on the loading screen. Run again; cooked builds are not affected.
 - **An `Owner` from the level being left** releases the request right after the travel (see *Map travel*).
