@@ -90,7 +90,7 @@ The plugin does **not** show the icon by itself for travel and does not decide w
 ```
 
 - Do not pass an actor of the old level as `Owner`: it is destroyed by the travel, and its request is released right after the load, possibly before the destination is ready. Level Blueprint variables are lost on travel too.
-- Acquire at least one frame before `Open Level` if possible, and see *Pitfalls* about acquiring in the same frame.
+- Acquiring in the same frame as `Open Level` is fine: the load starts later in that frame, with the request already active, so the icon appears on the loading screen at the show delay.
 
 **Your own blocking work (C++):**
 
@@ -253,8 +253,7 @@ Never depend on `LoadingFXBridge`; it has no API.
 ## Pitfalls
 
 - **Full-screen overlays above the icon.** The icon sits at `IconZOrder` 1000 among viewport widgets. Anything added at a higher Z-order covers it, for example TransitionFX's widget-layer presets (`WidgetZOrder` 10000): the icon is hidden under a held fade. Raise `IconZOrder` above the overlay (e.g. 10010).
-- **Acquiring in the same frame as `Open Level` with a show delay** may leave the loading screen plain black (the icon is not drawn on the MoviePlayer screen if it has never been drawn on the game viewport before; https://github.com/EmbarrassingMoment/LoadingFX_Dev/issues/5, open). Until it is fixed, acquire a little earlier, or use `IconShowDelay=0` for travel-heavy projects.
-- **First run in an uncooked project:** right after the plugin is added, the material's shaders may still be compiling, and nothing processes the results while the game thread is blocked, so the first run can show no icon on the loading screen. Run again; cooked builds are not affected.
+- **A short wait at startup in uncooked runs** (`-game`, Standalone Game): the engine compiles a material's shaders only when it is first drawn, which a blocked game thread cannot finish, so the icon subsystem compiles the icon material's shaders when it loads it and logs `Compiled the shaders of the loading icon material ... in N ms`. Expect a few tens of ms, or a second or two on the first run after the plugin is added or the material changed. Cooked builds and PIE skip this.
 - **An `Owner` from the level being left** releases the request right after the travel (see *Map travel*).
 - **`IsIconVisible` is false within the show delay** although the icon is requested; use `GetRequestCount` to know whether it is requested.
 - **A spinner in your own widget freezes during blocking loads**; only the loading icon keeps moving.
