@@ -56,7 +56,10 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FLoadingFXIconVisibilityChangedNative, bool 
  *
  * The icon material is loaded in the background as soon as the subsystem initializes, which also starts precaching
  * its PSOs, so showing the icon later loads and compiles nothing. An Acquire that comes before that load has
- * finished waits for it, so the icon still appears at once.
+ * finished waits for it, so the icon still appears at once. Uncooked processes (-game from the editor binaries)
+ * compile a material's shaders only when it is first drawn, and only the game thread can finish that, so there the
+ * subsystem also compiles the material's shaders when it arrives (with MoviePlayer only). Otherwise an icon first
+ * drawn on the loading screen would stay blank for the whole blocking load.
  *
  * The icon is viewport content (not a UMG widget added to the viewport), so it survives map travel. While it
  * is visible, a blocking map load (OpenLevel, LoadMap) is rendered through MoviePlayer with the icon as the
@@ -179,6 +182,11 @@ private:
 	void HandleIconMaterialPreloaded(const FSoftObjectPath& MaterialPath, UObject* LoadedObject);
 	/** Takes the result of the load (null if it failed) as the icon material, and warns about unusable ones. */
 	void SetIconMaterial(UMaterialInterface* Material, const FSoftObjectPath& MaterialPath);
+	/**
+	 * Compiles the icon material's missing shaders and waits for them (uncooked processes with MoviePlayer only), so
+	 * that its first draw may happen on MoviePlayer's loading thread.
+	 */
+	void CompileIconMaterialShaders();
 	/** The icon material, or null if there is none. Waits for the preload if it is still in flight. */
 	UMaterialInterface* GetIconMaterial();
 	/** With ShowAtSeconds in the future (platform time), the widget stays hidden until then: a loading screen set up within the show delay. */

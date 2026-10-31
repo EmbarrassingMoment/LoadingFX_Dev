@@ -485,6 +485,27 @@ void ULoadingFXIconSubsystem::SetIconMaterial(UMaterialInterface* Material, cons
 	{
 		UE_LOG(LogLoadingFX, Warning, TEXT("LoadingIconMaterial %s is not a User Interface domain material: Slate cannot draw it."), *MaterialPath.ToString());
 	}
+	CompileIconMaterialShaders();
+}
+
+void ULoadingFXIconSubsystem::CompileIconMaterialShaders()
+{
+#if WITH_EDITOR
+	// Uncooked processes (the editor's -game, or a standalone game run from the editor binaries) compile a material's
+	// shaders when it is first drawn, and only the game thread takes the results in. If that first draw is on
+	// MoviePlayer's loading thread while the game thread is blocked, the icon stays blank until the load is over, so
+	// the shaders are compiled here instead. Cooked builds load every shader with the material (EnsureIsComplete does
+	// nothing there), and without MoviePlayer (editor, PIE) every draw is on the game thread.
+	if (!IconMaterial || !IsMoviePlayerEnabled())
+	{
+		return;
+	}
+	const double StartSeconds = FPlatformTime::Seconds();
+	IconMaterial->EnsureIsComplete();
+	const double Milliseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000.0;
+	UE_CLOG(Milliseconds >= 1.0, LogLoadingFX, Log, TEXT("Compiled the shaders of the loading icon material %s in %.1f ms, so that MoviePlayer can draw it during blocking loads (uncooked builds compile shaders on first use)."),
+		*IconMaterial->GetPathName(), Milliseconds);
+#endif
 }
 
 UMaterialInterface* ULoadingFXIconSubsystem::GetIconMaterial()
@@ -621,6 +642,9 @@ bool ULoadingFXIconSubsystem::SetUpIconLoadingScreen(const FString& What)
 		// Someone else set up a loading screen first: leave it alone.
 		return false;
 	}
+
+	// Done when the material arrived; this catches a material that became incomplete since (a new quality level).
+	CompileIconMaterialShaders();
 
 	// MoviePlayer needs its own widget instance: the viewport one keeps its parent. The attributes are cleared
 	// by MoviePlayer after every playback, so this runs again for the next load.
