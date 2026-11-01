@@ -187,7 +187,10 @@ Loader->LoadAssetsSync(Paths, TEXT("Portrait"), this, false, Loaded);
 
 このリポジトリは開発用プロジェクトです。`LoadingFX_Dev.uproject` を UE 5.5 で開いてください。
 
-**Blueprint サンプル（`Content/Sample`）。** `L_LFXSample_Hub` には遷移ボタンを持つウィジェットがあり、押すとローディングアイコンを要求して `L_LFXSample_Destination` を開き、移動先で準備ができたら解除します。*Standalone Game* で再生してください（エディタのビューポート内では MoviePlayer が使えません）。遷移中のローディング画面でアイコンが回り続けるのが見られます。
+**Blueprint サンプル（`Content/Sample`）。** レベル 2 つで、処理はすべて Blueprint です。エディタを開くと `L_LFXSample_Hub` が開きます。*Standalone Game* で再生してください（エディタのビューポート内では MoviePlayer が使えないので、レベルの読み込み中はアイコンが止まります）。
+
+- `L_LFXSample_Hub`: *Loading Icon* ページでは、アイコンを 0.3 秒・0.8 秒・3 秒のあいだ要求し、実際に表示された時刻と消えた時刻をログに出します。表示遅延と最低表示時間の働きが見られます。*Asset Loader* ページでは、同梱のマテリアルを *Load Assets Async* で読み込んで *LoadingFX Progress Bar* に進捗を出します（Cancel と Release 付き）。*Open the Gallery level* はアイコンを要求して Gallery を開きます。要求の Owner は PlayerController なので、遷移で自動的に解除されます。
+- `L_LFXSample_Gallery`: 重いレベルを模して、レベルの読み込み中にゲームスレッドを 2 秒止めます（その間もロード画面でアイコンが回ります）。続いて *Show Loading Icon* 付きの *Load Assets Async* で自分のマテリアルを読み込み、21 種すべてを *LoadingFX Spinner* で並べます。1 つ選ぶと、*Get Dynamic Material* で `PrimaryColor` と `Speed` を変えられます。
 
 **コンソールコマンド（プロトタイプ）。** `Source/LoadingFX_Dev/Prototype` の `LFXProto.*` コマンドで、全マテリアルの表示とプラグインの動作確認ができます。エディタの外でプロジェクトを起動し、コマンドを渡します。
 
@@ -246,6 +249,7 @@ Do not edit assets inside the plugin folder; make material instances in the proj
 | `Plugins/LoadingFX/` | プラグイン本体（Fab で配布するもの） |
 | `Plugins/LoadingFX/AGENTS.md` | AI コーディングエージェント向けの使い方ガイド（プラグインに同梱） |
 | `Plugins/DevMaterialTools/` | マテリアルアセットを Python スクリプトから生成するローカルのエディタツール（配布しません） |
+| `Plugins/DevSampleTools/` | Blueprint サンプルをテキストから生成するローカルのエディタツール（配布しません） |
 | `Source/LoadingFX_Dev/` | サンプルプロジェクトのモジュール。`LFXProto.*` の検証コマンドを含む |
 | `Content/Sample/` | Blueprint のサンプルマップとウィジェット |
 | `Docs/` | この README の画像 |

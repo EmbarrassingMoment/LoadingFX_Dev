@@ -24,6 +24,9 @@ Config/User*.ini
 Plugins/*/Binaries/
 Plugins/*/Intermediate/
 
+# Python bytecode from the builder scripts' shared modules
+__pycache__/
+
 # MacOS
 .DS_Store
 

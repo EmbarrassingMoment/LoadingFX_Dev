@@ -1,0 +1,16 @@
+{
+  "path": "/Game/Sample/UI/WBP_LFXSample_Gallery",
+  "kind": "WidgetBlueprint",
+  "parent": "/Script/UMG.UserWidget",
+  "functions": [
+    "SetPreviewColor",
+    "SetPreviewSpeed",
+    "ReadBaseSpeed",
+    "Select",
+    "ShowMaterials"
+  ],
+  "graphs": [
+    "EventGraph"
+  ],
+  "exported_with": "5.8.3-58210709+++UE5+Release-5.8"
+}

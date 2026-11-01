@@ -1,0 +1,59 @@
+Begin Object Class=/Script/UMG.Button Name="TileButton" ExportPath="/Script/UMG.Button'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileButton'"
+   Begin Object Class=/Script/UMG.ButtonSlot Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileButton.ButtonSlot_0'"
+   End Object
+   Begin Object Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileButton.ButtonSlot_0'"
+      Padding=(Top=6.000000,Bottom=4.000000)
+      Parent="/Script/UMG.Button'TileButton'"
+      Content="/Script/UMG.VerticalBox'TileBox'"
+   End Object
+   BackgroundColor=(R=0.100000,G=0.120000,B=0.160000,A=1.000000)
+   Slots(0)="/Script/UMG.ButtonSlot'ButtonSlot_0'"
+   DisplayLabel="TileButton"
+End Object
+Begin Object Class=/Script/UMGEditor.WidgetSlotPair Name="WidgetSlotPair_3" ExportPath="/Script/UMGEditor.WidgetSlotPair'/Engine/Transient.WidgetSlotPair_3'"
+   WidgetName="TileButton"
+End Object
+Begin Object Class=/Script/UMG.VerticalBox Name="TileBox" ExportPath="/Script/UMG.VerticalBox'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileBox'"
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_0" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileBox.VerticalBoxSlot_0'"
+   End Object
+   Begin Object Class=/Script/UMG.VerticalBoxSlot Name="VerticalBoxSlot_1" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileBox.VerticalBoxSlot_1'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_0" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileBox.VerticalBoxSlot_0'"
+      Parent="/Script/UMG.VerticalBox'TileBox'"
+      Content="/Script/UMG.SizeBox'SpinnerBox'"
+   End Object
+   Begin Object Name="VerticalBoxSlot_1" ExportPath="/Script/UMG.VerticalBoxSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.TileBox.VerticalBoxSlot_1'"
+      Padding=(Top=4.000000)
+      HorizontalAlignment=HAlign_Center
+      Parent="/Script/UMG.VerticalBox'TileBox'"
+      Content="/Script/UMG.TextBlock'NameText'"
+   End Object
+   Slots(0)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_0'"
+   Slots(1)="/Script/UMG.VerticalBoxSlot'VerticalBoxSlot_1'"
+   DisplayLabel="TileBox"
+End Object
+Begin Object Class=/Script/UMG.SizeBox Name="SpinnerBox" ExportPath="/Script/UMG.SizeBox'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.SpinnerBox'"
+   Begin Object Class=/Script/UMG.SizeBoxSlot Name="SizeBoxSlot_0" ExportPath="/Script/UMG.SizeBoxSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.SpinnerBox.SizeBoxSlot_0'"
+   End Object
+   Begin Object Name="SizeBoxSlot_0" ExportPath="/Script/UMG.SizeBoxSlot'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.SpinnerBox.SizeBoxSlot_0'"
+      HorizontalAlignment=HAlign_Center
+      VerticalAlignment=VAlign_Center
+      Parent="/Script/UMG.SizeBox'SpinnerBox'"
+      Content="/Script/LoadingFX.LoadingFXSpinner'Spinner'"
+   End Object
+   WidthOverride=88.000000
+   HeightOverride=64.000000
+   bOverride_WidthOverride=True
+   bOverride_HeightOverride=True
+   Slots(0)="/Script/UMG.SizeBoxSlot'SizeBoxSlot_0'"
+   DisplayLabel="SpinnerBox"
+End Object
+Begin Object Class=/Script/LoadingFX.LoadingFXSpinner Name="Spinner" ExportPath="/Script/LoadingFX.LoadingFXSpinner'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.Spinner'"
+   DisplayLabel="Spinner"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="NameText" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_GalleryTile.WBP_LFXSample_GalleryTile:WidgetTree.NameText'"
+   Text=NSLOCTEXT("", "6C7C11A34D5CDDDF0F7E149E7324F128", "Name")
+   Font=(TypefaceFontName="Regular",Size=11.000000)
+   bIsVariable=True
+   DisplayLabel="NameText"
+End Object

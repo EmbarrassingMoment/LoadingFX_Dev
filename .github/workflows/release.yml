@@ -35,6 +35,7 @@ jobs:
             --exclude='Plugins/*/Binaries/' \
             --exclude='Plugins/*/Intermediate/' \
             --exclude='Plugins/DevMaterialTools/' \
+            --exclude='Plugins/DevSampleTools/' \
             --exclude='Tools/' \
             --exclude='.vs/' \
             --exclude='*.sln' \

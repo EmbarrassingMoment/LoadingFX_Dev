@@ -1,0 +1,284 @@
+Begin Map
+   Begin Level
+      Begin Actor Class=/Script/Engine.DirectionalLight Name=DirectionalLight_0 Archetype="/Script/Engine.DirectionalLight'/Script/Engine.Default__DirectionalLight'" ExportPath="/Script/Engine.DirectionalLight'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.DirectionalLight_0'"
+         Begin Object Class=/Script/Engine.DirectionalLightComponent Name="LightComponent0" Archetype="/Script/Engine.DirectionalLightComponent'/Script/Engine.Default__DirectionalLight:LightComponent0'" ExportPath="/Script/Engine.DirectionalLightComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.DirectionalLight_0.LightComponent0'"
+         End Object
+         Begin Object Class=/Script/Engine.ArrowComponent Name="ArrowComponent0" Archetype="/Script/Engine.ArrowComponent'/Script/Engine.Default__DirectionalLight:ArrowComponent0'" ExportPath="/Script/Engine.ArrowComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.DirectionalLight_0.ArrowComponent0'"
+         End Object
+         Begin Object Name="LightComponent0" ExportPath="/Script/Engine.DirectionalLightComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.DirectionalLight_0.LightComponent0'"
+            bEnableLightShaftOcclusion=True
+            DynamicShadowDistanceMovableLight=20000.000000
+            DistanceFieldShadowDistance=30000.000000
+            LightSourceAngle=0.735700
+            bUseTemperature=True
+            LightFunctionScale=(X=4235.453613,Y=4235.453613,Z=4235.453613)
+            LightFunctionFadeDistance=77466.187500
+            DisabledBrightness=0.696000
+            bUseRayTracedDistanceFieldShadows=False
+            Intensity=6.000000
+            RelativeRotation=(Pitch=-4.000000,Yaw=150.000000,Roll=-0.000000)
+            RelativeScale3D=(X=1.000000,Y=1.000000,Z=1.000000)
+            Mobility=Movable
+         End Object
+         Begin Object Name="ArrowComponent0" ExportPath="/Script/Engine.ArrowComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.DirectionalLight_0.ArrowComponent0'"
+            ArrowColor=(B=255,G=255,R=255,A=255)
+            AttachParent="LightComponent0"
+         End Object
+         ArrowComponent="ArrowComponent0"
+         DirectionalLightComponent="LightComponent0"
+         LightComponent="LightComponent0"
+         SpawnCollisionHandlingMethod=AlwaysSpawn
+         RootComponent="LightComponent0"
+         ActorLabel="DirectionalLight"
+         FolderPath="Lighting"
+      End Actor
+      Begin Actor Class=/Script/Engine.SkyAtmosphere Name=SkyAtmosphere_0 Archetype="/Script/Engine.SkyAtmosphere'/Script/Engine.Default__SkyAtmosphere'" ExportPath="/Script/Engine.SkyAtmosphere'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyAtmosphere_0'"
+         Begin Object Class=/Script/Engine.BillboardComponent Name="Sprite" Archetype="/Script/Engine.BillboardComponent'/Script/Engine.Default__SkyAtmosphere:Sprite'" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyAtmosphere_0.Sprite'"
+         End Object
+         Begin Object Class=/Script/Engine.SkyAtmosphereComponent Name="SkyAtmosphereComponent" Archetype="/Script/Engine.SkyAtmosphereComponent'/Script/Engine.Default__SkyAtmosphere:SkyAtmosphereComponent'" ExportPath="/Script/Engine.SkyAtmosphereComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyAtmosphere_0.SkyAtmosphereComponent'"
+         End Object
+         Begin Object Class=/Script/Engine.ArrowComponent Name="ArrowComponent" Archetype="/Script/Engine.ArrowComponent'/Script/Engine.Default__SkyAtmosphere:ArrowComponent'" ExportPath="/Script/Engine.ArrowComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyAtmosphere_0.ArrowComponent'"
+         End Object
+         Begin Object Name="Sprite" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyAtmosphere_0.Sprite'"
+            AttachParent="SkyAtmosphereComponent"
+         End Object
+         Begin Object Name="SkyAtmosphereComponent" ExportPath="/Script/Engine.SkyAtmosphereComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyAtmosphere_0.SkyAtmosphereComponent'"
+            TransformMode=PlanetTopAtComponentTransform
+            bStaticLightingBuiltGUID=D2EBDB0D4E606C1F777D6DAEF9046F9D
+            RelativeLocation=(X=0.000000,Y=0.000000,Z=-6000.000000)
+         End Object
+         Begin Object Name="ArrowComponent" ExportPath="/Script/Engine.ArrowComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyAtmosphere_0.ArrowComponent'"
+            AttachParent="SkyAtmosphereComponent"
+         End Object
+         SkyAtmosphereComponent="SkyAtmosphereComponent"
+         ArrowComponent="ArrowComponent"
+         SpriteComponent="Sprite"
+         RootComponent="SkyAtmosphereComponent"
+         ActorLabel="SkyAtmosphere"
+         FolderPath="Lighting"
+      End Actor
+      Begin Actor Class=/Script/Engine.SkyLight Name=SkyLight_0 Archetype="/Script/Engine.SkyLight'/Script/Engine.Default__SkyLight'" ExportPath="/Script/Engine.SkyLight'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyLight_0'"
+         Begin Object Class=/Script/Engine.BillboardComponent Name="Sprite" Archetype="/Script/Engine.BillboardComponent'/Script/Engine.Default__SkyLight:Sprite'" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyLight_0.Sprite'"
+         End Object
+         Begin Object Class=/Script/Engine.SkyLightComponent Name="SkyLightComponent0" Archetype="/Script/Engine.SkyLightComponent'/Script/Engine.Default__SkyLight:SkyLightComponent0'" ExportPath="/Script/Engine.SkyLightComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyLight_0.SkyLightComponent0'"
+         End Object
+         Begin Object Name="Sprite" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyLight_0.Sprite'"
+         End Object
+         Begin Object Name="SkyLightComponent0" ExportPath="/Script/Engine.SkyLightComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.SkyLight_0.SkyLightComponent0'"
+            bRealTimeCapture=True
+            bLowerHemisphereIsBlack=False
+            RelativeLocation=(X=0.000000,Y=0.000000,Z=600.000000)
+            Mobility=Movable
+         End Object
+         LightComponent="SkyLightComponent0"
+         SpriteComponent="Sprite"
+         RootComponent="SkyLightComponent0"
+         ActorLabel="SkyLight"
+         FolderPath="Lighting"
+      End Actor
+      Begin Actor Class=/Script/Engine.ExponentialHeightFog Name=ExponentialHeightFog_0 Archetype="/Script/Engine.ExponentialHeightFog'/Script/Engine.Default__ExponentialHeightFog'" ExportPath="/Script/Engine.ExponentialHeightFog'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.ExponentialHeightFog_0'"
+         Begin Object Class=/Script/Engine.BillboardComponent Name="Sprite" Archetype="/Script/Engine.BillboardComponent'/Script/Engine.Default__ExponentialHeightFog:Sprite'" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.ExponentialHeightFog_0.Sprite'"
+         End Object
+         Begin Object Class=/Script/Engine.ExponentialHeightFogComponent Name="HeightFogComponent0" Archetype="/Script/Engine.ExponentialHeightFogComponent'/Script/Engine.Default__ExponentialHeightFog:HeightFogComponent0'" ExportPath="/Script/Engine.ExponentialHeightFogComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.ExponentialHeightFog_0.HeightFogComponent0'"
+         End Object
+         Begin Object Name="Sprite" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.ExponentialHeightFog_0.Sprite'"
+            AttachParent="HeightFogComponent0"
+         End Object
+         Begin Object Name="HeightFogComponent0" ExportPath="/Script/Engine.ExponentialHeightFogComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.ExponentialHeightFog_0.HeightFogComponent0'"
+            FogDensity=0.043600
+            RelativeLocation=(X=-5600.000000,Y=-50.000000,Z=-6850.000000)
+         End Object
+         Component="HeightFogComponent0"
+         SpriteComponent="Sprite"
+         RootComponent="HeightFogComponent0"
+         ActorLabel="ExponentialHeightFog"
+         FolderPath="Lighting"
+      End Actor
+      Begin Actor Class=/Script/Engine.VolumetricCloud Name=VolumetricCloud_0 Archetype="/Script/Engine.VolumetricCloud'/Script/Engine.Default__VolumetricCloud'" ExportPath="/Script/Engine.VolumetricCloud'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.VolumetricCloud_0'"
+         Begin Object Class=/Script/Engine.BillboardComponent Name="Sprite" Archetype="/Script/Engine.BillboardComponent'/Script/Engine.Default__VolumetricCloud:Sprite'" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.VolumetricCloud_0.Sprite'"
+         End Object
+         Begin Object Class=/Script/Engine.VolumetricCloudComponent Name="VolumetricCloudComponent" Archetype="/Script/Engine.VolumetricCloudComponent'/Script/Engine.Default__VolumetricCloud:VolumetricCloudComponent'" ExportPath="/Script/Engine.VolumetricCloudComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.VolumetricCloud_0.VolumetricCloudComponent'"
+         End Object
+         Begin Object Name="Sprite" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.VolumetricCloud_0.Sprite'"
+            AttachParent="VolumetricCloudComponent"
+         End Object
+         Begin Object Name="VolumetricCloudComponent" ExportPath="/Script/Engine.VolumetricCloudComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.VolumetricCloud_0.VolumetricCloudComponent'"
+            TracingStartMaxDistance=200.000000
+            TracingMaxDistanceMode=DistanceFromPointOfView
+            TracingMaxDistance=200.000000
+            MaterialLifetimePtr="/Script/Engine.MaterialInstanceConstant'/Engine/EngineSky/VolumetricClouds/m_SimpleVolumetricCloud_Inst.m_SimpleVolumetricCloud_Inst'"
+            RelativeLocation=(X=0.000000,Y=0.000000,Z=700.000000)
+         End Object
+         VolumetricCloudComponent="VolumetricCloudComponent"
+         SpriteComponent="Sprite"
+         RootComponent="VolumetricCloudComponent"
+         ActorLabel="VolumetricCloud"
+         FolderPath="Lighting"
+      End Actor
+      Begin Actor Class=/Script/Engine.PlayerStart Name=PlayerStart_0 Archetype="/Script/Engine.PlayerStart'/Script/Engine.Default__PlayerStart'" ExportPath="/Script/Engine.PlayerStart'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0'"
+         Begin Object Class=/Script/Engine.CapsuleComponent Name="CollisionCapsule" Archetype="/Script/Engine.CapsuleComponent'/Script/Engine.Default__PlayerStart:CollisionCapsule'" ExportPath="/Script/Engine.CapsuleComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.CollisionCapsule'"
+         End Object
+         Begin Object Class=/Script/Engine.BillboardComponent Name="Sprite" Archetype="/Script/Engine.BillboardComponent'/Script/Engine.Default__PlayerStart:Sprite'" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.Sprite'"
+         End Object
+         Begin Object Class=/Script/Engine.BillboardComponent Name="Sprite2" Archetype="/Script/Engine.BillboardComponent'/Script/Engine.Default__PlayerStart:Sprite2'" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.Sprite2'"
+         End Object
+         Begin Object Class=/Script/Engine.ArrowComponent Name="Arrow" Archetype="/Script/Engine.ArrowComponent'/Script/Engine.Default__PlayerStart:Arrow'" ExportPath="/Script/Engine.ArrowComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.Arrow'"
+         End Object
+         Begin Object Name="CollisionCapsule" ExportPath="/Script/Engine.CapsuleComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.CollisionCapsule'"
+            AreaClass="/Script/CoreUObject.Class'/Script/NavigationSystem.NavArea_Obstacle'"
+            BodyInstance=(bInterpolateWhenSubStepping=False)
+            RelativeLocation=(X=0.000000,Y=0.000000,Z=92.000000)
+         End Object
+         Begin Object Name="Sprite" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.Sprite'"
+            AttachParent="CollisionCapsule"
+         End Object
+         Begin Object Name="Sprite2" ExportPath="/Script/Engine.BillboardComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.Sprite2'"
+            AttachParent="CollisionCapsule"
+         End Object
+         Begin Object Name="Arrow" ExportPath="/Script/Engine.ArrowComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.PlayerStart_0.Arrow'"
+            AttachParent="CollisionCapsule"
+         End Object
+         ArrowComponent="Arrow"
+         CapsuleComponent="CollisionCapsule"
+         GoodSprite="Sprite"
+         BadSprite="Sprite2"
+         RootComponent="CollisionCapsule"
+         ActorLabel="PlayerStart"
+      End Actor
+      Begin Actor Class=/Script/Engine.StaticMeshActor Name=StaticMeshActor_0 Archetype="/Script/Engine.StaticMeshActor'/Script/Engine.Default__StaticMeshActor'" ExportPath="/Script/Engine.StaticMeshActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_0'"
+         Begin Object Class=/Script/Engine.StaticMeshComponent Name="StaticMeshComponent0" Archetype="/Script/Engine.StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_0.StaticMeshComponent0'"
+         End Object
+         Begin Object Name="StaticMeshComponent0" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_0.StaticMeshComponent0'"
+            StaticMesh="/Script/Engine.StaticMesh'/Engine/EngineSky/SM_SkySphere.SM_SkySphere'"
+            bUseDefaultCollision=False
+            StaticMeshDerivedDataKey="STATICMESH_A8F10585DE67499EA913B652DC4A955E_228332BAE0224DD294E232B87D83948FQuadricMeshReduction_V2$2e0_37DD3B6C$2dD4A4$2d41C0$2dBCF6$2d32AE2029E647_CONSTRAINED_0000000000000080000000000000803F000000000000803F0000803FE24CA9997B8D383A984429295275520A00000000010000000100000000000000010000000100000000000000000000000100000000000000400000000000000001000000000000000000F03F000000000000F03F000000000000F03F0000803F00000000050000004E6F6E65000C00000030000000803F0000803F000000000000004100000000000034420303030000000000000000_LS0MNSzzzzzzzz0_SWLZ"
+            OverrideMaterials(0)="/Script/Engine.Material'/Engine/EngineSky/M_SimpleSkyDome.M_SimpleSkyDome'"
+            bEnableAutoLODGeneration=False
+            bVisibleInRayTracing=False
+            BodyInstance=(CollisionEnabled=NoCollision,bInterpolateWhenSubStepping=False,CollisionProfileName="NoCollision",CollisionResponses=(ResponseArray=((Channel="Visibility",Response=ECR_Ignore),(Channel="Camera",Response=ECR_Ignore))))
+            RelativeScale3D=(X=400.000000,Y=400.000000,Z=400.000000)
+            CustomProperties 
+         End Object
+         StaticMeshComponent="StaticMeshComponent0"
+         bRelevantForLevelBounds=False
+         bEnableAutoLODGeneration=False
+         RootComponent="StaticMeshComponent0"
+         ActorLabel="SM_SkySphere"
+         FolderPath="Lighting"
+         bIsSpatiallyLoaded=False
+      End Actor
+      Begin Actor Class=/Script/Engine.StaticMeshActor Name=Floor_0 Archetype="/Script/Engine.StaticMeshActor'/Script/Engine.Default__StaticMeshActor'" ExportPath="/Script/Engine.StaticMeshActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.Floor_0'"
+         Begin Object Class=/Script/Engine.StaticMeshComponent Name="StaticMeshComponent0" Archetype="/Script/Engine.StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.Floor_0.StaticMeshComponent0'"
+         End Object
+         Begin Object Name="StaticMeshComponent0" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.Floor_0.StaticMeshComponent0'"
+            StaticMesh="/Script/Engine.StaticMesh'/Engine/MapTemplates/SM_Template_Map_Floor.SM_Template_Map_Floor'"
+            bUseDefaultCollision=False
+            StaticMeshDerivedDataKey="STATICMESH_34081786561B425A9523C94540EA599D_359a029847e84730ba516769d0f19427Simplygon_5_5_2156_18f808c3cf724e5a994f57de5c83cc4b_680318F3495BDBDEBE4C11B39CD497CE000000000100000001000000000000000000803F0000803F00000000000000000000344203030300000000"
+            MaterialStreamingRelativeBoxes(0)=4294901760
+            OverrideMaterials(0)="/Script/Engine.MaterialInstanceConstant'/Engine/OpenWorldTemplate/LandscapeMaterial/MI_ProcGrid.MI_ProcGrid'"
+            BodyInstance=(ObjectType=ECC_WorldDynamic,CollisionProfileName="BlockAllDynamic",MaxAngularVelocity=3599.999756,bAutoWeld=False)
+            RelativeLocation=(X=0.000000,Y=0.000000,Z=-0.500000)
+            RelativeScale3D=(X=8.000000,Y=8.000000,Z=8.000000)
+            Mobility=Movable
+         End Object
+         StaticMeshComponent="StaticMeshComponent0"
+         RootComponent="StaticMeshComponent0"
+         ActorLabel="Floor"
+         bIsSpatiallyLoaded=False
+      End Actor
+      Begin Actor Class=/Script/Engine.CameraActor Name=CameraActor_0 Archetype="/Script/Engine.CameraActor'/Script/Engine.Default__CameraActor'" ExportPath="/Script/Engine.CameraActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.CameraActor_0'"
+         Begin Object Class=/Script/Engine.SceneComponent Name="SceneComponent" Archetype="/Script/Engine.SceneComponent'/Script/Engine.Default__CameraActor:SceneComponent'" ExportPath="/Script/Engine.SceneComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.CameraActor_0.SceneComponent'"
+         End Object
+         Begin Object Class=/Script/Engine.CameraComponent Name="CameraComponent" Archetype="/Script/Engine.CameraComponent'/Script/Engine.Default__CameraActor:CameraComponent'" ExportPath="/Script/Engine.CameraComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.CameraActor_0.CameraComponent'"
+         End Object
+         Begin Object Name="SceneComponent" ExportPath="/Script/Engine.SceneComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.CameraActor_0.SceneComponent'"
+            RelativeLocation=(X=-750.000000,Y=0.000000,Z=230.000000)
+            RelativeRotation=(Pitch=-7.594643,Yaw=0.000000,Roll=-0.000000)
+         End Object
+         Begin Object Name="CameraComponent" ExportPath="/Script/Engine.CameraComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.CameraActor_0.CameraComponent'"
+            AttachParent="SceneComponent"
+         End Object
+         AutoActivateForPlayer=Player0
+         CameraComponent="CameraComponent"
+         SceneComponent="SceneComponent"
+         RootComponent="SceneComponent"
+         ActorLabel="SampleCamera"
+      End Actor
+      Begin Actor Class=/Script/Engine.StaticMeshActor Name=StaticMeshActor_1 Archetype="/Script/Engine.StaticMeshActor'/Script/Engine.Default__StaticMeshActor'" ExportPath="/Script/Engine.StaticMeshActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_1'"
+         Begin Object Class=/Script/Engine.StaticMeshComponent Name="StaticMeshComponent0" Archetype="/Script/Engine.StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_1.StaticMeshComponent0'"
+         End Object
+         Begin Object Name="StaticMeshComponent0" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_1.StaticMeshComponent0'"
+            StaticMesh="/Script/Engine.StaticMesh'/Engine/BasicShapes/Cylinder.Cylinder'"
+            StaticMeshImportVersion=1
+            StaticMeshDerivedDataKey="STATICMESH_B305FAC46458078D3E17295180E212D3_228332BAE0224DD294E232B87D83948FQuadricMeshReduction_V2$2e1_B17DEE07$2d8E78$2d0119$2d69D6$2d481510F8F497_CONSTRAINED_METIS_5_2_10_2EDB01A82F59A3BFE9C551E882AF749E700000000010000000100000000000000010000000100000000000000000000000100000000000000400000000000000001000000000000000000F03F000000000000F03F000000000000F03F0000004000000000050000004E6F6E65000C00000030000000803FFFFFFFFF0000803FFFFFFFFF000000000000004100000000000034420303030000000000000000_RT00_0_IB0"
+            OverrideMaterials(0)="/Script/Engine.Material'/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial'"
+            RelativeLocation=(X=300.000000,Y=-700.000000,Z=150.000000)
+            RelativeScale3D=(X=0.600000,Y=0.600000,Z=3.000000)
+         End Object
+         StaticMeshComponent="StaticMeshComponent0"
+         RootComponent="StaticMeshComponent0"
+         ActorLabel="Pillar1"
+      End Actor
+      Begin Actor Class=/Script/Engine.StaticMeshActor Name=StaticMeshActor_2 Archetype="/Script/Engine.StaticMeshActor'/Script/Engine.Default__StaticMeshActor'" ExportPath="/Script/Engine.StaticMeshActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_2'"
+         Begin Object Class=/Script/Engine.StaticMeshComponent Name="StaticMeshComponent0" Archetype="/Script/Engine.StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_2.StaticMeshComponent0'"
+         End Object
+         Begin Object Name="StaticMeshComponent0" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_2.StaticMeshComponent0'"
+            StaticMesh="/Script/Engine.StaticMesh'/Engine/BasicShapes/Cylinder.Cylinder'"
+            StaticMeshImportVersion=1
+            StaticMeshDerivedDataKey="STATICMESH_B305FAC46458078D3E17295180E212D3_228332BAE0224DD294E232B87D83948FQuadricMeshReduction_V2$2e1_B17DEE07$2d8E78$2d0119$2d69D6$2d481510F8F497_CONSTRAINED_METIS_5_2_10_2EDB01A82F59A3BFE9C551E882AF749E700000000010000000100000000000000010000000100000000000000000000000100000000000000400000000000000001000000000000000000F03F000000000000F03F000000000000F03F0000004000000000050000004E6F6E65000C00000030000000803FFFFFFFFF0000803FFFFFFFFF000000000000004100000000000034420303030000000000000000_RT00_0_IB0"
+            OverrideMaterials(0)="/Script/Engine.Material'/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial'"
+            RelativeLocation=(X=650.000000,Y=-560.000000,Z=150.000000)
+            RelativeScale3D=(X=0.600000,Y=0.600000,Z=3.000000)
+         End Object
+         StaticMeshComponent="StaticMeshComponent0"
+         RootComponent="StaticMeshComponent0"
+         ActorLabel="Pillar2"
+      End Actor
+      Begin Actor Class=/Script/Engine.StaticMeshActor Name=StaticMeshActor_3 Archetype="/Script/Engine.StaticMeshActor'/Script/Engine.Default__StaticMeshActor'" ExportPath="/Script/Engine.StaticMeshActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_3'"
+         Begin Object Class=/Script/Engine.StaticMeshComponent Name="StaticMeshComponent0" Archetype="/Script/Engine.StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_3.StaticMeshComponent0'"
+         End Object
+         Begin Object Name="StaticMeshComponent0" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_3.StaticMeshComponent0'"
+            StaticMesh="/Script/Engine.StaticMesh'/Engine/BasicShapes/Cylinder.Cylinder'"
+            StaticMeshImportVersion=1
+            StaticMeshDerivedDataKey="STATICMESH_B305FAC46458078D3E17295180E212D3_228332BAE0224DD294E232B87D83948FQuadricMeshReduction_V2$2e1_B17DEE07$2d8E78$2d0119$2d69D6$2d481510F8F497_CONSTRAINED_METIS_5_2_10_2EDB01A82F59A3BFE9C551E882AF749E700000000010000000100000000000000010000000100000000000000000000000100000000000000400000000000000001000000000000000000F03F000000000000F03F000000000000F03F0000004000000000050000004E6F6E65000C00000030000000803FFFFFFFFF0000803FFFFFFFFF000000000000004100000000000034420303030000000000000000_RT00_0_IB0"
+            OverrideMaterials(0)="/Script/Engine.Material'/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial'"
+            RelativeLocation=(X=300.000000,Y=700.000000,Z=150.000000)
+            RelativeScale3D=(X=0.600000,Y=0.600000,Z=3.000000)
+         End Object
+         StaticMeshComponent="StaticMeshComponent0"
+         RootComponent="StaticMeshComponent0"
+         ActorLabel="Pillar3"
+      End Actor
+      Begin Actor Class=/Script/Engine.StaticMeshActor Name=StaticMeshActor_4 Archetype="/Script/Engine.StaticMeshActor'/Script/Engine.Default__StaticMeshActor'" ExportPath="/Script/Engine.StaticMeshActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_4'"
+         Begin Object Class=/Script/Engine.StaticMeshComponent Name="StaticMeshComponent0" Archetype="/Script/Engine.StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_4.StaticMeshComponent0'"
+         End Object
+         Begin Object Name="StaticMeshComponent0" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_4.StaticMeshComponent0'"
+            StaticMesh="/Script/Engine.StaticMesh'/Engine/BasicShapes/Cylinder.Cylinder'"
+            StaticMeshImportVersion=1
+            StaticMeshDerivedDataKey="STATICMESH_B305FAC46458078D3E17295180E212D3_228332BAE0224DD294E232B87D83948FQuadricMeshReduction_V2$2e1_B17DEE07$2d8E78$2d0119$2d69D6$2d481510F8F497_CONSTRAINED_METIS_5_2_10_2EDB01A82F59A3BFE9C551E882AF749E700000000010000000100000000000000010000000100000000000000000000000100000000000000400000000000000001000000000000000000F03F000000000000F03F000000000000F03F0000004000000000050000004E6F6E65000C00000030000000803FFFFFFFFF0000803FFFFFFFFF000000000000004100000000000034420303030000000000000000_RT00_0_IB0"
+            OverrideMaterials(0)="/Script/Engine.Material'/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial'"
+            RelativeLocation=(X=650.000000,Y=560.000000,Z=150.000000)
+            RelativeScale3D=(X=0.600000,Y=0.600000,Z=3.000000)
+         End Object
+         StaticMeshComponent="StaticMeshComponent0"
+         RootComponent="StaticMeshComponent0"
+         ActorLabel="Pillar4"
+      End Actor
+      Begin Actor Class=/Script/Engine.StaticMeshActor Name=StaticMeshActor_5 Archetype="/Script/Engine.StaticMeshActor'/Script/Engine.Default__StaticMeshActor'" ExportPath="/Script/Engine.StaticMeshActor'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_5'"
+         Begin Object Class=/Script/Engine.StaticMeshComponent Name="StaticMeshComponent0" Archetype="/Script/Engine.StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_5.StaticMeshComponent0'"
+         End Object
+         Begin Object Name="StaticMeshComponent0" ExportPath="/Script/Engine.StaticMeshComponent'/Game/Sample/Maps/L_LFXSample_Gallery.L_LFXSample_Gallery:PersistentLevel.StaticMeshActor_5.StaticMeshComponent0'"
+            StaticMesh="/Script/Engine.StaticMesh'/Engine/BasicShapes/Sphere.Sphere'"
+            StaticMeshDerivedDataKey="STATICMESH_B305FAC46458078D3E17295180E212D3_228332BAE0224DD294E232B87D83948FQuadricMeshReduction_V2$2e1_B17DEE07$2d8E78$2d0119$2d69D6$2d481510F8F497_CONSTRAINED_METIS_5_2_10_FC443783DBDF33DDB6FA7FC8099ACF0100000000010000000100000000000000010000000100000000000000000000000100000000000000400000000000000001000000000000000000F03F000000000000F03F000000000000F03F0000004000000000050000004E6F6E65000C00000030000000803FFFFFFFFF0000803FFFFFFFFF000000000000004100000000000034420303030000000000000000_RT00_0_IB0"
+            OverrideMaterials(0)="/Script/Engine.Material'/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial'"
+            RelativeLocation=(X=900.000000,Y=0.000000,Z=60.000000)
+            RelativeScale3D=(X=1.200000,Y=1.200000,Z=1.200000)
+         End Object
+         StaticMeshComponent="StaticMeshComponent0"
+         RootComponent="StaticMeshComponent0"
+         ActorLabel="Orb"
+      End Actor
+   End Level
+Begin Surface
+End Surface
+End Map
