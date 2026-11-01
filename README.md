@@ -2,7 +2,7 @@
 
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.5%20--%205.8-black?style=flat&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Win64-blue?style=flat&logo=windows&logoColor=white)](#requirements)
+[![Platform](https://img.shields.io/badge/Platform-Win64%20%7C%20Linux-blue?style=flat)](#requirements)
 
 > 日本語版はこちら → [README.ja.md](README.ja.md)
 
@@ -23,7 +23,7 @@ LoadingFX is a loading indicator plugin for Unreal Engine 5: a library of proced
 ## Requirements
 
 - Unreal Engine 5.5 – 5.8
-- Windows (Win64)
+- Windows (Win64), tested. Linux compiles (checked with the UE 5.5 and 5.8 cross-compile toolchains) but has not been run yet.
 
 ## Installation
 
@@ -236,7 +236,7 @@ The guide is in English only; agents read it fine whatever language you prompt i
 - **No progress for map travel.** The engine does not report any, so the progress bar is for asset loads only.
 - The loading screen behind the icon is **black** during a block (MoviePlayer's background); the last game frame is not kept.
 - The loading icon uses **one project-wide material**; there is no per-request override.
-- **Win64** only in this version.
+- **Win64 and Linux** are the only platforms in the plugin's `PlatformAllowList`, and Linux is compile-checked but not yet run. On any other platform the modules are not built, and Blueprints that use the plugin fail to cook for it. To try another platform, add it to the `PlatformAllowList` of each module in `LoadingFX.uplugin`; the code has no platform-specific parts.
 
 ## Repository layout
 
