@@ -54,16 +54,26 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogLoadingFXProto, Log, All);
 
-/** The frames LFXProto.IconTravel cold saw: when each was presented, and how many pixels of the icon's corner were lit. */
+/** The frames LFXProto.IconTravel cold saw: when each was presented, the icon's pixels in its corner, and the background. */
 struct FLoadingFXProtoIconFrameProbe
 {
-	/** The icon's default place: the bottom right corner, 32 px padding and 64 px size before DPI scaling. */
+	/**
+	 * The icon's default place: the bottom right corner, 32 px padding and 64 px size before DPI scaling. Up to a DPI
+	 * scale of 1.33 (1440 px high) the corner's top left pixel is background, so it gives the background color.
+	 */
 	static constexpr int32 CornerSize = 128;
-	/** Fewer lit pixels than this count as a frame without the icon (the background is black on both maps). */
-	static constexpr int32 MinLitPixels = 16;
+	/** Fewer pixels than this that differ from the background count as a frame without the icon. */
+	static constexpr int32 MinIconPixels = 16;
+
+	struct FFrame
+	{
+		double Seconds = 0.0;
+		int32 IconPixels = 0;
+		FColor Background;
+	};
 
 	FCriticalSection Lock;
-	TArray<TPair<double, int32>> Frames;
+	TArray<FFrame> Frames;
 
 	/** Render thread, right before present. The synchronous readback stalls the GPU, which a test can afford. */
 	void Sample(FRHITexture* BackBuffer)
@@ -76,10 +86,14 @@ struct FLoadingFXProtoIconFrameProbe
 		const int32 Corner = FMath::Min3(CornerSize, Size.X, Size.Y);
 		TArray<FColor> Pixels;
 		FRHICommandListImmediate::Get().ReadSurfaceData(BackBuffer, FIntRect(Size.X - Corner, Size.Y - Corner, Size.X, Size.Y), Pixels, FReadSurfaceDataFlags());
-		const int32 LitPixels = Algo::CountIf(Pixels, [](const FColor& Pixel) { return FMath::Max3(Pixel.R, Pixel.G, Pixel.B) > 64; });
+		const FColor Background = Pixels.Num() > 0 ? Pixels[0] : FColor::Black;
+		const int32 IconPixels = Algo::CountIf(Pixels, [Background](const FColor& Pixel)
+		{
+			return FMath::Max3(FMath::Abs(Pixel.R - Background.R), FMath::Abs(Pixel.G - Background.G), FMath::Abs(Pixel.B - Background.B)) > 64;
+		});
 
 		FScopeLock ScopeLock(&Lock);
-		Frames.Emplace(FPlatformTime::Seconds(), LitPixels);
+		Frames.Add({ FPlatformTime::Seconds(), IconPixels, Background });
 	}
 };
 
@@ -319,13 +333,13 @@ namespace LoadingFXProto
 
 	static FAutoConsoleCommandWithWorldAndArgs IconTravelCommand(
 		TEXT("LFXProto.IconTravel"),
-		TEXT("Verification prototype: exercise ULoadingFXIconSubsystem (acquire, owner auto-release, OpenLevel under the icon, release). 'cold' acquires in the same frame as OpenLevel. Args: [Map=/Engine/Maps/Entry] [ExtraSeconds=4] [cold] [quit]"),
+		TEXT("Verification prototype: exercise ULoadingFXIconSubsystem (acquire, owner auto-release, OpenLevel under the icon, release). 'cold' acquires in the same frame as OpenLevel; 'bg' sets a test LoadingScreenBackgroundColor for the run. Args: [Map=/Engine/Maps/Entry] [ExtraSeconds=4] [cold] [bg] [quit]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
 			{
 				Subsystem->RunIconTravelTest(Args.IsValidIndex(0) ? Args[0] : FString(TravelTestMap), ParseFloatArg(Args, 1, 4.0f),
-					Args.Contains(TEXT("cold")), Args.Contains(TEXT("quit")));
+					Args.Contains(TEXT("cold")), Args.Contains(TEXT("bg")), Args.Contains(TEXT("quit")));
 			}
 		}));
 
@@ -635,7 +649,7 @@ void ULoadingFXProtoSubsystem::RunGallery(bool bTakeScreenshots, bool bQuitWhenD
 	StartSequence();
 }
 
-void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bQuitWhenDone)
+void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bTestBackground, bool bQuitWhenDone)
 {
 	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
 	if (!IconSubsystem)
@@ -643,6 +657,16 @@ void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float E
 		UE_LOG(LogLoadingFXProto, Warning, TEXT("[IconTravel] ULoadingFXIconSubsystem not found"));
 		return;
 	}
+
+	// Read when MoviePlayer is set up, so setting it now covers this run. Round sRGB values make the readback easy to read.
+	const FLinearColor SavedBackgroundColor = GetDefault<ULoadingFXSettings>()->LoadingScreenBackgroundColor;
+	if (bTestBackground)
+	{
+		GetMutableDefault<ULoadingFXSettings>()->LoadingScreenBackgroundColor = FLinearColor::FromSRGBColor(FColor(40, 70, 140));
+	}
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] LoadingScreenBackgroundColor %s (sRGB %s)%s"),
+		*GetDefault<ULoadingFXSettings>()->LoadingScreenBackgroundColor.ToString(),
+		*GetDefault<ULoadingFXSettings>()->LoadingScreenBackgroundColor.ToFColor(true).ToString(), bTestBackground ? TEXT(", set for this run") : TEXT(""));
 
 	auto RequestShot = [](const TCHAR* Name)
 	{
@@ -726,8 +750,12 @@ void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float E
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 5/5 release=%d, release again=%d, visible=%d (expect 1, 0, 0)"),
 			bReleased ? 1 : 0, bReleasedAgain ? 1 : 0, IconSubsystem->IsIconVisible() ? 1 : 0);
 	} });
-	SequenceSteps.Add({ 1.0f, [bQuitWhenDone]()
+	SequenceSteps.Add({ 1.0f, [bQuitWhenDone, bTestBackground, SavedBackgroundColor]()
 	{
+		if (bTestBackground)
+		{
+			GetMutableDefault<ULoadingFXSettings>()->LoadingScreenBackgroundColor = SavedBackgroundColor;
+		}
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] finished"));
 		if (bQuitWhenDone)
 		{
@@ -2046,30 +2074,50 @@ void ULoadingFXProtoSubsystem::ReportIconFrameProbe() const
 	// last of them a little later, so the first 0.1 s of MoviePlayer is left out too.
 	const double FirstFrameSeconds = IconTravelMovieStartSeconds + 0.1;
 	const double ShowAtSeconds = IconTravelAcquireSeconds + GetDefault<ULoadingFXSettings>()->IconShowDelay;
+	const FColor ExpectedBackground = GetDefault<ULoadingFXSettings>()->LoadingScreenBackgroundColor.ToFColor(true);
 	int32 Frames[3] = {};
 	int32 IconFrames[3] = {};
+	int32 BackgroundFrames = 0;
 	double FirstIconOnLoadingScreen = -1.0;
+	int32 LoadingScreenFrames = 0;
+	FColor FirstBackground;
+	FColor LastBackground;
 	{
 		FScopeLock ScopeLock(&IconFrameProbe->Lock);
-		for (const TPair<double, int32>& Frame : IconFrameProbe->Frames)
+		for (const FLoadingFXProtoIconFrameProbe::FFrame& Frame : IconFrameProbe->Frames)
 		{
-			if (Frame.Key < FirstFrameSeconds)
+			if (Frame.Seconds < FirstFrameSeconds)
 			{
 				continue;
 			}
-			const int32 Phase = Frame.Key < ShowAtSeconds ? 0 : (Frame.Key < IconTravelLoadEndSeconds ? 1 : 2);
-			const bool bIcon = Frame.Value >= FLoadingFXProtoIconFrameProbe::MinLitPixels;
+			const int32 Phase = Frame.Seconds < ShowAtSeconds ? 0 : (Frame.Seconds < IconTravelLoadEndSeconds ? 1 : 2);
+			const bool bIcon = Frame.IconPixels >= FLoadingFXProtoIconFrameProbe::MinIconPixels;
 			++Frames[Phase];
 			IconFrames[Phase] += bIcon ? 1 : 0;
 			if (Phase == 1 && bIcon && FirstIconOnLoadingScreen < 0.0)
 			{
-				FirstIconOnLoadingScreen = Frame.Key - ShowAtSeconds;
+				FirstIconOnLoadingScreen = Frame.Seconds - ShowAtSeconds;
+			}
+			if (Phase < 2)
+			{
+				// Within a few steps of the sRGB value: Slate's gamma curve is not exactly the sRGB one.
+				const FColor& Pixel = Frame.Background;
+				const bool bBackground = FMath::Max3(FMath::Abs(Pixel.R - ExpectedBackground.R), FMath::Abs(Pixel.G - ExpectedBackground.G), FMath::Abs(Pixel.B - ExpectedBackground.B)) <= 4;
+				BackgroundFrames += bBackground ? 1 : 0;
+				FirstBackground = LoadingScreenFrames++ == 0 ? Pixel : FirstBackground;
+				LastBackground = Pixel;
 			}
 		}
 	}
 
 	UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] frames showing the icon (back buffer readback): loading screen within the show delay %d of %d (expect 0), loading screen after it %d of %d (expect all but a frame or two: the first came %.3fs after the delay ended), viewport after the load %d of %d (expect all)"),
 		IconFrames[0], Frames[0], IconFrames[1], Frames[1], FirstIconOnLoadingScreen, IconFrames[2], Frames[2]);
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] loading screen frames with the background %s: %d of %d (expect all); first %s, last %s"),
+		*ExpectedBackground.ToString(), BackgroundFrames, LoadingScreenFrames, *FirstBackground.ToString(), *LastBackground.ToString());
+	if (BackgroundFrames < LoadingScreenFrames)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[IconTravel] the loading screen background does not match LoadingScreenBackgroundColor"));
+	}
 	if (Frames[1] == 0)
 	{
 		UE_LOG(LogLoadingFXProto, Warning, TEXT("[IconTravel] no loading screen frame after the show delay: the simulated load must last longer than IconShowDelay"));

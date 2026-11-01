@@ -17,9 +17,12 @@
 #include "Materials/MaterialInterface.h"
 #include "Misc/CoreMisc.h"
 #include "MoviePlayer.h"
+#include "Styling/CoreStyle.h"
 #include "UObject/SoftObjectPath.h"
 #include "UObject/UObjectGlobals.h"
+#include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/SOverlay.h"
 
 #if !UE_BUILD_SHIPPING
 namespace LoadingFXIconConsole
@@ -572,6 +575,26 @@ TSharedRef<SWidget> ULoadingFXIconSubsystem::MakeIconWidget(double ShowAtSeconds
 		];
 }
 
+TSharedRef<SWidget> ULoadingFXIconSubsystem::MakeLoadingScreenWidget(double ShowAtSeconds)
+{
+	// MoviePlayer paints its root black and puts this widget over the whole screen, so a full-screen color here
+	// replaces the black. It stays outside the icon's show-delay visibility: the screen changes the moment MoviePlayer
+	// takes over, as the black did. Opaque, because nothing but that black is left underneath.
+	const FLinearColor BackgroundColor = GetDefault<ULoadingFXSettings>()->LoadingScreenBackgroundColor.CopyWithNewOpacity(1.0f);
+
+	return SNew(SOverlay)
+		+ SOverlay::Slot()
+		[
+			SNew(SImage)
+			.Image(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+			.ColorAndOpacity(BackgroundColor)
+		]
+		+ SOverlay::Slot()
+		[
+			MakeIconWidget(ShowAtSeconds)
+		];
+}
+
 void ULoadingFXIconSubsystem::ShowViewportIcon()
 {
 	if (ViewportIconRoot.IsValid())
@@ -649,7 +672,7 @@ bool ULoadingFXIconSubsystem::SetUpIconLoadingScreen(const FString& What)
 	// MoviePlayer needs its own widget instance: the viewport one keeps its parent. The attributes are cleared
 	// by MoviePlayer after every playback, so this runs again for the next load.
 	FLoadingScreenAttributes Attributes;
-	Attributes.WidgetLoadingScreen = MakeIconWidget(bShowPending ? PendingShowAtSeconds : 0.0);
+	Attributes.WidgetLoadingScreen = MakeLoadingScreenWidget(bShowPending ? PendingShowAtSeconds : 0.0);
 	Attributes.bAutoCompleteWhenLoadingCompletes = true;
 	Attributes.bMoviesAreSkippable = false;
 	Attributes.bWaitForManualStop = false;

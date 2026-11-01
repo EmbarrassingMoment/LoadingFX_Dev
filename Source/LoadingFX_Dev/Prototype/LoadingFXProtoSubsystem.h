@@ -27,10 +27,12 @@ class UMaterialInterface;
  *   LFXProto.RunAll [quit]        Run every case in order (e.g. -ExecCmds="LFXProto.RunAll quit").
  *   LFXProto.Gallery [shot] [quit]  Toggle the material contract gallery (non-square sizes, tint). 'shot' saves two
  *                                 screenshots to Saved/Screenshots/LFXProto_Gallery_*.png, 'quit' exits afterwards.
- *   LFXProto.IconTravel [Map] [Sec] [cold] [quit]  Exercise ULoadingFXIconSubsystem: acquire, owner auto-release, OpenLevel under the icon, release.
+ *   LFXProto.IconTravel [Map] [Sec] [cold] [bg] [quit]  Exercise ULoadingFXIconSubsystem: acquire, owner auto-release, OpenLevel under the icon, release.
  *                                 'cold' acquires in the same frame as OpenLevel instead, with the project's show delay, so the
  *                                 icon is first drawn on MoviePlayer's loading thread (issue #5), and logs how many frames
- *                                 showed it, read back from the back buffer (screenshots cannot see MoviePlayer frames).
+ *                                 showed it and the loading screen's background, read back from the back buffer (screenshots
+ *                                 cannot see MoviePlayer frames). 'bg' sets LoadingScreenBackgroundColor to sRGB (40, 70, 140)
+ *                                 for the run.
  *   LFXProto.UmgSpinner [shot] [quit]  Show a row of ULoadingFXSpinner UMG widgets (project default, tint, dynamic parameters, opacity, non-square).
  *   LFXProto.ProgressBar [shot] [quit]  Show ULoadingFXProgressBar UMG widgets: one driven by a real Load Assets Async of the
  *                                 prototype's material list (run it in a fresh process to see the steps), scripted increases
@@ -74,7 +76,7 @@ public:
 	void RunTravelTest(const FString& MapName, float ExtraLoadSeconds);
 	void RunAll(bool bQuitWhenDone);
 	void RunGallery(bool bTakeScreenshots, bool bQuitWhenDone);
-	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bQuitWhenDone);
+	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bTestBackground, bool bQuitWhenDone);
 	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunProgressBarTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone);
@@ -133,7 +135,8 @@ private:
 
 	/**
 	 * LFXProto.IconTravel cold: reads the icon's corner of the back buffer on every presented frame, MoviePlayer's
-	 * included (screenshots only see game frames), and logs in which phase of the travel the icon was drawn.
+	 * included (screenshots only see game frames), and logs in which phase of the travel the icon was drawn and
+	 * whether the loading screen's background matched LoadingScreenBackgroundColor.
 	 */
 	void StartIconFrameProbe();
 	void StopIconFrameProbe();

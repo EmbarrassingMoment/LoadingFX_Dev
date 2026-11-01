@@ -74,6 +74,15 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "LoadingFX|Loading Icon", AdvancedDisplay)
 	int32 IconZOrder = 1000;
 
+	/**
+	 * Color of the screen behind the icon while MoviePlayer draws it during a blocking load (map travel, a blocking
+	 * section). The screen turns this color as soon as MoviePlayer takes over, also within the show delay, and keeps
+	 * it until the load is over. Always opaque: the last game frame is not kept behind it. It does not apply to the
+	 * icon in the viewport, or to a loading screen set up by someone else.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "LoadingFX|Loading Screen", meta = (HideAlphaChannel))
+	FLinearColor LoadingScreenBackgroundColor = FLinearColor::Black;
+
 	//~ Begin UDeveloperSettings Interface
 	virtual FName GetCategoryName() const override;
 	//~ End UDeveloperSettings Interface
