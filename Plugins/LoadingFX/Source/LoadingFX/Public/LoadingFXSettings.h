@@ -27,7 +27,7 @@ public:
 	 * /LoadingFX/Materials. The effective value is added to every cook by FLoadingFXModule, so projects do
 	 * not need a DirectoriesToAlwaysCook entry for it.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "LoadingFX|Loading Icon")
+	UPROPERTY(Config, EditAnywhere, Category = "LoadingFX|Loading Icon", meta = (ForceShowPluginContent))
 	TSoftObjectPtr<UMaterialInterface> LoadingIconMaterial;
 
 	/** Size of the loading icon in Slate units (scaled with the viewport DPI). */
@@ -69,10 +69,11 @@ public:
 
 	/**
 	 * Z-order of the icon among viewport widgets. UMG's Add to Viewport uses its ZOrder + 10, so the default
-	 * draws above HUD widgets added with the usual small values.
+	 * draws above HUD widgets added with the usual small values, and above full-screen overlays at 10000 (such as
+	 * TransitionFX's widget-layer transitions), so the icon shows over a screen held covered while loading.
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "LoadingFX|Loading Icon", AdvancedDisplay)
-	int32 IconZOrder = 1000;
+	int32 IconZOrder = 10010;
 
 	/**
 	 * Color of the screen behind the icon while MoviePlayer draws it during a blocking load (map travel, a blocking

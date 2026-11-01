@@ -69,7 +69,7 @@ Icon->Release(Handle);
 | Icon Tint | 白 | マテリアルに乗算されます。アルファでフェードできます。 |
 | Icon Show Delay | 0.5 秒 | 最初の要求からアイコンが出るまでの時間。0 なら即座に出ます。 |
 | Icon Minimum Display Time | 1 秒 | 一度出たアイコンの最低表示時間。0 なら最後の解除で消えます。 |
-| Icon Z-Order | 1000 | ビューポートウィジェットの中での順序。通常の小さい値で追加した HUD より手前です。 |
+| Icon Z-Order | 10010 | ビューポートウィジェットの中での順序。通常の小さい値で追加した HUD や、10000 に置かれる全画面のオーバーレイ（TransitionFX のウィジェット層トランジションなど）より手前です。 |
 | Loading Screen Background Color | 黒 | ブロッキングロードを MoviePlayer で描いている間の、アイコンの背景色。常に不透明です。 |
 
 ## スピナーマテリアル

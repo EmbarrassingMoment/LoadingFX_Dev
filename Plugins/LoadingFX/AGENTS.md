@@ -117,7 +117,7 @@ IconPadding=(Left=32.000000,Top=32.000000,Right=32.000000,Bottom=32.000000)
 IconTint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000)  ; multiplied into the material (VertexColor); alpha fades it
 IconShowDelay=0.500000            ; seconds from the first request until the icon appears; 0 = at once
 IconMinimumDisplayTime=1.000000   ; seconds the icon stays once it appeared; 0 = hide at the last release
-IconZOrder=1000                   ; among viewport widgets (UMG Add to Viewport uses ZOrder + 10)
+IconZOrder=10010                  ; among viewport widgets (UMG Add to Viewport uses ZOrder + 10)
 LoadingScreenBackgroundColor=(R=0.000000,G=0.000000,B=0.000000,A=1.000000)  ; behind the icon on the MoviePlayer screen; linear, alpha ignored
 ```
 
@@ -253,7 +253,7 @@ Never depend on `LoadingFXBridge`; it has no API.
 
 ## Pitfalls
 
-- **Full-screen overlays above the icon.** The icon sits at `IconZOrder` 1000 among viewport widgets. Anything added at a higher Z-order covers it, for example TransitionFX's widget-layer presets (`WidgetZOrder` 10000): the icon is hidden under a held fade. Raise `IconZOrder` above the overlay (e.g. 10010).
+- **Full-screen overlays above the icon.** The icon sits at `IconZOrder` 10010 among viewport widgets, just above TransitionFX's widget-layer presets (`WidgetZOrder` 10000), so it shows over a held fade. Anything added at a higher Z-order covers it (a preset whose `WidgetZOrder` was raised, or another plugin's overlay): raise `IconZOrder` above that overlay.
 - **A short wait at startup in uncooked runs** (`-game`, Standalone Game): the engine compiles a material's shaders only when it is first drawn, which a blocked game thread cannot finish, so the icon subsystem compiles the icon material's shaders when it loads it and logs `Compiled the shaders of the loading icon material ... in N ms`. Expect a few tens of ms, or a second or two on the first run after the plugin is added or the material changed. Cooked builds and PIE skip this.
 - **An `Owner` from the level being left** releases the request right after the travel (see *Map travel*).
 - **`IsIconVisible` is false within the show delay** although the icon is requested; use `GetRequestCount` to know whether it is requested.

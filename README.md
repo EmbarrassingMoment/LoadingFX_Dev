@@ -69,7 +69,7 @@ The icon appears after `IconShowDelay` (0.5 s by default): release every request
 | Icon Tint | white | Multiplied into the material; alpha fades the icon. |
 | Icon Show Delay | 0.5 s | Time from the first request until the icon appears. 0 shows it at once. |
 | Icon Minimum Display Time | 1 s | Shortest time the icon stays once it appeared. 0 hides it at the last release. |
-| Icon Z-Order | 1000 | Among viewport widgets; above HUD widgets added with the usual small values. |
+| Icon Z-Order | 10010 | Among viewport widgets; above HUD widgets added with the usual small values, and above full-screen overlays at 10000 such as TransitionFX's widget-layer transitions. |
 | Loading Screen Background Color | black | The screen behind the icon while a blocking load is rendered through MoviePlayer. Always opaque. |
 
 ## Spinner materials
