@@ -12,7 +12,7 @@ LoadingFX is an Unreal Engine 5 plugin: a library of material-based loading spin
 
 - **Target engines:** UE 5.5 – 5.8 (one Fab package per version).
 - **Authoring engine: UE 5.5.** Content (`.uasset` / `.umap`) must stay loadable in 5.5, so never open or save this checkout's content with a newer engine. Use 5.6 – 5.8 for compile checks of the plugin (RunUAT `BuildPlugin`), and 5.8 for the MCP workbench, a separate worktree whose content is never committed (see UE 5.8 workbench below).
-- **Platform:** Win64 (initial scope).
+- **Platform:** Win64 (tested) and Linux (compile-checked on 5.5 and 5.8 on 2026-11-01, not run). Both are in every module's `PlatformAllowList`; Fab requires an allow or deny list per module, so the list stays. Other platforms after 1.0.
 
 ## Build & Setup
 
@@ -30,6 +30,10 @@ Plugin compile check (any engine from 5.5 to 5.8). Keep `-Package` short, such a
 ```
 <UE_5.x>\Engine\Build\BatchFiles\RunUAT.bat BuildPlugin -Plugin="<repo>\Plugins\LoadingFX\LoadingFX.uplugin" -Package="<short dir>" -TargetPlatforms=Win64 -Rocket -unattended -utf8output -nop4
 ```
+
+### Linux cross-compile (set up 2026-11-01)
+
+Epic's cross-toolchains are installed under `C:\UnrealToolchains`: `v23_clang-18.1.0-rockylinux8` for 5.5 and `v26_clang-20.1.8-rockylinux8` for 5.7 and 5.8 (5.6 wants v25, not installed; each engine names its version in `Engine/Config/Linux/Linux_SDK.json`). UBT reads `LINUX_MULTIARCH_ROOT` first and, only when it is unset, the in-tree path `<Engine>\Engine\Extras\ThirdPartyNotUE\SDKs\HostWin64\Linux_x64\<version>`; a junction to the matching toolchain sits there in 5.5, 5.7 and 5.8, so every engine finds its own version as long as the variable is not set in the process. The v26 installer set it at machine level, and `ValidatePlatforms` does not check the version (5.5 accepts the v26 path), so remove it from the process before building (`Remove-Item Env:LINUX_MULTIARCH_ROOT` in PowerShell) or delete it at machine level. `UnrealBuildTool.exe -Mode=ValidatePlatforms -Platforms=Linux` (with `DOTNET_ROOT` at the engine's bundled dotnet under `Engine\Binaries\ThirdParty\DotNet`) reports VALID on all three. The toolchain alone is not enough: `BuildPlugin` filters `-TargetPlatforms` through `InstalledPlatformInfo.IsValidPlatform`, which needs the Launcher's Linux target platform (`Engine\Binaries\Linux\UnrealGame.target` and the precompiled Linux libs; Library > engine > Options > Target Platforms > Linux, about 15 GB on disk per engine), and drops a platform that is not installed without any message, so without it `-TargetPlatforms=Linux` prints BUILD SUCCESSFUL and compiles nothing. Added to 5.5.4 and 5.8.4 on 2026-11-01 (5.6 and 5.7 still lack it). `-NoHostPlatform` skips the editor build. A platform must also be in each module's `PlatformAllowList` for anything to compile (Linux is since 2026-11-01; the first runs that day used a copy under `%TEMP%\lfxsrc\LoadingFX` with the lists removed, and Fab requires an allow or deny list per module, so the list is never dropped). Result: BuildPlugin passed on 5.5.4 (clang 18.1.0) and 5.8.4 (clang 20.1.8) for UnrealGame Linux Development and Shipping, 15 files per configuration, with no compiler or UHT warning, about 3 minutes each (about 1 minute once the engine side is warm); the real `LoadingFX.uplugin` with Linux in its allow lists passed the same way on both. A game-target build leaves no `Binaries\Linux` in the package (the modules are precompiled into `Intermediate\Build\Linux\x64\UnrealGame\<Config>\<Module>\*.o` plus a `.precompiled` manifest); the proof that something was built is those files and the `Using toolchain` / `[n/15] Compile` lines in the log.
 
 ### UE 5.8 workbench and live editor access (set up 2026-10-25)
 
@@ -76,7 +80,7 @@ What users reference by name is frozen at 1.0: asset paths and names, material p
 - **Docs and listing:** README (English and Japanese) rewritten, CHANGELOG 1.0.0, `VersionName` 1.0.0, Fab description and media.
 - **Samples:** only in this project, as a Blueprint sample map and widget kept apart from the C++ prototype. The plugin ships no sample content.
 
-After 1.0: a background color for the blocking screen, fades, platforms other than Win64.
+After 1.0: a background color for the blocking screen, fades, platforms other than Win64 and Linux (Mac first, once there is a way to compile-check it).
 
 ### Still open (1.0)
 

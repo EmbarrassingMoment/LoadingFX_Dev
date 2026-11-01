@@ -3,7 +3,7 @@
 This file is for AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, etc.) helping a developer **use** the LoadingFX plugin in their own Unreal Engine project. It describes the public API, the settings, the bundled materials and the rules to follow. It is not a guide for modifying the plugin itself.
 
 - Plugin version: see `VersionName` in `LoadingFX.uplugin`
-- Engine: Unreal Engine 5.5 – 5.8, **Win64 only**
+- Engine: Unreal Engine 5.5 – 5.8. Platforms: **Win64** (tested) and **Linux** (compiles, not yet run)
 - Works in Blueprint-only and C++ projects; no C++ is needed for standard use
 - Full docs: https://github.com/EmbarrassingMoment/LoadingFX_Dev (README in English and Japanese). The public headers under `Source/*/Public` are commented and are the reference for details.
 
@@ -226,7 +226,7 @@ Only two bundled materials are added to every cook automatically: the configured
 
 ## C++ setup
 
-Add the modules you use to the game module's `Build.cs`. `LoadingFX` (and `LoadingFXBridge`) are excluded from Server targets and every module is Win64-only, so guard the dependency if the project builds a dedicated server or other platforms:
+Add the modules you use to the game module's `Build.cs`. `LoadingFX` (and `LoadingFXBridge`) are excluded from Server targets and every module's `PlatformAllowList` is Win64 and Linux, so guard the dependency if the project builds a dedicated server or other platforms:
 
 ```csharp
 PrivateDependencyModuleNames.Add("LoadingFXLoader");
@@ -260,7 +260,7 @@ Never depend on `LoadingFXBridge`; it has no API.
 
 ## Limitations
 
-- Win64 only.
+- Win64 and Linux only (`PlatformAllowList` of each module); Linux is compile-checked, not yet run. On a platform where the modules are not built, Blueprints that use the plugin fail to cook. To try another platform, add it to each module's allow list in `LoadingFX.uplugin`.
 - No progress for map travel or blocking loads: the engine reports none, and nothing can update a widget while the game thread is blocked. Use a spinner or an indeterminate bar there; the progress bar is for asset loads started with the loader.
 - One project-wide loading icon material; no per-request override.
 - The MoviePlayer loading screen is black behind the icon; there is no background image or color option yet.

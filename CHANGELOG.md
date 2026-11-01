@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Linux in every module's `PlatformAllowList`. Compile-checked with the UE 5.5 and 5.8 cross-compile toolchains (Development and Shipping); not yet run on Linux.
 - `AGENTS.md` in the plugin folder: a usage guide for AI coding agents (public API, settings, bundled materials and their parameters, the map travel pattern, verification, pitfalls), with a `CLAUDE.md` that imports it for Claude Code. Both are listed in `FilterPlugin.ini`, so they ship in the Fab package. The README explains how to point an agent at it.
 - Material parameters are grouped in the material instance editor: `Appearance` (color and opacities), `Shape` (layout and sizes) and `Motion` (speed and timing), plus `Input` for `Progress` on the progress bar material. Parameter names follow one vocabulary across the library (`Radius`, `Thickness`, `Spacing`, `DotRadiusMin` / `DotRadiusMax`, `OpacityMin` / `OpacityMax`, `TailDelay`, ...).
 - Initial project setup: the `LoadingFX_Dev` sample project (UE 5.5) and the `LoadingFX` plugin skeleton with the `LoadingFX`, `LoadingFXLoader` and `LoadingFXBridge` runtime modules.
