@@ -14,6 +14,7 @@
 #include "LoadingFXSpinner.h"
 
 #include "Algo/Count.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
@@ -29,10 +30,14 @@
 #include "Misc/CoreDelegates.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
+#include "Misc/ScopeLock.h"
 #include "MoviePlayer.h"
 #include "PipelineStateCache.h"
 #include "PSOPrecacheValidation.h"
+#include "RHICommandList.h"
 #include "RHIFeatureLevel.h"
+#include "Rendering/SlateRenderer.h"
+#include "Runtime/Launch/Resources/Version.h"
 #include "UnrealClient.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
@@ -43,7 +48,40 @@
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
+#if ENGINE_MAJOR_VERSION > 5 || ENGINE_MINOR_VERSION >= 8
+#include "Slate/SlateViewportProvider.h"
+#endif
+
 DEFINE_LOG_CATEGORY_STATIC(LogLoadingFXProto, Log, All);
+
+/** The frames LFXProto.IconTravel cold saw: when each was presented, and how many pixels of the icon's corner were lit. */
+struct FLoadingFXProtoIconFrameProbe
+{
+	/** The icon's default place: the bottom right corner, 32 px padding and 64 px size before DPI scaling. */
+	static constexpr int32 CornerSize = 128;
+	/** Fewer lit pixels than this count as a frame without the icon (the background is black on both maps). */
+	static constexpr int32 MinLitPixels = 16;
+
+	FCriticalSection Lock;
+	TArray<TPair<double, int32>> Frames;
+
+	/** Render thread, right before present. The synchronous readback stalls the GPU, which a test can afford. */
+	void Sample(FRHITexture* BackBuffer)
+	{
+		if (!BackBuffer)
+		{
+			return;
+		}
+		const FIntPoint Size = BackBuffer->GetSizeXY();
+		const int32 Corner = FMath::Min3(CornerSize, Size.X, Size.Y);
+		TArray<FColor> Pixels;
+		FRHICommandListImmediate::Get().ReadSurfaceData(BackBuffer, FIntRect(Size.X - Corner, Size.Y - Corner, Size.X, Size.Y), Pixels, FReadSurfaceDataFlags());
+		const int32 LitPixels = Algo::CountIf(Pixels, [](const FColor& Pixel) { return FMath::Max3(Pixel.R, Pixel.G, Pixel.B) > 64; });
+
+		FScopeLock ScopeLock(&Lock);
+		Frames.Emplace(FPlatformTime::Seconds(), LitPixels);
+	}
+};
 
 namespace LoadingFXProto
 {
@@ -281,12 +319,13 @@ namespace LoadingFXProto
 
 	static FAutoConsoleCommandWithWorldAndArgs IconTravelCommand(
 		TEXT("LFXProto.IconTravel"),
-		TEXT("Verification prototype: exercise ULoadingFXIconSubsystem (acquire, owner auto-release, OpenLevel under the icon, release). Args: [Map=/Engine/Maps/Entry] [ExtraSeconds=4] [quit]"),
+		TEXT("Verification prototype: exercise ULoadingFXIconSubsystem (acquire, owner auto-release, OpenLevel under the icon, release). 'cold' acquires in the same frame as OpenLevel. Args: [Map=/Engine/Maps/Entry] [ExtraSeconds=4] [cold] [quit]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
 			{
-				Subsystem->RunIconTravelTest(Args.IsValidIndex(0) ? Args[0] : FString(TravelTestMap), ParseFloatArg(Args, 1, 4.0f), Args.Contains(TEXT("quit")));
+				Subsystem->RunIconTravelTest(Args.IsValidIndex(0) ? Args[0] : FString(TravelTestMap), ParseFloatArg(Args, 1, 4.0f),
+					Args.Contains(TEXT("cold")), Args.Contains(TEXT("quit")));
 			}
 		}));
 
@@ -452,6 +491,7 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 	}
 	FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(PostLoadMapHandle);
 	FCoreDelegates::OnSyncLoadPackage.Remove(SyncLoadPackageHandle);
+	StopIconFrameProbe();
 	if (ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>())
 	{
 		Loader->OnLoadStartedNative.Remove(LoaderStartedHandle);
@@ -595,7 +635,7 @@ void ULoadingFXProtoSubsystem::RunGallery(bool bTakeScreenshots, bool bQuitWhenD
 	StartSequence();
 }
 
-void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bQuitWhenDone)
+void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bQuitWhenDone)
 {
 	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
 	if (!IconSubsystem)
@@ -611,43 +651,72 @@ void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float E
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] screenshot requested: %s"), *Filename);
 	};
 
-	// Exercises the real subsystem instead of the prototype overlay: the prototype's own loading screen stays out
-	// of the way (bTravelPending is false and the overlay is hidden).
-	SequenceSteps.Reset();
-	SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
+	auto StartTravel = [this, MapName, ExtraLoadSeconds]()
 	{
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 1/5 acquire twice: a plain request and one owned by a throwaway actor"));
-		IconTravelHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel"));
-		AActor* Owner = GetWorld()->SpawnActor<AActor>();
-		IconTravelOwner = Owner;
-		const FLoadingFXIconHandle OwnedHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel (owned)"), Owner);
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] visible=%d requests=%d (expect %d, 2: the icon appears after IconShowDelay); handles active: %d %d (expect 1, 1)"),
-			IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(), GetDefault<ULoadingFXSettings>()->IconShowDelay > 0.0f ? 0 : 1,
-			IconSubsystem->IsHandleActive(IconTravelHandle) ? 1 : 0, IconSubsystem->IsHandleActive(OwnedHandle) ? 1 : 0);
-	} });
-	SequenceSteps.Add({ 3.0f, [this, RequestShot]()
-	{
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 2/5 screenshot of the viewport icon, then Destroy() the owner actor (expect auto-release next tick)"));
-		RequestShot(TEXT("LFXProto_Icon_Viewport.png"));
-		if (AActor* Owner = Cast<AActor>(IconTravelOwner.Get()))
-		{
-			Owner->Destroy();
-		}
-	} });
-	SequenceSteps.Add({ 1.0f, [this, IconSubsystem, MapName, ExtraLoadSeconds]()
-	{
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 3/5 requests=%d (expect 1); OpenLevel %s with +%.1fs simulated load, expecting the icon as loading screen"),
-			IconSubsystem->GetRequestCount(), *MapName, ExtraLoadSeconds);
-		IconSubsystem->DumpRequests();
 		bIconTravelPending = true;
 		TravelExtraLoadSeconds = ExtraLoadSeconds;
 		TravelStartSeconds = FPlatformTime::Seconds();
 		OpenLevel(MapName);
-	} });
-	SequenceSteps.Add({ ExtraLoadSeconds + 3.0f, [this, IconSubsystem, RequestShot]()
+	};
+
+	// Exercises the real subsystem instead of the prototype overlay: the prototype's own loading screen stays out
+	// of the way (bTravelPending is false and the overlay is hidden).
+	SequenceSteps.Reset();
+	if (bCold)
+	{
+		// The README's own pattern (acquire, then Open Level) in a process that never showed the icon: its first draw
+		// is on the loading screen, after the show delay (issue #5).
+		SequenceSteps.Add({ 0.5f, [this, IconSubsystem, MapName, ExtraLoadSeconds, StartTravel]()
+		{
+			StartIconFrameProbe();
+			IconTravelAcquireSeconds = FPlatformTime::Seconds();
+			IconTravelMovieStartSeconds = TNumericLimits<double>::Max();
+			IconTravelLoadEndSeconds = TNumericLimits<double>::Max();
+			IconTravelHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel (cold)"));
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 1-3/5 cold: acquire and OpenLevel %s with +%.1fs simulated load in the same frame. The icon was never on screen: expect it on the loading screen %.2fs into the load"),
+				*MapName, ExtraLoadSeconds, GetDefault<ULoadingFXSettings>()->IconShowDelay);
+			StartTravel();
+		} });
+	}
+	else
+	{
+		SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 1/5 acquire twice: a plain request and one owned by a throwaway actor"));
+			IconTravelHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel"));
+			AActor* Owner = GetWorld()->SpawnActor<AActor>();
+			IconTravelOwner = Owner;
+			const FLoadingFXIconHandle OwnedHandle = IconSubsystem->Acquire(TEXT("LFXProto.IconTravel (owned)"), Owner);
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] visible=%d requests=%d (expect %d, 2: the icon appears after IconShowDelay); handles active: %d %d (expect 1, 1)"),
+				IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(), GetDefault<ULoadingFXSettings>()->IconShowDelay > 0.0f ? 0 : 1,
+				IconSubsystem->IsHandleActive(IconTravelHandle) ? 1 : 0, IconSubsystem->IsHandleActive(OwnedHandle) ? 1 : 0);
+		} });
+		SequenceSteps.Add({ 3.0f, [this, RequestShot]()
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 2/5 screenshot of the viewport icon, then Destroy() the owner actor (expect auto-release next tick)"));
+			RequestShot(TEXT("LFXProto_Icon_Viewport.png"));
+			if (AActor* Owner = Cast<AActor>(IconTravelOwner.Get()))
+			{
+				Owner->Destroy();
+			}
+		} });
+		SequenceSteps.Add({ 1.0f, [IconSubsystem, MapName, ExtraLoadSeconds, StartTravel]()
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 3/5 requests=%d (expect 1); OpenLevel %s with +%.1fs simulated load, expecting the icon as loading screen"),
+				IconSubsystem->GetRequestCount(), *MapName, ExtraLoadSeconds);
+			IconSubsystem->DumpRequests();
+			StartTravel();
+		} });
+	}
+	SequenceSteps.Add({ ExtraLoadSeconds + 3.0f, [this, IconSubsystem, RequestShot, bCold]()
 	{
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 4/5 after travel: visible=%d requests=%d (expect 1, 1: viewport content survives LoadMap)"),
 			IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount());
+		if (bCold)
+		{
+			StopIconFrameProbe();
+			ReportIconFrameProbe();
+		}
 		RequestShot(TEXT("LFXProto_Icon_AfterTravel.png"));
 	} });
 	SequenceSteps.Add({ 1.0f, [this, IconSubsystem]()
@@ -1931,6 +2000,86 @@ void ULoadingFXProtoSubsystem::LogOverlayStats(const TCHAR* Context, double Elap
 		LoadingScreenOverlay->GetPaintCount(), LoadingScreenOverlay->GetOffGameThreadPaintCount());
 }
 
+void ULoadingFXProtoSubsystem::StartIconFrameProbe()
+{
+	StopIconFrameProbe();
+	if (!FSlateApplication::IsInitialized())
+	{
+		return;
+	}
+
+	// The lambda holds its own reference: the render thread may still be in it when the probe stops.
+	IconFrameProbe = MakeShared<FLoadingFXProtoIconFrameProbe, ESPMode::ThreadSafe>();
+	FSlateRenderer::FOnBackBufferReadyToPresent& BackBufferReady = FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent();
+#if ENGINE_MAJOR_VERSION > 5 || ENGINE_MINOR_VERSION >= 8
+	BackBufferReadyHandle = BackBufferReady.AddLambda([Probe = IconFrameProbe](SWindow&, ISlateViewportProvider& Viewport)
+	{
+		Probe->Sample(Viewport.GetBackBufferResource());
+	});
+#else
+	BackBufferReadyHandle = BackBufferReady.AddLambda([Probe = IconFrameProbe](SWindow&, const FTextureRHIRef& BackBuffer)
+	{
+		Probe->Sample(BackBuffer.GetReference());
+	});
+#endif
+}
+
+void ULoadingFXProtoSubsystem::StopIconFrameProbe()
+{
+	if (BackBufferReadyHandle.IsValid() && FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().Remove(BackBufferReadyHandle);
+	}
+	BackBufferReadyHandle.Reset();
+}
+
+void ULoadingFXProtoSubsystem::ReportIconFrameProbe() const
+{
+	if (!IconFrameProbe.IsValid())
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[IconTravel] no frame probe (Slate is not initialized)"));
+		return;
+	}
+
+	// Phases: on the loading screen before the show delay ended, on the loading screen after it, in the viewport
+	// after the load. Game frames show the start map until MoviePlayer started, and the render thread presents the
+	// last of them a little later, so the first 0.1 s of MoviePlayer is left out too.
+	const double FirstFrameSeconds = IconTravelMovieStartSeconds + 0.1;
+	const double ShowAtSeconds = IconTravelAcquireSeconds + GetDefault<ULoadingFXSettings>()->IconShowDelay;
+	int32 Frames[3] = {};
+	int32 IconFrames[3] = {};
+	double FirstIconOnLoadingScreen = -1.0;
+	{
+		FScopeLock ScopeLock(&IconFrameProbe->Lock);
+		for (const TPair<double, int32>& Frame : IconFrameProbe->Frames)
+		{
+			if (Frame.Key < FirstFrameSeconds)
+			{
+				continue;
+			}
+			const int32 Phase = Frame.Key < ShowAtSeconds ? 0 : (Frame.Key < IconTravelLoadEndSeconds ? 1 : 2);
+			const bool bIcon = Frame.Value >= FLoadingFXProtoIconFrameProbe::MinLitPixels;
+			++Frames[Phase];
+			IconFrames[Phase] += bIcon ? 1 : 0;
+			if (Phase == 1 && bIcon && FirstIconOnLoadingScreen < 0.0)
+			{
+				FirstIconOnLoadingScreen = Frame.Key - ShowAtSeconds;
+			}
+		}
+	}
+
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] frames showing the icon (back buffer readback): loading screen within the show delay %d of %d (expect 0), loading screen after it %d of %d (expect all but a frame or two: the first came %.3fs after the delay ended), viewport after the load %d of %d (expect all)"),
+		IconFrames[0], Frames[0], IconFrames[1], Frames[1], FirstIconOnLoadingScreen, IconFrames[2], Frames[2]);
+	if (Frames[1] == 0)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[IconTravel] no loading screen frame after the show delay: the simulated load must last longer than IconShowDelay"));
+	}
+	else if (IconFrames[1] * 10 < Frames[1] * 9)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[IconTravel] the icon is missing from the loading screen (issue #5)"));
+	}
+}
+
 void ULoadingFXProtoSubsystem::HandlePrepareLoadingScreen()
 {
 	// Called by PlayMovie() (e.g. MoviePlayer's own PreLoadMap hook) when nobody set up a loading screen.
@@ -1954,6 +2103,10 @@ void ULoadingFXProtoSubsystem::HandlePrepareLoadingScreen()
 void ULoadingFXProtoSubsystem::HandleMoviePlaybackStarted()
 {
 	// Runs inside PlayMovie(), i.e. inside LoadMap for travel: sleeping here lengthens the blocked section.
+	if (bIconTravelPending)
+	{
+		IconTravelMovieStartSeconds = FPlatformTime::Seconds();
+	}
 	if ((bTravelPending || bIconTravelPending) && TravelExtraLoadSeconds > 0.0f)
 	{
 		UE_LOG(LogLoadingFXProto, Display, TEXT("Simulating +%.1fs of map loading%s"), TravelExtraLoadSeconds,
@@ -1972,6 +2125,7 @@ void ULoadingFXProtoSubsystem::HandlePostLoadMap(UWorld* LoadedWorld)
 	const FString MapName = LoadedWorld ? LoadedWorld->GetPackage()->GetName() : FString(TEXT("<none>"));
 	if (bIconTravelPending)
 	{
+		IconTravelLoadEndSeconds = FPlatformTime::Seconds();
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] LoadMap %s done in %.2fs"), *MapName, FPlatformTime::Seconds() - TravelStartSeconds);
 	}
 	else

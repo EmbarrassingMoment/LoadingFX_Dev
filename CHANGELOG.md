@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Linux in every module's `PlatformAllowList`. Compile-checked with the UE 5.5 and 5.8 cross-compile toolchains (Development and Shipping); not yet run on Linux.
 - `AGENTS.md` in the plugin folder: a usage guide for AI coding agents (public API, settings, bundled materials and their parameters, the map travel pattern, verification, pitfalls), with a `CLAUDE.md` that imports it for Claude Code. Both are listed in `FilterPlugin.ini`, so they ship in the Fab package. The README explains how to point an agent at it.
 - Material parameters are grouped in the material instance editor: `Appearance` (color and opacities), `Shape` (layout and sizes) and `Motion` (speed and timing), plus `Input` for `Progress` on the progress bar material. Parameter names follow one vocabulary across the library (`Radius`, `Thickness`, `Spacing`, `DotRadiusMin` / `DotRadiusMax`, `OpacityMin` / `OpacityMax`, `TailDelay`, ...).
 - Initial project setup: the `LoadingFX_Dev` sample project (UE 5.5) and the `LoadingFX` plugin skeleton with the `LoadingFX`, `LoadingFXLoader` and `LoadingFXBridge` runtime modules.
@@ -41,3 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `ULoadingFXLoaderSubsystem` (`LoadingFXLoader` module): loads soft object and soft class references in the background, with progress and cancel, or synchronously. The loaded assets stay in memory until the load is released or its owner object is destroyed (the Blueprint nodes default the owner to the calling object). Blueprint: the Load Assets Async node (On Progress / On Completed / On Canceled, cancelable), Load Assets Sync, Release Loaded Assets, Release All Loaded Assets. Progress counts requested assets. Console: `LoadingFX.Loader.Dump`.
 - Every load can ask for the loading icon (`bShowLoadingIcon`): the `LoadingFXBridge` module shows the icon while the load runs. A sync load also keeps an icon that is already requested animating while the game thread is blocked (on a black screen, through MoviePlayer).
 - `ULoadingFXIconSubsystem::BeginBlockingSection` / `EndBlockingSection` and `FLoadingFXBlockingScope` (C++): keep the loading icon animating through any work that blocks the game thread, if the icon is requested.
+
+### Fixed
+
+- The loading icon is drawn on the MoviePlayer loading screen in uncooked runs (`-game`, Standalone Game) when it was never on screen before the blocking load, for example when it is acquired right before Open Level ([#5](https://github.com/EmbarrassingMoment/LoadingFX_Dev/issues/5)). Uncooked processes compile a material's shaders only when it is first drawn, and only the game thread takes the results in, so an icon first drawn on the loading screen stayed blank until the load was over (also on the first run after the plugin was added). The icon subsystem now compiles the icon material's shaders when it loads it, which takes a few tens of ms at startup in uncooked runs (a second or two the first time). Cooked builds were not affected and skip it.

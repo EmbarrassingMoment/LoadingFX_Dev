@@ -3,7 +3,7 @@
 This file is for AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini CLI, etc.) helping a developer **use** the LoadingFX plugin in their own Unreal Engine project. It describes the public API, the settings, the bundled materials and the rules to follow. It is not a guide for modifying the plugin itself.
 
 - Plugin version: see `VersionName` in `LoadingFX.uplugin`
-- Engine: Unreal Engine 5.5 – 5.8, **Win64 only**
+- Engine: Unreal Engine 5.5 – 5.8. Platforms: **Win64** (tested) and **Linux** (compiles, not yet run)
 - Works in Blueprint-only and C++ projects; no C++ is needed for standard use
 - Full docs: https://github.com/EmbarrassingMoment/LoadingFX_Dev (README in English and Japanese). The public headers under `Source/*/Public` are commented and are the reference for details.
 
@@ -90,7 +90,7 @@ The plugin does **not** show the icon by itself for travel and does not decide w
 ```
 
 - Do not pass an actor of the old level as `Owner`: it is destroyed by the travel, and its request is released right after the load, possibly before the destination is ready. Level Blueprint variables are lost on travel too.
-- Acquire at least one frame before `Open Level` if possible, and see *Pitfalls* about acquiring in the same frame.
+- Acquiring in the same frame as `Open Level` is fine: the load starts later in that frame, with the request already active, so the icon appears on the loading screen at the show delay.
 
 **Your own blocking work (C++):**
 
@@ -226,7 +226,7 @@ Only two bundled materials are added to every cook automatically: the configured
 
 ## C++ setup
 
-Add the modules you use to the game module's `Build.cs`. `LoadingFX` (and `LoadingFXBridge`) are excluded from Server targets and every module is Win64-only, so guard the dependency if the project builds a dedicated server or other platforms:
+Add the modules you use to the game module's `Build.cs`. `LoadingFX` (and `LoadingFXBridge`) are excluded from Server targets and every module's `PlatformAllowList` is Win64 and Linux, so guard the dependency if the project builds a dedicated server or other platforms:
 
 ```csharp
 PrivateDependencyModuleNames.Add("LoadingFXLoader");
@@ -253,15 +253,14 @@ Never depend on `LoadingFXBridge`; it has no API.
 ## Pitfalls
 
 - **Full-screen overlays above the icon.** The icon sits at `IconZOrder` 10010 among viewport widgets, just above TransitionFX's widget-layer presets (`WidgetZOrder` 10000), so it shows over a held fade. Anything added at a higher Z-order covers it (a preset whose `WidgetZOrder` was raised, or another plugin's overlay): raise `IconZOrder` above that overlay.
-- **Acquiring in the same frame as `Open Level` with a show delay** may leave the loading screen plain black (the icon is not drawn on the MoviePlayer screen if it has never been drawn on the game viewport before; https://github.com/EmbarrassingMoment/LoadingFX_Dev/issues/5, open). Until it is fixed, acquire a little earlier, or use `IconShowDelay=0` for travel-heavy projects.
-- **First run in an uncooked project:** right after the plugin is added, the material's shaders may still be compiling, and nothing processes the results while the game thread is blocked, so the first run can show no icon on the loading screen. Run again; cooked builds are not affected.
+- **A short wait at startup in uncooked runs** (`-game`, Standalone Game): the engine compiles a material's shaders only when it is first drawn, which a blocked game thread cannot finish, so the icon subsystem compiles the icon material's shaders when it loads it and logs `Compiled the shaders of the loading icon material ... in N ms`. Expect a few tens of ms, or a second or two on the first run after the plugin is added or the material changed. Cooked builds and PIE skip this.
 - **An `Owner` from the level being left** releases the request right after the travel (see *Map travel*).
 - **`IsIconVisible` is false within the show delay** although the icon is requested; use `GetRequestCount` to know whether it is requested.
 - **A spinner in your own widget freezes during blocking loads**; only the loading icon keeps moving.
 
 ## Limitations
 
-- Win64 only.
+- Win64 and Linux only (`PlatformAllowList` of each module); Linux is compile-checked, not yet run. On a platform where the modules are not built, Blueprints that use the plugin fail to cook. To try another platform, add it to each module's allow list in `LoadingFX.uplugin`.
 - No progress for map travel or blocking loads: the engine reports none, and nothing can update a widget while the game thread is blocked. Use a spinner or an indeterminate bar there; the progress bar is for asset loads started with the loader.
 - One project-wide loading icon material; no per-request override.
 - The MoviePlayer loading screen is black behind the icon; there is no background image or color option yet.

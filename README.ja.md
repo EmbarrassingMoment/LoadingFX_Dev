@@ -2,7 +2,7 @@
 
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.5%20--%205.8-black?style=flat&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Win64-blue?style=flat&logo=windows&logoColor=white)](#動作環境)
+[![Platform](https://img.shields.io/badge/Platform-Win64%20%7C%20Linux-blue?style=flat)](#動作環境)
 
 > English version → [README.md](README.md)
 
@@ -23,7 +23,7 @@ LoadingFX は Unreal Engine 5 向けのローディング表示プラグイン�
 ## 動作環境
 
 - Unreal Engine 5.5 – 5.8
-- Windows (Win64)
+- Windows (Win64) で動作確認済み。Linux はコンパイル確認のみ（UE 5.5 / 5.8 のクロスコンパイルツールチェーン）で、実機では未確認です。
 
 ## インストール
 
@@ -236,7 +236,7 @@ Do not edit assets inside the plugin folder; make material instances in the proj
 - **マップ遷移の進捗は出ません。** エンジンが報告しないためです。進捗バーはアセットロード専用です。
 - ブロック中のアイコンの背景は**黒**です（MoviePlayer の背景）。直前のゲーム画面は残りません。
 - ローディングアイコンのマテリアルは**プロジェクトで 1 つ**です。要求ごとの切り替えはありません。
-- このバージョンは **Win64** のみです。
+- プラグインの `PlatformAllowList` は **Win64 と Linux** だけで、Linux はコンパイル確認のみです。それ以外のプラットフォームではモジュールがビルドされず、プラグインを使う Blueprint はそのプラットフォーム向けの cook に失敗します。試す場合は `LoadingFX.uplugin` の各モジュールの `PlatformAllowList` にプラットフォームを足してください。プラットフォーム固有のコードはありません。
 
 ## リポジトリ構成
 
