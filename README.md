@@ -55,7 +55,7 @@ Icon->Release(Handle);
 
 The icon appears after `IconShowDelay` (0.5 s by default): release every request before that and nothing is shown. Once it is on screen it stays for at least `IconMinimumDisplayTime` (1 s). `IsIconVisible` and the `OnVisibilityChanged` event follow what is actually on screen.
 
-**Map travel and other blocking loads.** If the icon is requested when a map load starts, the plugin takes over the engine's loading screen (MoviePlayer) and draws the icon there, so it keeps spinning while the game thread is blocked. Nothing else is needed. The screen behind the icon is black during the block, like any MoviePlayer loading screen. The plugin does not decide when travel is finished: acquire before `Open Level`, release when your destination map is ready.
+**Map travel and other blocking loads.** If the icon is requested when a map load starts, the plugin takes over the engine's loading screen (MoviePlayer) and draws the icon there, so it keeps spinning while the game thread is blocked. Nothing else is needed. The screen behind the icon is a solid color during the block, black unless you change `LoadingScreenBackgroundColor`. The plugin does not decide when travel is finished: acquire before `Open Level`, release when your destination map is ready.
 
 > MoviePlayer is not available in the editor or in PIE, so there the icon freezes during blocking loads. Check this behavior with `-game` or in a packaged build.
 
@@ -70,6 +70,7 @@ The icon appears after `IconShowDelay` (0.5 s by default): release every request
 | Icon Show Delay | 0.5 s | Time from the first request until the icon appears. 0 shows it at once. |
 | Icon Minimum Display Time | 1 s | Shortest time the icon stays once it appeared. 0 hides it at the last release. |
 | Icon Z-Order | 10010 | Among viewport widgets; above HUD widgets added with the usual small values, and above full-screen overlays at 10000 such as TransitionFX's widget-layer transitions. |
+| Loading Screen Background Color | black | The screen behind the icon while a blocking load is rendered through MoviePlayer. Always opaque. |
 
 ## Spinner materials
 
@@ -234,7 +235,7 @@ The guide is in English only; agents read it fine whatever language you prompt i
 
 - **Editor and PIE:** MoviePlayer is unavailable there, so the loading icon freezes during blocking loads. Everything else works. Use `-game`, *Standalone Game* or a packaged build to see the icon spin through a block.
 - **No progress for map travel.** The engine does not report any, so the progress bar is for asset loads only.
-- The loading screen behind the icon is **black** during a block (MoviePlayer's background); the last game frame is not kept.
+- The loading screen behind the icon is a **solid color** during a block (`LoadingScreenBackgroundColor`, black by default); the last game frame is not kept, so it cannot be translucent, and the switch to it and back is instant.
 - The loading icon uses **one project-wide material**; there is no per-request override.
 - **Win64 and Linux** are the only platforms in the plugin's `PlatformAllowList`, and Linux is compile-checked but not yet run. On any other platform the modules are not built, and Blueprints that use the plugin fail to cook for it. To try another platform, add it to the `PlatformAllowList` of each module in `LoadingFX.uplugin`; the code has no platform-specific parts.
 

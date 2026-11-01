@@ -24,7 +24,7 @@ Acquire(Reason, Owner) ──► ULoadingFXIconSubsystem ──► viewport cont
                                    │
                  blocking map load / blocking section
                                    ▼
-                     MoviePlayer loading screen: the icon on black, animated off the game thread
+                     MoviePlayer loading screen: the icon on a solid color, animated off the game thread
 
 LoadAssetsAsync / LoadAssetsSync (bShowLoadingIcon) ──► ULoadingFXLoaderSubsystem
                                    │ OnLoadStartedNative / OnLoadEndedNative
@@ -77,7 +77,7 @@ Requests are reference counted: the icon stays while any request is active, so i
 
 ### Map travel and blocking loads
 
-The icon is added with `UGameViewportClient::AddViewportWidgetContent`, not `AddToViewport`, so it survives map travel. If the icon is visible or requested (also within the show delay) when a blocking map load starts, the plugin takes over the engine's MoviePlayer loading screen and draws the icon there, so it keeps animating while the game thread is blocked. The screen behind it is **black** for the whole block (MoviePlayer's background; the last game frame is not kept). If the icon is not requested, nothing changes and the game simply hitches. If another loading screen is already set up (the project's own MoviePlayer screen, for example), the plugin leaves it alone.
+The icon is added with `UGameViewportClient::AddViewportWidgetContent`, not `AddToViewport`, so it survives map travel. If the icon is visible or requested (also within the show delay) when a blocking map load starts, the plugin takes over the engine's MoviePlayer loading screen and draws the icon there, so it keeps animating while the game thread is blocked. The screen behind it is one opaque color for the whole block, `LoadingScreenBackgroundColor` (**black** by default; the last game frame is not kept, so it cannot be translucent). The switch to it and back is instant; there are no fades. If the icon is not requested, nothing changes and the game simply hitches. If another loading screen is already set up (the project's own MoviePlayer screen, for example), the plugin leaves it alone.
 
 The plugin does **not** show the icon by itself for travel and does not decide when travel is over:
 
@@ -101,7 +101,7 @@ The plugin does **not** show the icon by itself for travel and does not decide w
 }
 ```
 
-The section starts MoviePlayer only if the icon is requested at that moment (acquire first), and does nothing where MoviePlayer is unavailable (editor, PIE, `-NoLoadingScreen`) or while another loading screen is set up or playing. The screen turns black as soon as the section starts, even for very short work.
+The section starts MoviePlayer only if the icon is requested at that moment (acquire first), and does nothing where MoviePlayer is unavailable (editor, PIE, `-NoLoadingScreen`) or while another loading screen is set up or playing. The screen turns to `LoadingScreenBackgroundColor` (black by default) as soon as the section starts, even for very short work.
 
 ## Settings (`ULoadingFXSettings`)
 
@@ -118,6 +118,7 @@ IconTint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000)  ; multiplied into the ma
 IconShowDelay=0.500000            ; seconds from the first request until the icon appears; 0 = at once
 IconMinimumDisplayTime=1.000000   ; seconds the icon stays once it appeared; 0 = hide at the last release
 IconZOrder=10010                  ; among viewport widgets (UMG Add to Viewport uses ZOrder + 10)
+LoadingScreenBackgroundColor=(R=0.000000,G=0.000000,B=0.000000,A=1.000000)  ; behind the icon on the MoviePlayer screen; linear, alpha ignored
 ```
 
 The values above are the defaults; write only the keys you change. A one-off override for a test run: `-ini:Game:[/Script/LoadingFX.LoadingFXSettings]:IconShowDelay=0`.
@@ -215,7 +216,7 @@ FLoadingFXLoadHandle SyncHandle = Loader->LoadAssetsSync(Paths, TEXT("Portrait")
 - **Progress** is finished requested assets / requested assets. A one-asset request jumps from 0 to 1; dependencies are not counted, and the engine reports nothing finer. Progress 1 is reported right before completion.
 - **No callback fires inside the load call**, even when everything is already in memory: completion comes on a later tick.
 - **Cancel** stops the callbacks; packages already being read still finish loading.
-- **`bShowLoadingIcon`** (default false): an async load acquires the loading icon from start to completion or cancel (so the show delay applies: a fast load shows nothing). A sync load acquires it around the call, and MoviePlayer takes over at once: the screen turns black for the load, even a short one, with the icon appearing at the show delay. A sync load **without** the flag only keeps an icon that is already requested animating. Async loads without the flag (background preloads) never show the icon.
+- **`bShowLoadingIcon`** (default false): an async load acquires the loading icon from start to completion or cancel (so the show delay applies: a fast load shows nothing). A sync load acquires it around the call, and MoviePlayer takes over at once: the screen turns to the loading screen color (black by default) for the load, even a short one, with the icon appearing at the show delay. A sync load **without** the flag only keeps an icon that is already requested animating. Async loads without the flag (background preloads) never show the icon.
 - Requires the `LoadingFXBridge` module for the flag to do anything; it is part of the plugin and needs no setup.
 
 **Progress bar wiring (Blueprint):** *Load Assets Async* → *On Progress* → *Set Progress* (Progress pin) on a *LoadingFX Progress Bar*. That is all; no C++ glue.
@@ -263,6 +264,6 @@ Never depend on `LoadingFXBridge`; it has no API.
 - Win64 and Linux only (`PlatformAllowList` of each module); Linux is compile-checked, not yet run. On a platform where the modules are not built, Blueprints that use the plugin fail to cook. To try another platform, add it to each module's allow list in `LoadingFX.uplugin`.
 - No progress for map travel or blocking loads: the engine reports none, and nothing can update a widget while the game thread is blocked. Use a spinner or an indeterminate bar there; the progress bar is for asset loads started with the loader.
 - One project-wide loading icon material; no per-request override.
-- The MoviePlayer loading screen is black behind the icon; there is no background image or color option yet.
+- The MoviePlayer loading screen behind the icon is one opaque color (`LoadingScreenBackgroundColor`); there is no background image and no fade in or out yet.
 - No replication; everything is local to the GameInstance.
 - Report issues at https://github.com/EmbarrassingMoment/LoadingFX_Dev/issues.

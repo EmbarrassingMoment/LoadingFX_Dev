@@ -191,6 +191,8 @@ private:
 	UMaterialInterface* GetIconMaterial();
 	/** With ShowAtSeconds in the future (platform time), the widget stays hidden until then: a loading screen set up within the show delay. */
 	TSharedRef<SWidget> MakeIconWidget(double ShowAtSeconds = 0.0);
+	/** The icon over a full-screen LoadingScreenBackgroundColor, for MoviePlayer. The color shows at once, the icon at ShowAtSeconds. */
+	TSharedRef<SWidget> MakeLoadingScreenWidget(double ShowAtSeconds);
 
 	void ShowViewportIcon();
 	void HideViewportIcon();
