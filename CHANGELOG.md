@@ -15,6 +15,7 @@ First release.
 ### Added
 
 - `LoadingScreenBackgroundColor` (Project Settings > Plugins > LoadingFX > Loading Screen): the color of the screen behind the loading icon while a blocking load is rendered through MoviePlayer, black by default. It shows from the moment MoviePlayer takes over, also within the show delay, and is always opaque, because the last game frame is not kept behind it.
+- `EngineVersion` in `LoadingFX.uplugin` (`5.5` here; each Fab package carries its own engine version), as Fab's technical review requires.
 - Linux in every module's `PlatformAllowList`. Compile-checked with the UE 5.5 and 5.8 cross-compile toolchains (Development and Shipping); not yet run on Linux.
 - `AGENTS.md` in the plugin folder: a usage guide for AI coding agents (public API, settings, bundled materials and their parameters, the map travel pattern, verification, pitfalls), with a `CLAUDE.md` that imports it for Claude Code. Both are listed in `FilterPlugin.ini`, so they ship in the Fab package. The README explains how to point an agent at it.
 - Material parameters are grouped in the material instance editor: `Appearance` (color and opacities), `Shape` (layout and sizes) and `Motion` (speed and timing), plus `Input` for `Progress` on the progress bar material. Parameter names follow one vocabulary across the library (`Radius`, `Thickness`, `Spacing`, `DotRadiusMin` / `DotRadiusMax`, `OpacityMin` / `OpacityMax`, `TailDelay`, ...).
