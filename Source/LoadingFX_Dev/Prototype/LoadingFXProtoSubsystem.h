@@ -16,6 +16,14 @@ class SWidget;
 class UWidget;
 class UMaterialInterface;
 
+/** Which bundled materials LFXProto.Showcase draws. */
+enum class ELoadingFXProtoShowcaseSet : uint8
+{
+	All,
+	Spinners,
+	Bars,
+};
+
 /**
  * Verification prototype only (not part of the LoadingFX plugin).
  * Checks whether UI materials render and animate under MoviePlayer, driven by console commands:
@@ -39,9 +47,10 @@ class UMaterialInterface;
  *                                 (smoothing), a decrease (applied at once), fixed values near 0 (hairline check), a tinted
  *                                 bar (sheen), a bar drawing an indeterminate material, and the bar materials in spinners.
  *                                 'shot' saves Saved/Screenshots/LFXProto_ProgressBar.png.
- *   LFXProto.Showcase [Size] [ref] [shot] [quit]  Toggle a full-screen showcase of every bundled spinner material on black, Size px
- *                                 each (default 256). 'ref' overlays the material contract's reference circle and square,
- *                                 'shot' saves Saved/Screenshots/LFXProto_Showcase.png, 'quit' exits afterwards.
+ *   LFXProto.Showcase [Size] [ref] [spinners|bars] [shot] [quit]  Toggle a full-screen showcase of every bundled spinner material on
+ *                                 black, Size px each (default 256). 'ref' overlays the material contract's reference circle and
+ *                                 square, 'spinners' / 'bars' draw only those materials (for larger sizes, which no longer fit
+ *                                 all of them on screen), 'shot' saves Saved/Screenshots/LFXProto_Showcase.png, 'quit' exits afterwards.
  *   LFXProto.Preload [shot] [quit]  Check the icon material preload: in memory before the first Acquire, no sync load
  *                                 during Acquire, and its PSOs precached by then, against a material loaded on demand
  *                                 (PSO states only in packaged builds). 'shot' saves Saved/Screenshots/LFXProto_Preload.png.
@@ -79,7 +88,7 @@ public:
 	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bTestBackground, bool bQuitWhenDone);
 	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunProgressBarTest(bool bTakeScreenshot, bool bQuitWhenDone);
-	void RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone);
+	void RunShowcase(float TileSize, bool bShowReference, ELoadingFXProtoShowcaseSet Set, bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunPreloadTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunMinDisplayTest(bool bQuitWhenDone);
 	void RunShowDelayTest(bool bQuitWhenDone);
@@ -109,7 +118,7 @@ private:
 	void HideGallery();
 	void HideUmgSpinners();
 	void HideProgressBars();
-	void ShowShowcase(float TileSize, bool bShowReference);
+	void ShowShowcase(float TileSize, bool bShowReference, ELoadingFXProtoShowcaseSet Set);
 	void HideShowcase();
 	void StartSequence();
 	void SimulateBlockingWork(float Seconds, bool bCollectGarbage) const;
