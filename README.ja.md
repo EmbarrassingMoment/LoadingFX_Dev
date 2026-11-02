@@ -209,9 +209,9 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 
 ## AI コーディングエージェントで使う
 
-プラグインフォルダには、Claude Code、Codex、Cursor、GitHub Copilot、Gemini CLI などの AI コーディングエージェント向けの `AGENTS.md`（`Plugins/LoadingFX/AGENTS.md`）が入っています。Blueprint と C++ の公開 API、設定と既定値、同梱マテリアルとそのパラメータ、マップ遷移のパターン、ローディング画面の確かめ方、落とし穴をまとめたものです。隣の `CLAUDE.md` は Claude Code 向けに同じファイルを読み込みます。
+プラグインフォルダには、Claude Code、Codex、Cursor、GitHub Copilot、Gemini CLI などの AI コーディングエージェント向けの `AGENTS.md`（`Plugins/LoadingFX/AGENTS.md`）が入っています。Blueprint と C++ の公開 API、設定と既定値、同梱マテリアルとそのパラメータ、マップ遷移のパターン、ローディング画面の確かめ方、落とし穴をまとめたものです。隣の `CLAUDE.md` は Claude Code に同じファイルを読むよう指示します。
 
-エージェントはプロジェクト内のファイルしか読まないため、Fab からエンジンにインストールした場合（`<EngineDir>/Engine/Plugins/Marketplace/LoadingFX`）は自分では見つけられません。プロジェクトの `Plugins` フォルダに置いた場合も、案内を書いておくのが確実です。**あなたの**プロジェクトのルートにある指示ファイルに次を貼り、パスを合わせてください:
+エージェントはプロジェクト内のファイルしか読まないため、Fab からエンジンにインストールした場合（`<EngineDir>/Engine/Plugins/Marketplace/LoadingFX`）は自分では見つけられません。プロジェクトの `Plugins` フォルダに置いた場合も、Claude Code がプラグインの `CLAUDE.md` を読むのはそのフォルダのファイルを開いたときだけなので、案内を書いておくのが確実です。**あなたの**プロジェクトのルートにある指示ファイルに次を貼り、パスを合わせてください:
 
 ```markdown
 ## LoadingFX (loading icon, spinners, asset loader)

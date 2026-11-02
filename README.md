@@ -209,9 +209,9 @@ UnrealEditor.exe <repo>\LoadingFX_Dev.uproject -game -windowed -ResX=1280 -ResY=
 
 ## Using LoadingFX with AI coding agents
 
-The plugin folder ships an `AGENTS.md` (`Plugins/LoadingFX/AGENTS.md`) written for AI coding agents such as Claude Code, Codex, Cursor, GitHub Copilot and Gemini CLI: the public Blueprint and C++ API, the settings and their defaults, every bundled material with its parameters, the map travel pattern, how to verify the loading screen, and the pitfalls. A `CLAUDE.md` next to it imports the same file for Claude Code.
+The plugin folder ships an `AGENTS.md` (`Plugins/LoadingFX/AGENTS.md`) written for AI coding agents such as Claude Code, Codex, Cursor, GitHub Copilot and Gemini CLI: the public Blueprint and C++ API, the settings and their defaults, every bundled material with its parameters, the map travel pattern, how to verify the loading screen, and the pitfalls. A `CLAUDE.md` next to it points Claude Code at the same file.
 
-Agents only read files inside your project, so when the plugin is installed to the engine from Fab (`<EngineDir>/Engine/Plugins/Marketplace/LoadingFX`) they never find it on their own. Even with the plugin in your project's `Plugins` folder, a pointer is the safe choice. Paste this into the instruction file at the root of **your** project and adjust the path:
+Agents only read files inside your project, so when the plugin is installed to the engine from Fab (`<EngineDir>/Engine/Plugins/Marketplace/LoadingFX`) they never find it on their own. Even with the plugin in your project's `Plugins` folder, Claude Code reads the plugin's `CLAUDE.md` only once it opens a file in that folder, so a pointer is the safe choice. Paste this into the instruction file at the root of **your** project and adjust the path:
 
 ```markdown
 ## LoadingFX (loading icon, spinners, asset loader)
