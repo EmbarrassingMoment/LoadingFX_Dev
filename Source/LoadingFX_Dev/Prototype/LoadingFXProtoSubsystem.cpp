@@ -356,12 +356,12 @@ namespace LoadingFXProto
 
 	static FAutoConsoleCommandWithWorldAndArgs ShowcaseCommand(
 		TEXT("LFXProto.Showcase"),
-		TEXT("Verification prototype: toggle a full-screen showcase of every bundled spinner material on black. Args: [Size=256] [ref] [shot] [quit]"),
+		TEXT("Verification prototype: toggle a full-screen showcase of every bundled spinner material on black. Args: [Size=256] [ref] [spinners|bars] [shot] [quit]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
 			{
-				// The size is the only numeric argument; 'shot' and 'quit' can come in any order.
+				// The size is the only numeric argument; the words can come in any order.
 				float TileSize = 256.0f;
 				for (const FString& Arg : Args)
 				{
@@ -370,7 +370,10 @@ namespace LoadingFXProto
 						TileSize = FCString::Atof(*Arg);
 					}
 				}
-				Subsystem->RunShowcase(TileSize, Args.Contains(TEXT("ref")), Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
+				const ELoadingFXProtoShowcaseSet Set = Args.Contains(TEXT("spinners")) ? ELoadingFXProtoShowcaseSet::Spinners
+					: Args.Contains(TEXT("bars")) ? ELoadingFXProtoShowcaseSet::Bars
+					: ELoadingFXProtoShowcaseSet::All;
+				Subsystem->RunShowcase(TileSize, Args.Contains(TEXT("ref")), Set, Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
 			}
 		}));
 
@@ -1230,7 +1233,7 @@ void ULoadingFXProtoSubsystem::HideGallery()
 	GalleryRoot.Reset();
 }
 
-void ULoadingFXProtoSubsystem::RunShowcase(float TileSize, bool bShowReference, bool bTakeScreenshot, bool bQuitWhenDone)
+void ULoadingFXProtoSubsystem::RunShowcase(float TileSize, bool bShowReference, ELoadingFXProtoShowcaseSet Set, bool bTakeScreenshot, bool bQuitWhenDone)
 {
 	if (ShowcaseRoot.IsValid() && !bTakeScreenshot && !bQuitWhenDone)
 	{
@@ -1239,7 +1242,7 @@ void ULoadingFXProtoSubsystem::RunShowcase(float TileSize, bool bShowReference, 
 	}
 
 	HideShowcase();
-	ShowShowcase(TileSize, bShowReference);
+	ShowShowcase(TileSize, bShowReference, Set);
 	if (!bTakeScreenshot && !bQuitWhenDone)
 	{
 		return;
@@ -1263,7 +1266,7 @@ void ULoadingFXProtoSubsystem::RunShowcase(float TileSize, bool bShowReference, 
 	StartSequence();
 }
 
-void ULoadingFXProtoSubsystem::ShowShowcase(float TileSize, bool bShowReference)
+void ULoadingFXProtoSubsystem::ShowShowcase(float TileSize, bool bShowReference, ELoadingFXProtoShowcaseSet Set)
 {
 	if (ShowcaseRoot.IsValid())
 	{
@@ -1282,10 +1285,16 @@ void ULoadingFXProtoSubsystem::ShowShowcase(float TileSize, bool bShowReference)
 	TArray<SLoadingFXProtoShowcase::FTile> Tiles;
 	for (UMaterialInterface* Material : Materials)
 	{
-		if (Material && Material->GetPathName().StartsWith(TEXT("/LoadingFX/")))
+		if (!Material || !Material->GetPathName().StartsWith(TEXT("/LoadingFX/")))
 		{
-			Tiles.Add({ Material, Material->GetName(), LoadingFXProto::IsBarMaterial(Material) ? LoadingFXProto::BarAspectRatio : 1.0f });
+			continue;
 		}
+		const bool bIsBar = LoadingFXProto::IsBarMaterial(Material);
+		if ((Set == ELoadingFXProtoShowcaseSet::Spinners && bIsBar) || (Set == ELoadingFXProtoShowcaseSet::Bars && !bIsBar))
+		{
+			continue;
+		}
+		Tiles.Add({ Material, Material->GetName(), bIsBar ? LoadingFXProto::BarAspectRatio : 1.0f });
 	}
 	UE_LOG(LogLoadingFXProto, Display, TEXT("[Showcase] %d materials at %.0f px, reference shapes=%d"), Tiles.Num(), TileSize, bShowReference ? 1 : 0);
 

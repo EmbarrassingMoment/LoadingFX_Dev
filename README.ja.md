@@ -84,24 +84,24 @@ Icon->Release(Handle);
 
 | マテリアル | 見た目 |
 |---|---|
-| `M_LoadingDotRing` | 輪に並んだ点が尾に向かって小さくなり、時計回りに回る。既定のローディングアイコン。 |
-| `M_LoadingDotGrid` | 四角形に並んだ 8 つの点を、膨らみのパルスが時計回りに巡る。 |
-| `M_LoadingBoxes` | 角丸の四角 4 つが順に明るくなる。 |
-| `M_LoadingSpokes` | おなじみの放射状スピナー。丸い棒の明るさが一周する。 |
-| `M_LoadingArc` | 1 本の丸い弧が、伸び縮みしながら回る。 |
-| `M_LoadingComet` | 丸い頭と、一周かけて細く薄くなる尾。 |
-| `M_LoadingDotRow` | 横に並んだ点が左から順に膨らんで明るくなる。ボタンなど横長で小さい場所向き。 |
-| `M_LoadingDualArc` | 外側と内側の輪に 2 対の弧。互いに逆向きに回る。 |
-| `M_LoadingSegments` | 輪に並んだ丸いセグメントが 1 つずつ点灯し、同じ順に消える。 |
-| `M_LoadingTimer` | 細い輪の中の扇形が時計回りに満ちて、また空になる。 |
-| `M_LoadingHourglass` | 砂が上から下へ落ちきると、砂時計がひっくり返る。 |
-| `M_LoadingBounce` | ボールが跳ねて着地でつぶれ、影は上昇に合わせて縮む。 |
-| `M_LoadingRipple` | 中心から広がる輪が、減速しながら薄れていく。 |
-| `M_LoadingEqualizer` | 丸い棒の列が順に伸び縮みする、イコライザー風。 |
-| `M_LoadingGooey` | 丸い核から液体のように雫が分かれ、全体が回りながら外へ広がり、また溶け込む。 |
-| `M_LoadingMorph` | 角丸の四角が 4 分の 1 回転し、途中で円になり、止まる。 |
-| `M_LoadingLine` | 細い不定ライン。薄いトラックの左から棒が伸びて右へ抜ける。スピナーと同じ大きさなので、同じ場所に置けます。 |
-| `M_LoadingChase` | 点が輪の上で追いかけ合い、上で固まって一つに溶け、また離れる。 |
+| `M_LoadingDotRing` | <img src="Docs/images/materials/M_LoadingDotRing.gif" width="80" height="80" alt="M_LoadingDotRing"><br>輪に並んだ点が尾に向かって小さくなり、時計回りに回る。既定のローディングアイコン。 |
+| `M_LoadingDotGrid` | <img src="Docs/images/materials/M_LoadingDotGrid.gif" width="80" height="80" alt="M_LoadingDotGrid"><br>四角形に並んだ 8 つの点を、膨らみのパルスが時計回りに巡る。 |
+| `M_LoadingBoxes` | <img src="Docs/images/materials/M_LoadingBoxes.gif" width="80" height="80" alt="M_LoadingBoxes"><br>角丸の四角 4 つが順に明るくなる。 |
+| `M_LoadingSpokes` | <img src="Docs/images/materials/M_LoadingSpokes.gif" width="80" height="80" alt="M_LoadingSpokes"><br>おなじみの放射状スピナー。丸い棒の明るさが一周する。 |
+| `M_LoadingArc` | <img src="Docs/images/materials/M_LoadingArc.gif" width="80" height="80" alt="M_LoadingArc"><br>1 本の丸い弧が、伸び縮みしながら回る。 |
+| `M_LoadingComet` | <img src="Docs/images/materials/M_LoadingComet.gif" width="80" height="80" alt="M_LoadingComet"><br>丸い頭と、一周かけて細く薄くなる尾。 |
+| `M_LoadingDotRow` | <img src="Docs/images/materials/M_LoadingDotRow.gif" width="80" height="80" alt="M_LoadingDotRow"><br>横に並んだ点が左から順に膨らんで明るくなる。ボタンなど横長で小さい場所向き。 |
+| `M_LoadingDualArc` | <img src="Docs/images/materials/M_LoadingDualArc.gif" width="80" height="80" alt="M_LoadingDualArc"><br>外側と内側の輪に 2 対の弧。互いに逆向きに回る。 |
+| `M_LoadingSegments` | <img src="Docs/images/materials/M_LoadingSegments.gif" width="80" height="80" alt="M_LoadingSegments"><br>輪に並んだ丸いセグメントが 1 つずつ点灯し、同じ順に消える。 |
+| `M_LoadingTimer` | <img src="Docs/images/materials/M_LoadingTimer.gif" width="80" height="80" alt="M_LoadingTimer"><br>細い輪の中の扇形が時計回りに満ちて、また空になる。 |
+| `M_LoadingHourglass` | <img src="Docs/images/materials/M_LoadingHourglass.gif" width="80" height="80" alt="M_LoadingHourglass"><br>砂が上から下へ落ちきると、砂時計がひっくり返る。 |
+| `M_LoadingBounce` | <img src="Docs/images/materials/M_LoadingBounce.gif" width="80" height="80" alt="M_LoadingBounce"><br>ボールが跳ねて着地でつぶれ、影は上昇に合わせて縮む。 |
+| `M_LoadingRipple` | <img src="Docs/images/materials/M_LoadingRipple.gif" width="80" height="80" alt="M_LoadingRipple"><br>中心から広がる輪が、減速しながら薄れていく。 |
+| `M_LoadingEqualizer` | <img src="Docs/images/materials/M_LoadingEqualizer.gif" width="80" height="80" alt="M_LoadingEqualizer"><br>丸い棒の列が順に伸び縮みする、イコライザー風。 |
+| `M_LoadingGooey` | <img src="Docs/images/materials/M_LoadingGooey.gif" width="80" height="80" alt="M_LoadingGooey"><br>丸い核から液体のように雫が分かれ、全体が回りながら外へ広がり、また溶け込む。 |
+| `M_LoadingMorph` | <img src="Docs/images/materials/M_LoadingMorph.gif" width="80" height="80" alt="M_LoadingMorph"><br>角丸の四角が 4 分の 1 回転し、途中で円になり、止まる。 |
+| `M_LoadingLine` | <img src="Docs/images/materials/M_LoadingLine.gif" width="80" height="80" alt="M_LoadingLine"><br>細い不定ライン。薄いトラックの左から棒が伸びて右へ抜ける。スピナーと同じ大きさなので、同じ場所に置けます。 |
+| `M_LoadingChase` | <img src="Docs/images/materials/M_LoadingChase.gif" width="80" height="80" alt="M_LoadingChase"><br>点が輪の上で追いかけ合い、上で固まって一つに溶け、また離れる。 |
 
 ### パラメータ
 
@@ -121,9 +121,9 @@ Icon->Release(Handle);
 
 | マテリアル | 見た目 |
 |---|---|
-| `M_LoadingBarSlide` | 不定。帯が左から伸び、右へ走って縮んで消える（`TailDelay` で帯の長さ）。 |
-| `M_LoadingBarStripes` | 不定。斜めの縞が右へ流れる（`Period`、`Duty`）。 |
-| `M_LoadingBarFill` | 進捗あり。`Progress` パラメータ（0〜1）まで塗る。塗った部分を光沢が掃くので、粗い進捗の段差でも動きが見えます（`SheenWidth`、`SheenStrength`。光沢は `PrimaryColor` に色を付けたときに見えます）。 |
+| `M_LoadingBarSlide` | <img src="Docs/images/materials/M_LoadingBarSlide.gif" width="160" height="40" alt="M_LoadingBarSlide"><br>不定。帯が左から伸び、右へ走って縮んで消える（`TailDelay` で帯の長さ）。 |
+| `M_LoadingBarStripes` | <img src="Docs/images/materials/M_LoadingBarStripes.gif" width="160" height="40" alt="M_LoadingBarStripes"><br>不定。斜めの縞が右へ流れる（`Period`、`Duty`）。 |
+| `M_LoadingBarFill` | <img src="Docs/images/materials/M_LoadingBarFill.gif" width="160" height="40" alt="M_LoadingBarFill"><br>進捗あり。`Progress` パラメータ（0〜1）まで塗る。塗った部分を光沢が掃くので、粗い進捗の段差でも動きが見えます（`SheenWidth`、`SheenStrength`。光沢は `PrimaryColor` に色を付けたときに見えます）。 |
 
 不定バーはローディングアイコンにも使えます（*Icon Size* を横長に）。進捗ありのバーは **LoadingFX Progress Bar** ウィジェット用です。既定で `M_LoadingBarFill`（`Progress` パラメータを持つマテリアルなら何でも可）を描き、`Set Progress` で塗りが動きます。増えるときは `SmoothingTime`（0.25 秒）かけてなめらかに、減るときは即座に反映されるので、次のロードのためにリセットしても逆向きに動きません。
 

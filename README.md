@@ -84,24 +84,24 @@ They keep their look at any aspect ratio (the shape stays round and centered in 
 
 | Material | Look |
 |---|---|
-| `M_LoadingDotRing` | A ring of dots that shrink toward the tail, turning clockwise. The default loading icon. |
-| `M_LoadingDotGrid` | Eight dots on a square; a pulse swells them one after another, clockwise. |
-| `M_LoadingBoxes` | Four rounded boxes that brighten in turn. |
-| `M_LoadingSpokes` | The classic radial spinner: rounded spokes with a fade running around. |
-| `M_LoadingArc` | One rounded arc that stretches and shrinks while it turns. |
-| `M_LoadingComet` | A round head with a tail that thins and fades over one turn. |
-| `M_LoadingDotRow` | A row of dots that swell and brighten left to right. Suits buttons and other wide, small places. |
-| `M_LoadingDualArc` | Two pairs of arcs on an outer and an inner ring, turning in opposite directions. |
-| `M_LoadingSegments` | A ring of rounded segments that light up one by one, then go out in the same order. |
-| `M_LoadingTimer` | A pie inside a thin ring that fills clockwise, then empties. |
-| `M_LoadingHourglass` | Sand runs from the top bulb to the bottom one, then the glass turns over. |
-| `M_LoadingBounce` | A ball that bounces and flattens on landing, over a shadow that shrinks as it rises. |
-| `M_LoadingRipple` | Rings that start at the center, spread out, slow down and fade. |
-| `M_LoadingEqualizer` | A row of rounded bars that grow and shrink in turn, like an audio equalizer. |
-| `M_LoadingGooey` | Droplets that bud off a round core, drift out while the whole turns, then melt back in. |
-| `M_LoadingMorph` | A rounded square that turns a quarter, rounding into a circle halfway, then pauses. |
-| `M_LoadingLine` | A thin indeterminate line: a bar grows from the left of a faint track and leaves at the right. Keeps the same size as the spinners, so it fits where they fit. |
-| `M_LoadingChase` | Dots that chase each other around a ring, bunching up and melting into one blob at the top, then pulling apart. |
+| `M_LoadingDotRing` | <img src="Docs/images/materials/M_LoadingDotRing.gif" width="80" height="80" alt="M_LoadingDotRing"><br>A ring of dots that shrink toward the tail, turning clockwise. The default loading icon. |
+| `M_LoadingDotGrid` | <img src="Docs/images/materials/M_LoadingDotGrid.gif" width="80" height="80" alt="M_LoadingDotGrid"><br>Eight dots on a square; a pulse swells them one after another, clockwise. |
+| `M_LoadingBoxes` | <img src="Docs/images/materials/M_LoadingBoxes.gif" width="80" height="80" alt="M_LoadingBoxes"><br>Four rounded boxes that brighten in turn. |
+| `M_LoadingSpokes` | <img src="Docs/images/materials/M_LoadingSpokes.gif" width="80" height="80" alt="M_LoadingSpokes"><br>The classic radial spinner: rounded spokes with a fade running around. |
+| `M_LoadingArc` | <img src="Docs/images/materials/M_LoadingArc.gif" width="80" height="80" alt="M_LoadingArc"><br>One rounded arc that stretches and shrinks while it turns. |
+| `M_LoadingComet` | <img src="Docs/images/materials/M_LoadingComet.gif" width="80" height="80" alt="M_LoadingComet"><br>A round head with a tail that thins and fades over one turn. |
+| `M_LoadingDotRow` | <img src="Docs/images/materials/M_LoadingDotRow.gif" width="80" height="80" alt="M_LoadingDotRow"><br>A row of dots that swell and brighten left to right. Suits buttons and other wide, small places. |
+| `M_LoadingDualArc` | <img src="Docs/images/materials/M_LoadingDualArc.gif" width="80" height="80" alt="M_LoadingDualArc"><br>Two pairs of arcs on an outer and an inner ring, turning in opposite directions. |
+| `M_LoadingSegments` | <img src="Docs/images/materials/M_LoadingSegments.gif" width="80" height="80" alt="M_LoadingSegments"><br>A ring of rounded segments that light up one by one, then go out in the same order. |
+| `M_LoadingTimer` | <img src="Docs/images/materials/M_LoadingTimer.gif" width="80" height="80" alt="M_LoadingTimer"><br>A pie inside a thin ring that fills clockwise, then empties. |
+| `M_LoadingHourglass` | <img src="Docs/images/materials/M_LoadingHourglass.gif" width="80" height="80" alt="M_LoadingHourglass"><br>Sand runs from the top bulb to the bottom one, then the glass turns over. |
+| `M_LoadingBounce` | <img src="Docs/images/materials/M_LoadingBounce.gif" width="80" height="80" alt="M_LoadingBounce"><br>A ball that bounces and flattens on landing, over a shadow that shrinks as it rises. |
+| `M_LoadingRipple` | <img src="Docs/images/materials/M_LoadingRipple.gif" width="80" height="80" alt="M_LoadingRipple"><br>Rings that start at the center, spread out, slow down and fade. |
+| `M_LoadingEqualizer` | <img src="Docs/images/materials/M_LoadingEqualizer.gif" width="80" height="80" alt="M_LoadingEqualizer"><br>A row of rounded bars that grow and shrink in turn, like an audio equalizer. |
+| `M_LoadingGooey` | <img src="Docs/images/materials/M_LoadingGooey.gif" width="80" height="80" alt="M_LoadingGooey"><br>Droplets that bud off a round core, drift out while the whole turns, then melt back in. |
+| `M_LoadingMorph` | <img src="Docs/images/materials/M_LoadingMorph.gif" width="80" height="80" alt="M_LoadingMorph"><br>A rounded square that turns a quarter, rounding into a circle halfway, then pauses. |
+| `M_LoadingLine` | <img src="Docs/images/materials/M_LoadingLine.gif" width="80" height="80" alt="M_LoadingLine"><br>A thin indeterminate line: a bar grows from the left of a faint track and leaves at the right. Keeps the same size as the spinners, so it fits where they fit. |
+| `M_LoadingChase` | <img src="Docs/images/materials/M_LoadingChase.gif" width="80" height="80" alt="M_LoadingChase"><br>Dots that chase each other around a ring, bunching up and melting into one blob at the top, then pulling apart. |
 
 ### Parameters
 
@@ -121,9 +121,9 @@ The bars span the widget they are drawn in: a horizontal pill inset the same amo
 
 | Material | Look |
 |---|---|
-| `M_LoadingBarSlide` | Indeterminate. A segment grows from the left, runs right and shrinks away (`TailDelay` sets its length). |
-| `M_LoadingBarStripes` | Indeterminate. Diagonal stripes running right (`Period`, `Duty`). |
-| `M_LoadingBarFill` | Determinate. Fills to its `Progress` parameter (0 to 1), with a sheen sweeping over the filled part so coarse progress steps still show motion (`SheenWidth`, `SheenStrength`; the sheen is visible on a colored `PrimaryColor`). |
+| `M_LoadingBarSlide` | <img src="Docs/images/materials/M_LoadingBarSlide.gif" width="160" height="40" alt="M_LoadingBarSlide"><br>Indeterminate. A segment grows from the left, runs right and shrinks away (`TailDelay` sets its length). |
+| `M_LoadingBarStripes` | <img src="Docs/images/materials/M_LoadingBarStripes.gif" width="160" height="40" alt="M_LoadingBarStripes"><br>Indeterminate. Diagonal stripes running right (`Period`, `Duty`). |
+| `M_LoadingBarFill` | <img src="Docs/images/materials/M_LoadingBarFill.gif" width="160" height="40" alt="M_LoadingBarFill"><br>Determinate. Fills to its `Progress` parameter (0 to 1), with a sheen sweeping over the filled part so coarse progress steps still show motion (`SheenWidth`, `SheenStrength`; the sheen is visible on a colored `PrimaryColor`). |
 
 The indeterminate bars work as the loading icon too (set a wide *Icon Size*). The determinate one is for the **LoadingFX Progress Bar** widget: it draws `M_LoadingBarFill` by default (or any material with a `Progress` parameter), and `Set Progress` moves the fill. An increase is smoothed over `SmoothingTime` (0.25 s); a decrease is applied at once, so a bar reset for the next load never runs backwards.
 
