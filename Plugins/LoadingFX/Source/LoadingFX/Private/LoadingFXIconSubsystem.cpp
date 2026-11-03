@@ -15,6 +15,7 @@
 #include "MaterialDomain.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/CoreDelegates.h"
 #include "Misc/CoreMisc.h"
 #include "MoviePlayer.h"
 #include "Styling/CoreStyle.h"
@@ -133,6 +134,8 @@ void ULoadingFXIconSubsystem::Deinitialize()
 		UE_LOG(LogLoadingFX, Log, TEXT("Loading icon subsystem shut down inside blocking section '%s'."), *BlockingSectionReason.ToString());
 		BlockingSectionDepth = 0;
 		bBlockingSectionPlaysMovie = false;
+		FCoreDelegates::OnEndFrame.Remove(BlockingSectionEndFrameHandle);
+		BlockingSectionEndFrameHandle.Reset();
 	}
 
 	Super::Deinitialize();
@@ -705,6 +708,7 @@ void ULoadingFXIconSubsystem::BeginBlockingSection(FName Reason)
 	BlockingSectionReason = Reason;
 	BlockingSectionStartSeconds = FPlatformTime::Seconds();
 	bBlockingSectionPlaysMovie = false;
+	BlockingSectionEndFrameHandle = FCoreDelegates::OnEndFrame.AddUObject(this, &ThisClass::HandleEndFrameInBlockingSection);
 
 	if (!IsIconVisible() && !PendingShowTickerHandle.IsValid())
 	{
@@ -756,6 +760,8 @@ void ULoadingFXIconSubsystem::EndBlockingSection()
 	{
 		return;
 	}
+	FCoreDelegates::OnEndFrame.Remove(BlockingSectionEndFrameHandle);
+	BlockingSectionEndFrameHandle.Reset();
 
 	if (bBlockingSectionPlaysMovie)
 	{
@@ -769,6 +775,18 @@ void ULoadingFXIconSubsystem::EndBlockingSection()
 			*BlockingSectionReason.ToString(), FPlatformTime::Seconds() - BlockingSectionStartSeconds);
 	}
 	BlockingSectionReason = NAME_None;
+}
+
+void ULoadingFXIconSubsystem::HandleEndFrameInBlockingSection()
+{
+	// Work that blocks the game thread is over by the end of the frame, so a section still open here was never ended: a
+	// Blueprint path that skips End Blocking Section, or a Delay before it. Left open, it would make every later section a
+	// nested one that takes nothing over. MoviePlayer started in the engine tick has already stopped (the engine loop
+	// waits for it right after the tick); started later in the frame, it is still playing and stops here.
+	UE_LOG(LogLoadingFX, Warning, TEXT("Blocking section '%s' was not ended in the frame it began (depth %d): ending it now. Call EndBlockingSection in the same frame, right after the blocking work."),
+		*BlockingSectionReason.ToString(), BlockingSectionDepth);
+	BlockingSectionDepth = 1;
+	EndBlockingSection();
 }
 
 bool ULoadingFXIconSubsystem::TickOwnerWatch(float /*DeltaTime*/)

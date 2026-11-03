@@ -168,9 +168,13 @@ Loader->LoadAssetsSync(Paths, TEXT("Portrait"), this, false, Loaded);
 
 進捗は「読み込み終わったアセット数 / 要求したアセット数」なので、1 件の要求では 0 から 1 に一気に進みます。コールバックがロードの呼び出しの内側で呼ばれることはありません。
 
-### ブロッキングセクション（C++）
+### ブロッキングセクション
 
-自前の処理でゲームスレッドを止める間もアイコンを回し続けたいときは、その処理をブロッキングセクションで囲みます。
+自前の処理（*Load Asset Blocking* ノード、ほかのプラグインの同期ロード、重いループなど）でゲームスレッドを止める間もアイコンを回し続けたいときは、その処理をブロッキングセクションで囲みます。
+
+**Blueprint:** *Get LoadingFXIconSubsystem* → **Begin Blocking Section**（`Reason`）→ ブロックするノード → **End Blocking Section** を、一続きの実行の流れでつなぎます。セクションは同じフレームのうちに終えてください。間に *Delay* などの latent ノードを挟むと、そこでブロックせずにフレームが終わります。フレームの終わりにまだ開いているセクションはそこで終了し、ログに警告が出ます。セクションが開いているかは **Is In Blocking Section** でわかります。
+
+**C++:**
 
 ```cpp
 #include "LoadingFXIconSubsystem.h"
@@ -181,7 +185,9 @@ Loader->LoadAssetsSync(Paths, TEXT("Portrait"), this, false, Loaded);
 }
 ```
 
-セクションが MoviePlayer を引き継ぐのは、アイコンが要求されていて、ほかのローディング画面が出ていないときだけです。MoviePlayer が使えない環境（エディタ、PIE、`-NoLoadingScreen`）では何もしません。`BeginBlockingSection` / `EndBlockingSection` が手動の形で、入れ子にできます。
+`BeginBlockingSection` / `EndBlockingSection` が手動の形です。スコープなら終了を呼び忘れることがありません。
+
+セクションが MoviePlayer を引き継ぐのは、アイコンが要求されていて（先に `Acquire` してください）、ほかのローディング画面が出ていないときだけです。MoviePlayer が使えない環境（エディタ、PIE、`-NoLoadingScreen`）では何もしません。引き継ぐと、ごく短い処理でもその時点で画面がローディング画面の背景色に変わります。セクションは入れ子にでき、MoviePlayer を開始・停止するのは一番外側のセクションだけです。
 
 ## 動かしてみる: サンプル
 
@@ -189,7 +195,7 @@ Loader->LoadAssetsSync(Paths, TEXT("Portrait"), this, false, Loaded);
 
 **Blueprint サンプル（`Content/Sample`）。** レベル 2 つで、処理はすべて Blueprint です。エディタを開くと `L_LFXSample_Hub` が開きます。*Standalone Game* で再生してください（エディタのビューポート内では MoviePlayer が使えないので、レベルの読み込み中はアイコンが止まります）。
 
-- `L_LFXSample_Hub`: *Loading Icon* ページでは、アイコンを 0.3 秒・0.8 秒・3 秒のあいだ要求し、実際に表示された時刻と消えた時刻をログに出します。表示遅延と最低表示時間の働きが見られます。*Asset Loader* ページでは、同梱のマテリアルを *Load Assets Async* で読み込んで *LoadingFX Progress Bar* に進捗を出します（Cancel と Release 付き）。*Open the Gallery level* はアイコンを要求して Gallery を開きます。要求の Owner は PlayerController なので、遷移で自動的に解除されます。
+- `L_LFXSample_Hub`: *Loading Icon* ページでは、アイコンを 0.3 秒・0.8 秒・3 秒のあいだ要求し、実際に表示された時刻と消えた時刻をログに出します。表示遅延と最低表示時間の働きが見られます。同じページの *2 s blocking work* ボタンは、アイコンを要求してから *Begin Blocking Section* と *End Blocking Section* のあいだでゲームスレッドを 2 秒止めます（*Load Asset Blocking* ノードやほかのプラグインの同期ロードの代わりに debug hitch を使っています）。そのあいだもアイコンはローディング画面で回り続けます。*Asset Loader* ページでは、同梱のマテリアルを *Load Assets Async* で読み込んで *LoadingFX Progress Bar* に進捗を出します（Cancel と Release 付き）。*Open the Gallery level* はアイコンを要求して Gallery を開きます。要求の Owner は PlayerController なので、遷移で自動的に解除されます。
 - `L_LFXSample_Gallery`: 重いレベルを模して、レベルの読み込み中にゲームスレッドを 2 秒止めます（その間もロード画面でアイコンが回ります）。続いて *Show Loading Icon* 付きの *Load Assets Async* で自分のマテリアルを読み込み、21 種すべてを *LoadingFX Spinner* で並べます。1 つ選ぶと、*Get Dynamic Material* で `PrimaryColor` と `Speed` を変えられます。
 
 **コンソールコマンド（プロトタイプ）。** `Source/LoadingFX_Dev/Prototype` の `LFXProto.*` コマンドで、全マテリアルの表示とプラグインの動作確認ができます。エディタの外でプロジェクトを起動し、コマンドを渡します。
