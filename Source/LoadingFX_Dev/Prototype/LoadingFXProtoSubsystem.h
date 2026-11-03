@@ -66,6 +66,14 @@ enum class ELoadingFXProtoShowcaseSet : uint8
  *                                 release, already loaded, empty, cancel, owner), sync loads with and without the loading icon
  *                                 (the blocking section), the Blueprint sync function and the Load Assets Async action. Run it
  *                                 in a fresh process: it expects its materials not to be loaded yet.
+ *   LFXProto.BlockingSection [quit]  Check the blocking section through its UFunctions, as Blueprint calls them: Begin / End in
+ *                                 the world tick, a Begin without End there and later in the frame (ended at the end of the
+ *                                 frame), the next section taking over again, a nested sync load, and Begin / End inside a
+ *                                 button's OnClicked (Slate input routing).
+ *   LFXProto.ClickButton Name [quit]  Click the UMG button named Name (a widget in a Blueprint's widget tree, such as the
+ *                                 sample's BlockingTaskButton) through FSlateApplication one second later, and log how long
+ *                                 its OnClicked took. Saves Saved/Screenshots/LFXProto_Click.png 1.5 s after the click; 'quit'
+ *                                 exits 3 s after it.
  *
  * The prototype loads its own material list on first use, so that it does not hide the icon material preload.
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
@@ -93,6 +101,8 @@ public:
 	void RunMinDisplayTest(bool bQuitWhenDone);
 	void RunShowDelayTest(bool bQuitWhenDone);
 	void RunLoaderTest(bool bQuitWhenDone);
+	void RunBlockingSectionTest(bool bQuitWhenDone);
+	void RunClickButton(const FString& ButtonName, bool bQuitWhenDone);
 
 private:
 	/** LFXProto.Loader: the outputs of the Load Assets Async actions it starts. */
@@ -141,6 +151,18 @@ private:
 	void ReportLoaderState(const TCHAR* Step, const FLoadingFXLoadHandle& Handle, const FString& Expect) const;
 	void HandleLoaderLoadStarted(const FLoadingFXLoadInfo& Info);
 	void HandleLoaderLoadEnded(const FLoadingFXLoadInfo& Info);
+
+	/** LFXProto.BlockingSection: starts a case (times and frames in its reports count from now). */
+	void StartSectionCase(const FString& Description);
+	void ReportSectionState(const TCHAR* Step, const FString& Expect) const;
+	/** Runs Action in the world tick of the next frame, where Blueprint events and timers run. */
+	void RunInWorldTick(TFunction<void()> Action);
+	/** Calls a UFUNCTION of the icon subsystem by name through ProcessEvent, as Blueprint does ("Name Arg"). */
+	void CallIconFunction(const TCHAR* Command);
+	/** A button whose OnClicked runs a blocking section, and a click synthesized on it through FSlateApplication. */
+	void ShowSectionButton();
+	void ClickSectionButton();
+	void HideSectionButton();
 
 	/**
 	 * LFXProto.IconTravel cold: reads the icon's corner of the back buffer on every presented frame, MoviePlayer's
@@ -199,6 +221,14 @@ private:
 	float LoaderSimulatedSyncSeconds = 0.0f;
 	FDelegateHandle LoaderStartedHandle;
 	FDelegateHandle LoaderEndedHandle;
+
+	/** LFXProto.BlockingSection state. */
+	double SectionCaseStartSeconds = 0.0;
+	uint64 SectionCaseStartFrame = 0;
+	FLoadingFXIconHandle SectionIconHandle;
+	TSharedPtr<SWidget> SectionButtonRoot;
+	TSharedPtr<SWidget> SectionButton;
+	int32 SectionButtonClicks = 0;
 
 	TSharedPtr<SWidget> ViewportOverlayRoot;
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;

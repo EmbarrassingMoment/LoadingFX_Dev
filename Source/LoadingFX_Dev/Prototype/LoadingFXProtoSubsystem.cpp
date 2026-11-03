@@ -14,6 +14,7 @@
 #include "LoadingFXSpinner.h"
 
 #include "Algo/Count.h"
+#include "Components/Button.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -38,10 +39,13 @@
 #include "RHIFeatureLevel.h"
 #include "Rendering/SlateRenderer.h"
 #include "Runtime/Launch/Resources/Version.h"
+#include "TimerManager.h"
 #include "UnrealClient.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
+#include "UObject/UObjectIterator.h"
 #include "Styling/CoreStyle.h"
+#include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScaleBox.h"
@@ -247,6 +251,28 @@ namespace LoadingFXProto
 		return Algo::CountIf(Objects, [](const TWeakObjectPtr<UObject>& Object) { return Object.IsValid(); });
 	}
 
+	/**
+	 * Clicks the middle of Widget through FSlateApplication, the same route as a real click from the hit test on, and returns
+	 * whether the down and up events were handled. The game viewport captures the mouse in game input mode, which would take
+	 * the events instead, so that is released first. SButton clicks only while hovered, which a mouse move over it sets.
+	 */
+	bool SynthesizeClick(const SWidget& Widget, FVector2D& OutPosition)
+	{
+		FSlateApplication& Slate = FSlateApplication::Get();
+		OutPosition = FVector2D(Widget.GetTickSpaceGeometry().GetAbsolutePositionAtCoordinates(FVector2D(0.5, 0.5)));
+		Slate.ReleaseAllPointerCapture();
+		const FPointerEvent Move(Slate.GetUserIndexForMouse(), FSlateApplication::CursorPointerIndex, OutPosition, OutPosition - FVector2D(1.0, 1.0),
+			TSet<FKey>(), EKeys::Invalid, 0.0f, FModifierKeysState());
+		Slate.ProcessMouseMoveEvent(Move);
+		const FPointerEvent Down(Slate.GetUserIndexForMouse(), FSlateApplication::CursorPointerIndex, OutPosition, OutPosition,
+			TSet<FKey>({ EKeys::LeftMouseButton }), EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+		const FPointerEvent Up(Slate.GetUserIndexForMouse(), FSlateApplication::CursorPointerIndex, OutPosition, OutPosition,
+			TSet<FKey>(), EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+		const bool bDownHandled = Slate.ProcessMouseButtonDownEvent(nullptr, Down);
+		const bool bUpHandled = Slate.ProcessMouseButtonUpEvent(Up);
+		return bDownHandled && bUpHandled;
+	}
+
 	ULoadingFXProtoSubsystem* FindSubsystem(const UWorld* World)
 	{
 		const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
@@ -431,6 +457,29 @@ namespace LoadingFXProto
 				Subsystem->RunLoaderTest(Args.Contains(TEXT("quit")));
 			}
 		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs BlockingSectionCommand(
+		TEXT("LFXProto.BlockingSection"),
+		TEXT("Verification prototype: check the blocking section through its Blueprint entry points (Begin / End, a missing End, nesting, a button's OnClicked). Args: [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunBlockingSectionTest(Args.Contains(TEXT("quit")));
+			}
+		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs ClickButtonCommand(
+		TEXT("LFXProto.ClickButton"),
+		TEXT("Verification prototype: click a UMG button by name through FSlateApplication one second later and log how long its OnClicked took. Args: Name [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World);
+			if (Subsystem && Args.IsValidIndex(0))
+			{
+				Subsystem->RunClickButton(Args[0], Args.Contains(TEXT("quit")));
+			}
+		}));
 }
 
 bool ULoadingFXProtoSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -522,6 +571,7 @@ void ULoadingFXProtoSubsystem::Deinitialize()
 	ProgressBarLoadHandle.Invalidate();
 	HideProgressBars();
 	HideShowcase();
+	HideSectionButton();
 	LoadingScreenOverlay.Reset();
 
 	Super::Deinitialize();
@@ -1984,6 +2034,283 @@ void ULoadingFXProtoSubsystem::HandleLoaderActionCanceled(FLoadingFXLoadHandle H
 {
 	++LoaderCanceledCount;
 	UE_LOG(LogLoadingFXProto, Display, TEXT("[Loader]   action On Canceled at %.2fs: progress %.2f"), LoaderCaseSeconds(), Progress);
+}
+
+void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
+{
+	static const TCHAR* const Tag = TEXT("[Section]");
+
+	ULoadingFXLoaderSubsystem* Loader = GetGameInstance()->GetSubsystem<ULoadingFXLoaderSubsystem>();
+	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	if (!Loader || !IconSubsystem || !GetWorld())
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s ULoadingFXLoaderSubsystem, ULoadingFXIconSubsystem or the world not found"), Tag);
+		return;
+	}
+	if (IconSubsystem->IsIconVisible() || IconSubsystem->GetRequestCount() > 0 || IconSubsystem->IsInBlockingSection())
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s the loading icon is in use: release its requests first (LoadingFX.Icon.Hide all)"), Tag);
+		return;
+	}
+	UE_LOG(LogLoadingFXProto, Display, TEXT("%s MoviePlayer enabled=%d (expect 1: run with -game)"), Tag, IsMoviePlayerEnabled() ? 1 : 0);
+
+	SequenceSteps.Reset();
+
+	SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
+	{
+		StartSectionCase(TEXT("1/7 the Blueprint entry points"));
+		for (const TCHAR* Name : { TEXT("BeginBlockingSection"), TEXT("EndBlockingSection"), TEXT("IsInBlockingSection") })
+		{
+			const UFunction* Function = IconSubsystem->FindFunction(Name);
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   %s: UFunction=%d BlueprintCallable=%d BlueprintPure=%d"), Name, Function ? 1 : 0,
+				Function && Function->HasAnyFunctionFlags(FUNC_BlueprintCallable) ? 1 : 0, Function && Function->HasAnyFunctionFlags(FUNC_BlueprintPure) ? 1 : 0);
+		}
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   (expect 1 1 0, 1 1 0, 1 1 1)"));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
+	{
+		StartSectionCase(TEXT("2/7 Begin / End in the world tick, icon visible, 1.5 s of blocking work"));
+		SectionIconHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.BlockingSection"));
+		RunInWorldTick([this]()
+		{
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section2"));
+			ReportSectionState(TEXT("after Begin"), TEXT("in section=1 MoviePlayer playing=1"));
+			SimulateBlockingWork(1.5f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("after End"), TEXT("in section=0 MoviePlayer playing=0, about 1.5 s after the case started"));
+		});
+	} });
+
+	SequenceSteps.Add({ 2.5f, [this]()
+	{
+		StartSectionCase(TEXT("3/7 Begin without End in the world tick (a Blueprint path that skips End), 0.5 s of blocking work"));
+		RunInWorldTick([this]()
+		{
+			SectionCaseStartFrame = GFrameCounter;
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section3"));
+			SimulateBlockingWork(0.5f, false);
+			ReportSectionState(TEXT("returning without End"), TEXT("in section=1 MoviePlayer playing=1; the plugin warns at the end of this frame"));
+			RunInWorldTick([this]()
+			{
+				ReportSectionState(TEXT("in the next world tick"), TEXT("frame +1: in section=0 MoviePlayer playing=0"));
+			});
+		});
+	} });
+
+	SequenceSteps.Add({ 1.5f, [this]()
+	{
+		StartSectionCase(TEXT("4/7 the next section takes over again, 1 s of blocking work"));
+		RunInWorldTick([this]()
+		{
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section4"));
+			ReportSectionState(TEXT("after Begin"), TEXT("in section=1 MoviePlayer playing=1 (0 would mean case 3 left the section open)"));
+			SimulateBlockingWork(1.0f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("after End"), TEXT("in section=0 MoviePlayer playing=0"));
+		});
+	} });
+
+	SequenceSteps.Add({ 2.0f, [this]()
+	{
+		StartSectionCase(TEXT("5/7 Begin without End after the engine tick (a core ticker), 0.3 s of blocking work"));
+		CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section5"));
+		SimulateBlockingWork(0.3f, false);
+		ReportSectionState(TEXT("returning without End"), TEXT("in section=1 MoviePlayer playing=1; the plugin warns and stops MoviePlayer at the end of this frame"));
+		RunInWorldTick([this]()
+		{
+			ReportSectionState(TEXT("in the next world tick"), TEXT("frame +1: in section=0 MoviePlayer playing=0"));
+		});
+	} });
+
+	SequenceSteps.Add({ 1.0f, [this, Loader]()
+	{
+		StartSectionCase(TEXT("6/7 a sync load through the loader nested in a section, then an End too many"));
+		RunInWorldTick([this, Loader]()
+		{
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section6"));
+			TArray<UObject*> Loaded;
+			FLoadingFXLoadHandle Handle = Loader->LoadAssetsSync({ LoadingFXProto::LoaderMaterial(TEXT("M_LoadingRipple")) }, TEXT("LFXProto.Section6Load"), nullptr, false, Loaded);
+			ReportSectionState(*FString::Printf(TEXT("after the nested sync load (%s)"), *LoadingFXProto::DescribeObjects(Loaded)),
+				TEXT("M_LoadingRipple; in section=1 MoviePlayer playing=1: only the outer section stops it"));
+			SimulateBlockingWork(0.5f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("after End"), TEXT("in section=0 MoviePlayer playing=0"));
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("after a second End"), TEXT("in section=0, with the plugin's warning about an End without a Begin"));
+			Loader->Release(Handle);
+		});
+	} });
+
+	SequenceSteps.Add({ 1.5f, [this]()
+	{
+		StartSectionCase(TEXT("7/7 Begin / End inside a button's OnClicked (Slate input routing), 1 s of blocking work"));
+		ShowSectionButton();
+	} });
+	SequenceSteps.Add({ 0.5f, [this]()
+	{
+		ClickSectionButton();
+		ReportSectionState(*FString::Printf(TEXT("after the click (OnClicked ran %d time(s))"), SectionButtonClicks), TEXT("OnClicked ran 1 time; in section=0 MoviePlayer playing=0"));
+	} });
+
+	SequenceSteps.Add({ 1.5f, [this, IconSubsystem, bQuitWhenDone]()
+	{
+		HideSectionButton();
+		IconSubsystem->Release(SectionIconHandle);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Section] finished"));
+		if (bQuitWhenDone)
+		{
+			FPlatformMisc::RequestExit(false, TEXT("[Section]"));
+		}
+	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::StartSectionCase(const FString& Description)
+{
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Section] %s"), *Description);
+	SectionCaseStartSeconds = FPlatformTime::Seconds();
+	SectionCaseStartFrame = GFrameCounter;
+}
+
+void ULoadingFXProtoSubsystem::ReportSectionState(const TCHAR* Step, const FString& Expect) const
+{
+	const ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	const IGameMoviePlayer* MoviePlayer = GetMoviePlayer();
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   %s at %.2fs (frame +%llu): in section=%d MoviePlayer playing=%d (expect %s)"),
+		Step, FPlatformTime::Seconds() - SectionCaseStartSeconds, GFrameCounter - SectionCaseStartFrame,
+		IconSubsystem && IconSubsystem->IsInBlockingSection() ? 1 : 0, MoviePlayer && MoviePlayer->IsMovieCurrentlyPlaying() ? 1 : 0, *Expect);
+}
+
+void ULoadingFXProtoSubsystem::RunInWorldTick(TFunction<void()> Action)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, MoveTemp(Action)));
+	}
+}
+
+void ULoadingFXProtoSubsystem::CallIconFunction(const TCHAR* Command)
+{
+	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	if (!IconSubsystem || !IconSubsystem->CallFunctionByNameWithArguments(Command, *GLog, nullptr, /*bForceCallWithNonExec*/ true))
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[Section]   calling '%s' through its UFunction failed"), Command);
+	}
+}
+
+void ULoadingFXProtoSubsystem::ShowSectionButton()
+{
+	UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+	if (!ViewportClient || SectionButtonRoot.IsValid())
+	{
+		return;
+	}
+
+	SectionButtonClicks = 0;
+	SectionButton = SNew(SButton)
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Center)
+		.OnClicked_Lambda([this]()
+		{
+			++SectionButtonClicks;
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section7"));
+			ReportSectionState(TEXT("in OnClicked, after Begin"), TEXT("in section=1 MoviePlayer playing=1"));
+			SimulateBlockingWork(1.0f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("in OnClicked, after End"), TEXT("in section=0 MoviePlayer playing=0"));
+			return FReply::Handled();
+		})
+		[
+			SNew(STextBlock).Text(FText::FromString(TEXT("Blocking section (1 s)")))
+		];
+
+	SectionButtonRoot = SNew(SBox)
+		.Visibility(EVisibility::SelfHitTestInvisible)
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Center)
+		[
+			SNew(SBox)
+			.WidthOverride(240.0f)
+			.HeightOverride(60.0f)
+			[
+				SectionButton.ToSharedRef()
+			]
+		];
+	ViewportClient->AddViewportWidgetContent(SectionButtonRoot.ToSharedRef(), LoadingFXProto::ViewportOverlayZOrder + 2);
+}
+
+void ULoadingFXProtoSubsystem::ClickSectionButton()
+{
+	if (!SectionButton.IsValid() || !FSlateApplication::IsInitialized())
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[Section]   no button to click"));
+		return;
+	}
+
+	FVector2D Center;
+	const bool bHandled = LoadingFXProto::SynthesizeClick(*SectionButton, Center);
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   synthesized a click at (%.0f, %.0f): handled=%d"), Center.X, Center.Y, bHandled ? 1 : 0);
+}
+
+void ULoadingFXProtoSubsystem::RunClickButton(const FString& ButtonName, bool bQuitWhenDone)
+{
+	SequenceSteps.Reset();
+
+	// A second for the level's widgets to be created and laid out (the click needs their geometry).
+	SequenceSteps.Add({ 1.0f, [this, ButtonName]()
+	{
+		UButton* Button = nullptr;
+		for (TObjectIterator<UButton> It; It; ++It)
+		{
+			if (It->GetName() == ButtonName && It->GetCachedWidget().IsValid() && It->GetWorld() == GetWorld())
+			{
+				Button = *It;
+				break;
+			}
+		}
+		if (!Button)
+		{
+			UE_LOG(LogLoadingFXProto, Warning, TEXT("[Click] no button named %s on screen"), *ButtonName);
+			return;
+		}
+
+		const double StartSeconds = FPlatformTime::Seconds();
+		FVector2D Position;
+		const bool bHandled = LoadingFXProto::SynthesizeClick(*Button->GetCachedWidget(), Position);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Click] clicked %s (%s) at (%.0f, %.0f): handled=%d, the click took %.2fs"),
+			*ButtonName, *Button->GetPathName(), Position.X, Position.Y, bHandled ? 1 : 0, FPlatformTime::Seconds() - StartSeconds);
+	} });
+
+	SequenceSteps.Add({ 1.5f, []()
+	{
+		LoadingFXProto::RequestScreenshot(TEXT("Click"), TEXT("LFXProto_Click.png"));
+	} });
+
+	SequenceSteps.Add({ 1.5f, [bQuitWhenDone]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Click] finished"));
+		if (bQuitWhenDone)
+		{
+			FPlatformMisc::RequestExit(false, TEXT("[Click]"));
+		}
+	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::HideSectionButton()
+{
+	if (SectionButtonRoot.IsValid())
+	{
+		if (UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient())
+		{
+			ViewportClient->RemoveViewportWidgetContent(SectionButtonRoot.ToSharedRef());
+		}
+	}
+	SectionButtonRoot.Reset();
+	SectionButton.Reset();
 }
 
 void ULoadingFXProtoSubsystem::HandleIconVisibilityChanged(bool bVisible)

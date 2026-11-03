@@ -123,17 +123,23 @@ public:
 	/**
 	 * Marks the start of work that blocks the game thread (a sync load, for example), so the icon keeps animating
 	 * through it. If the icon is requested at that moment (also within the show delay), MoviePlayer takes over and draws
-	 * it on a black screen until the matching EndBlockingSection; otherwise nothing changes and the game just hitches.
-	 * Sections nest, and only the outermost one starts and stops MoviePlayer.
+	 * it on the loading screen color until the matching EndBlockingSection; otherwise nothing changes and the game just
+	 * hitches. Sections nest, and only the outermost one starts and stops MoviePlayer.
 	 * Does nothing where MoviePlayer is unavailable (editor, PIE, -NoLoadingScreen) or while another loading screen is
-	 * set up or playing. Prefer FLoadingFXBlockingScope, which cannot miss the end.
+	 * set up or playing.
+	 * End the section in the same frame, right after the blocking work: a latent node such as Delay in between does not
+	 * block, it lets the frame end. A section still open at the end of the frame is ended then, with a warning. In C++,
+	 * prefer FLoadingFXBlockingScope, which cannot miss the end.
 	 */
+	UFUNCTION(BlueprintCallable, Category = "LoadingFX")
 	void BeginBlockingSection(FName Reason);
 
 	/** Ends the section started by the matching BeginBlockingSection. The outermost one waits for MoviePlayer to finish. */
+	UFUNCTION(BlueprintCallable, Category = "LoadingFX")
 	void EndBlockingSection();
 
 	/** True between the outermost BeginBlockingSection and its EndBlockingSection, whether MoviePlayer took over or not. */
+	UFUNCTION(BlueprintPure, Category = "LoadingFX")
 	bool IsInBlockingSection() const { return BlockingSectionDepth > 0; }
 
 	/** Fires when the icon appears (after the show delay) or hides (after the last release and the minimum display time). */
@@ -206,6 +212,9 @@ private:
 	 */
 	bool SetUpIconLoadingScreen(const FString& What);
 
+	/** Bound only while a section is open: ends one that was not ended in the frame it began. */
+	void HandleEndFrameInBlockingSection();
+
 	bool TickOwnerWatch(float DeltaTime);
 
 	/** Keeps the material alive across garbage collection, including the one inside LoadMap. */
@@ -244,6 +253,7 @@ private:
 	bool bBlockingSectionPlaysMovie = false;
 	FName BlockingSectionReason;
 	double BlockingSectionStartSeconds = 0.0;
+	FDelegateHandle BlockingSectionEndFrameHandle;
 
 	/** Registered only while some request has an owner to watch. */
 	FTSTicker::FDelegateHandle OwnerWatchTickerHandle;

@@ -64,7 +64,7 @@ Icon->Release(Handle);   // takes the handle by reference and invalidates it
 | `GetRequestCount()` | Active requests, including those still waiting for the show delay. |
 | `IsHandleActive(Handle)` | True if that request has not been released. `FLoadingFXIconHandle::IsValid()` only says the copy was issued and not released through itself. |
 | `OnVisibilityChanged(bool bVisible)` (Blueprint-assignable) / `OnVisibilityChangedNative` (C++, fires first) | Fires when the icon appears or hides, i.e. what is on screen, not the request count. |
-| `BeginBlockingSection(FName Reason)` / `EndBlockingSection()` / `IsInBlockingSection()` (C++ only) | Mark game-thread-blocking work so the icon keeps animating through it (see below). Nested sections are counted. |
+| `BeginBlockingSection(FName Reason)` / `EndBlockingSection()` / `IsInBlockingSection()` (*Begin Blocking Section* / *End Blocking Section* / *Is In Blocking Section*) | Mark game-thread-blocking work so the icon keeps animating through it (see below). Nested sections are counted. End a section in the frame it began; one still open at the end of the frame is ended then, with a warning. |
 | `FLoadingFXBlockingScope(const UObject* WorldContextObject, FName Reason)` (C++ only) | RAII form of a blocking section. Prefer it. |
 
 Requests are reference counted: the icon stays while any request is active, so independent systems can share it. Everything is **game thread only**. The subsystem is not created on dedicated servers or in commandlets, so `GetSubsystem` returns null there; check it.
@@ -92,7 +92,16 @@ The plugin does **not** show the icon by itself for travel and does not decide w
 - Do not pass an actor of the old level as `Owner`: it is destroyed by the travel, and its request is released right after the load, possibly before the destination is ready. Level Blueprint variables are lost on travel too.
 - Acquiring in the same frame as `Open Level` is fine: the load starts later in that frame, with the request already active, so the icon appears on the loading screen at the show delay.
 
-**Your own blocking work (C++):**
+**Your own blocking work** (a *Load Asset Blocking* node, another plugin's synchronous load, a heavy loop):
+
+```
+[Blueprint: one chain of execution, all in the same frame]
+  Handle = Acquire Loading Icon (Reason = "BuildCache")   // unless the icon is already requested
+  Begin Blocking Section (Reason = "BuildCache")
+  ... nodes that block the game thread ...
+  End Blocking Section
+  Release Loading Icon (Handle)
+```
 
 ```cpp
 {
@@ -102,6 +111,8 @@ The plugin does **not** show the icon by itself for travel and does not decide w
 ```
 
 The section starts MoviePlayer only if the icon is requested at that moment (acquire first), and does nothing where MoviePlayer is unavailable (editor, PIE, `-NoLoadingScreen`) or while another loading screen is set up or playing. The screen turns to `LoadingScreenBackgroundColor` (black by default) as soon as the section starts, even for very short work.
+
+Begin and End must run in the same frame. Never put a latent node (*Delay*, the output pins of an async node) between them: it does not block, it lets the frame end. A section still open at the end of its frame is ended there and logs `Blocking section '<Reason>' was not ended in the frame it began`. Loads that do not block (*Load Assets Async*, the engine's *Async Load Asset*) need no section; acquire the icon around them instead.
 
 ## Settings (`ULoadingFXSettings`)
 
@@ -262,6 +273,7 @@ Never depend on `LoadingFXBridge`; it has no API.
 - **Full-screen overlays above the icon.** The icon sits at `IconZOrder` 10010 among viewport widgets, just above TransitionFX's widget-layer presets (`WidgetZOrder` 10000), so it shows over a held fade. Anything added at a higher Z-order covers it (a preset whose `WidgetZOrder` was raised, or another plugin's overlay): raise `IconZOrder` above that overlay.
 - **A short wait at startup in uncooked runs** (`-game`, Standalone Game): the engine compiles a material's shaders only when it is first drawn, which a blocked game thread cannot finish, so the icon subsystem compiles the icon material's shaders when it loads it and logs `Compiled the shaders of the loading icon material ... in N ms`. Expect a few tens of ms, or a second or two on the first run after the plugin is added or the material changed. Cooked builds and PIE skip this.
 - **An `Owner` from the level being left** releases the request right after the travel (see *Map travel*).
+- **A blocking section left open** (a branch that skips *End Blocking Section*, or a *Delay* before it) is ended at the end of the frame with a warning; the work after that point is not covered. Fix the graph so that every path reaches End in the same frame.
 - **`IsIconVisible` is false within the show delay** although the icon is requested; use `GetRequestCount` to know whether it is requested.
 - **A spinner in your own widget freezes during blocking loads**; only the loading icon keeps moving.
 

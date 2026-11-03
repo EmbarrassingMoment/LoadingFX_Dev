@@ -66,17 +66,24 @@ Begin Object Class=/Script/UMG.TextBlock Name="IconInfo" ExportPath="/Script/UMG
    DisplayLabel="IconInfo"
 End Object
 Begin Object Class=/Script/UMG.TextBlock Name="TasksInfo" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TasksInfo'"
-   Text=NSLOCTEXT("", "EF7DE28740F5747E30F1DAAE14C972CE", "Each button acquires the icon, waits, then releases it. The log below shows when the icon really appears and hides.")
+   Text=NSLOCTEXT("", "EF7DE28740F5747E30F1DAAE14C972CE", "The first three buttons acquire the icon, wait, then release it. The fourth acquires it and blocks the game thread for 2 s between Begin Blocking Section and End Blocking Section (a debug hitch stands in for a Load Asset Blocking node or a synchronous load in another plugin): the screen turns to the loading screen color and the icon keeps turning there. Play with Standalone Game to see it; in the editor viewport the game just freezes. The log below shows when the icon really appears and hides. Its clock stands still while the game thread is blocked.")
    Font=(TypefaceFontName="Regular",Size=14.000000)
    WrapTextAt=680.000000
    DisplayLabel="TasksInfo"
 End Object
 Begin Object Class=/Script/UMG.HorizontalBox Name="TaskRow" ExportPath="/Script/UMG.HorizontalBox'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TaskRow'"
+   Begin Object Class=/Script/UMG.HorizontalBoxSlot Name="HorizontalBoxSlot_3" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TaskRow.HorizontalBoxSlot_3'"
+   End Object
    Begin Object Class=/Script/UMG.HorizontalBoxSlot Name="HorizontalBoxSlot_2" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TaskRow.HorizontalBoxSlot_2'"
    End Object
    Begin Object Class=/Script/UMG.HorizontalBoxSlot Name="HorizontalBoxSlot_1" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TaskRow.HorizontalBoxSlot_1'"
    End Object
    Begin Object Class=/Script/UMG.HorizontalBoxSlot Name="HorizontalBoxSlot_0" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TaskRow.HorizontalBoxSlot_0'"
+   End Object
+   Begin Object Name="HorizontalBoxSlot_3" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TaskRow.HorizontalBoxSlot_3'"
+      Padding=(Left=8.000000)
+      Parent="/Script/UMG.HorizontalBox'TaskRow'"
+      Content="/Script/UMG.Button'BlockingTaskButton'"
    End Object
    Begin Object Name="HorizontalBoxSlot_2" ExportPath="/Script/UMG.HorizontalBoxSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.TaskRow.HorizontalBoxSlot_2'"
       Padding=(Left=8.000000)
@@ -95,6 +102,7 @@ Begin Object Class=/Script/UMG.HorizontalBox Name="TaskRow" ExportPath="/Script/
    Slots(0)="/Script/UMG.HorizontalBoxSlot'HorizontalBoxSlot_0'"
    Slots(1)="/Script/UMG.HorizontalBoxSlot'HorizontalBoxSlot_1'"
    Slots(2)="/Script/UMG.HorizontalBoxSlot'HorizontalBoxSlot_2'"
+   Slots(3)="/Script/UMG.HorizontalBoxSlot'HorizontalBoxSlot_3'"
    DisplayLabel="TaskRow"
 End Object
 Begin Object Class=/Script/UMG.Button Name="ShortTaskButton" ExportPath="/Script/UMG.Button'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.ShortTaskButton'"
@@ -147,6 +155,23 @@ Begin Object Class=/Script/UMG.TextBlock Name="LongTaskButtonLabel" ExportPath="
    Text=NSLOCTEXT("", "6173311F4FF22BDC6CFA62B534189243", "3 s task")
    Font=(TypefaceFontName="Regular",Size=14.000000)
    DisplayLabel="LongTaskButtonLabel"
+End Object
+Begin Object Class=/Script/UMG.Button Name="BlockingTaskButton" ExportPath="/Script/UMG.Button'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.BlockingTaskButton'"
+   Begin Object Class=/Script/UMG.ButtonSlot Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.BlockingTaskButton.ButtonSlot_0'"
+   End Object
+   Begin Object Name="ButtonSlot_0" ExportPath="/Script/UMG.ButtonSlot'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.BlockingTaskButton.ButtonSlot_0'"
+      Padding=(Left=12.000000,Top=4.000000,Right=12.000000,Bottom=4.000000)
+      Parent="/Script/UMG.Button'BlockingTaskButton'"
+      Content="/Script/UMG.TextBlock'BlockingTaskButtonLabel'"
+   End Object
+   BackgroundColor=(R=0.100000,G=0.120000,B=0.160000,A=1.000000)
+   Slots(0)="/Script/UMG.ButtonSlot'ButtonSlot_0'"
+   DisplayLabel="BlockingTaskButton"
+End Object
+Begin Object Class=/Script/UMG.TextBlock Name="BlockingTaskButtonLabel" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.BlockingTaskButtonLabel'"
+   Text=NSLOCTEXT("", "3E6A1F0C4B7D4E2A9C5D8F1B2A6E7C40", "2 s blocking work")
+   Font=(TypefaceFontName="Regular",Size=14.000000)
+   DisplayLabel="BlockingTaskButtonLabel"
 End Object
 Begin Object Class=/Script/UMG.TextBlock Name="LogText" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_IconPage.WBP_LFXSample_IconPage:WidgetTree.LogText'"
    Font=(TypefaceFontName="Regular",Size=14.000000)

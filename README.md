@@ -168,9 +168,13 @@ Loader->LoadAssetsSync(Paths, TEXT("Portrait"), this, false, Loaded);
 
 Progress is finished assets over requested assets, so a one-asset request jumps from 0 to 1. No callback fires inside the load call itself.
 
-### Blocking sections (C++)
+### Blocking sections
 
-If you block the game thread with your own work and want the loading icon to keep animating, wrap the work in a blocking section:
+If you block the game thread with your own work (a *Load Asset Blocking* node, another plugin's synchronous load, a heavy loop) and want the loading icon to keep animating, wrap the work in a blocking section.
+
+**Blueprint:** *Get LoadingFXIconSubsystem* → **Begin Blocking Section** (`Reason`) → the nodes that block → **End Blocking Section**, in one chain of execution. End the section in the same frame: a latent node such as *Delay* in between does not block, it lets the frame end. A section still open at the end of the frame is ended then, with a warning in the log. **Is In Blocking Section** tells whether one is open.
+
+**C++:**
 
 ```cpp
 #include "LoadingFXIconSubsystem.h"
@@ -181,7 +185,9 @@ If you block the game thread with your own work and want the loading icon to kee
 }
 ```
 
-The section takes over MoviePlayer only while the icon is requested and no other loading screen is up, and does nothing where MoviePlayer is unavailable (editor, PIE, `-NoLoadingScreen`). `BeginBlockingSection` / `EndBlockingSection` are the manual form and nest.
+`BeginBlockingSection` / `EndBlockingSection` are the manual form; the scope cannot miss the end.
+
+The section takes over MoviePlayer only while the icon is requested (acquire it first) and no other loading screen is up, and does nothing where MoviePlayer is unavailable (editor, PIE, `-NoLoadingScreen`). Once it takes over, the screen turns to the loading screen color at once, even for very short work. Sections nest, and only the outermost one starts and stops MoviePlayer.
 
 ## Try it: the samples
 
@@ -189,7 +195,7 @@ This repository is the development project; open `LoadingFX_Dev.uproject` with U
 
 **Blueprint sample (`Content/Sample`).** Two levels, all logic in Blueprint; the editor opens `L_LFXSample_Hub`. Play it with *Standalone Game*: in the editor viewport MoviePlayer is unavailable, so the icon freezes while a level loads.
 
-- `L_LFXSample_Hub`: the *Loading Icon* page requests the icon for 0.3 s, 0.8 s or 3 s and logs when it really appears and hides, so the show delay and the minimum display time can be seen at work. The *Asset Loader* page loads the bundled materials with *Load Assets Async* into a *LoadingFX Progress Bar*, with Cancel and Release. *Open the Gallery level* acquires the icon, owned by the player controller so that the travel releases it, and opens the Gallery.
+- `L_LFXSample_Hub`: the *Loading Icon* page requests the icon for 0.3 s, 0.8 s or 3 s and logs when it really appears and hides, so the show delay and the minimum display time can be seen at work. Its *2 s blocking work* button acquires the icon and blocks the game thread for 2 s between *Begin Blocking Section* and *End Blocking Section* (a debug hitch stands in for a *Load Asset Blocking* node or another plugin's synchronous load), so the icon keeps turning on the loading screen. The *Asset Loader* page loads the bundled materials with *Load Assets Async* into a *LoadingFX Progress Bar*, with Cancel and Release. *Open the Gallery level* acquires the icon, owned by the player controller so that the travel releases it, and opens the Gallery.
 - `L_LFXSample_Gallery` simulates a heavy level (the game thread sleeps for 2 s inside the level load, so the icon keeps spinning on the loading screen), then loads its materials with *Load Assets Async* and *Show Loading Icon* and shows all 21 in *LoadingFX Spinner* widgets. Pick one to change its `PrimaryColor` and `Speed` through *Get Dynamic Material*.
 
 **Console commands (prototype).** The `LFXProto.*` commands in `Source/LoadingFX_Dev/Prototype` show every material and exercise the plugin. Run the project outside the editor and pass a command:
