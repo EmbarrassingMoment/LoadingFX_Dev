@@ -294,7 +294,7 @@ smt.create_comment_in_material(
 smt.create_comment_in_material(
     mat, "smin(a, b) = min(a, b) - max(k - abs(a - b), 0)^2 * kInv4   (iq's polynomial smooth min), over every dot:\n"
          "where the dots bunch up, three to five of them are within reach, so the two around the pixel's angle\n"
-         "are not enough (that showed steps in the blob; see Saved/ChaseHarness/smin.html)",
+         "are not enough (that showed steps in the blob)",
     SMIN_X - 200, DOT_Y + DOT_DY - 220, 1200, (MAX_DOTS - 1) * DOT_DY + 150, C_SDF)
 smt.create_comment_in_material(
     mat, "d = smin(...) - DotRadius   (smooth min does not change under a shift, so the radius comes off once)",
