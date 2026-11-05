@@ -23,12 +23,14 @@
 #include "GameFramework/Actor.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformProcess.h"
+#include "ImageUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "MaterialShared.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/CommandLine.h"
 #include "Misc/CoreDelegates.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeLock.h"
@@ -79,6 +81,11 @@ struct FLoadingFXProtoIconFrameProbe
 	FCriticalSection Lock;
 	TArray<FFrame> Frames;
 
+	/** Set before the probe is bound. The first frame presented from then on is read back whole (0 = none). */
+	double SaveFrameAtSeconds = 0.0;
+	TArray<FColor> SavedFrame;
+	FIntPoint SavedFrameSize = FIntPoint::ZeroValue;
+
 	/** Render thread, right before present. The synchronous readback stalls the GPU, which a test can afford. */
 	void Sample(FRHITexture* BackBuffer)
 	{
@@ -96,8 +103,31 @@ struct FLoadingFXProtoIconFrameProbe
 			return FMath::Max3(FMath::Abs(Pixel.R - Background.R), FMath::Abs(Pixel.G - Background.G), FMath::Abs(Pixel.B - Background.B)) > 64;
 		});
 
+		const double Seconds = FPlatformTime::Seconds();
 		FScopeLock ScopeLock(&Lock);
-		Frames.Add({ FPlatformTime::Seconds(), IconPixels, Background });
+		Frames.Add({ Seconds, IconPixels, Background });
+		if (SaveFrameAtSeconds > 0.0 && Seconds >= SaveFrameAtSeconds && SavedFrame.IsEmpty())
+		{
+			FRHICommandListImmediate::Get().ReadSurfaceData(BackBuffer, FIntRect(FIntPoint::ZeroValue, Size), SavedFrame, FReadSurfaceDataFlags());
+			SavedFrameSize = Size;
+		}
+	}
+
+	/** Game thread. The back buffer's alpha means nothing, so the file is written opaque. */
+	bool WriteSavedFrame(const FString& Filename)
+	{
+		FScopeLock ScopeLock(&Lock);
+		if (SavedFrame.IsEmpty())
+		{
+			return false;
+		}
+		for (FColor& Pixel : SavedFrame)
+		{
+			Pixel.A = 255;
+		}
+		TArray64<uint8> Png;
+		FImageUtils::PNGCompressImageArray(SavedFrameSize.X, SavedFrameSize.Y, TArrayView64<const FColor>(SavedFrame.GetData(), SavedFrame.Num()), Png);
+		return FFileHelper::SaveArrayToFile(Png, *Filename);
 	}
 };
 
@@ -359,13 +389,13 @@ namespace LoadingFXProto
 
 	static FAutoConsoleCommandWithWorldAndArgs IconTravelCommand(
 		TEXT("LFXProto.IconTravel"),
-		TEXT("Verification prototype: exercise ULoadingFXIconSubsystem (acquire, owner auto-release, OpenLevel under the icon, release). 'cold' acquires in the same frame as OpenLevel; 'bg' sets a test LoadingScreenBackgroundColor for the run. Args: [Map=/Engine/Maps/Entry] [ExtraSeconds=4] [cold] [bg] [quit]"),
+		TEXT("Verification prototype: exercise ULoadingFXIconSubsystem (acquire, owner auto-release, OpenLevel under the icon, release). 'cold' acquires in the same frame as OpenLevel; 'bg' sets a test LoadingScreenBackgroundColor for the run; 'shot' with 'cold' saves a loading screen frame. Args: [Map=/Engine/Maps/Entry] [ExtraSeconds=4] [cold] [bg] [shot] [quit]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
 			{
 				Subsystem->RunIconTravelTest(Args.IsValidIndex(0) ? Args[0] : FString(TravelTestMap), ParseFloatArg(Args, 1, 4.0f),
-					Args.Contains(TEXT("cold")), Args.Contains(TEXT("bg")), Args.Contains(TEXT("quit")));
+					Args.Contains(TEXT("cold")), Args.Contains(TEXT("bg")), Args.Contains(TEXT("shot")), Args.Contains(TEXT("quit")));
 			}
 		}));
 
@@ -471,13 +501,21 @@ namespace LoadingFXProto
 
 	static FAutoConsoleCommandWithWorldAndArgs ClickButtonCommand(
 		TEXT("LFXProto.ClickButton"),
-		TEXT("Verification prototype: click a UMG button by name through FSlateApplication one second later and log how long its OnClicked took. Args: Name [quit]"),
+		TEXT("Verification prototype: click UMG buttons by name through FSlateApplication, one a second, log how long each OnClicked took and save a screenshot after the last. Args: Name[+Name...] [ShotDelay=1.5] [quit]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World);
 			if (Subsystem && Args.IsValidIndex(0))
 			{
-				Subsystem->RunClickButton(Args[0], Args.Contains(TEXT("quit")));
+				float ShotDelay = 1.5f;
+				for (const FString& Arg : Args)
+				{
+					if (Arg.IsNumeric())
+					{
+						ShotDelay = FCString::Atof(*Arg);
+					}
+				}
+				Subsystem->RunClickButton(Args[0], ShotDelay, Args.Contains(TEXT("quit")));
 			}
 		}));
 }
@@ -702,7 +740,7 @@ void ULoadingFXProtoSubsystem::RunGallery(bool bTakeScreenshots, bool bQuitWhenD
 	StartSequence();
 }
 
-void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bTestBackground, bool bQuitWhenDone)
+void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bTestBackground, bool bSaveLoadingScreenFrame, bool bQuitWhenDone)
 {
 	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
 	if (!IconSubsystem)
@@ -743,9 +781,10 @@ void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float E
 	{
 		// The README's own pattern (acquire, then Open Level) in a process that never showed the icon: its first draw
 		// is on the loading screen, after the show delay (issue #5).
-		SequenceSteps.Add({ 0.5f, [this, IconSubsystem, MapName, ExtraLoadSeconds, StartTravel]()
+		SequenceSteps.Add({ 0.5f, [this, IconSubsystem, MapName, ExtraLoadSeconds, StartTravel, bSaveLoadingScreenFrame]()
 		{
-			StartIconFrameProbe();
+			// Three quarters of a second into the icon's time on the loading screen.
+			StartIconFrameProbe(bSaveLoadingScreenFrame ? FPlatformTime::Seconds() + GetDefault<ULoadingFXSettings>()->IconShowDelay + 0.75 : 0.0);
 			IconTravelAcquireSeconds = FPlatformTime::Seconds();
 			IconTravelMovieStartSeconds = TNumericLimits<double>::Max();
 			IconTravelLoadEndSeconds = TNumericLimits<double>::Max();
@@ -785,7 +824,7 @@ void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float E
 			StartTravel();
 		} });
 	}
-	SequenceSteps.Add({ ExtraLoadSeconds + 3.0f, [this, IconSubsystem, RequestShot, bCold]()
+	SequenceSteps.Add({ ExtraLoadSeconds + 3.0f, [this, IconSubsystem, RequestShot, bCold, bSaveLoadingScreenFrame]()
 	{
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] 4/5 after travel: visible=%d requests=%d (expect 1, 1: viewport content survives LoadMap)"),
 			IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount());
@@ -793,6 +832,11 @@ void ULoadingFXProtoSubsystem::RunIconTravelTest(const FString& MapName, float E
 		{
 			StopIconFrameProbe();
 			ReportIconFrameProbe();
+			if (bSaveLoadingScreenFrame && IconFrameProbe.IsValid())
+			{
+				const FString Filename = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("LFXProto_LoadingScreen.png"));
+				UE_LOG(LogLoadingFXProto, Display, TEXT("[IconTravel] loading screen frame saved=%d: %s"), IconFrameProbe->WriteSavedFrame(Filename) ? 1 : 0, *Filename);
+			}
 		}
 		RequestShot(TEXT("LFXProto_Icon_AfterTravel.png"));
 	} });
@@ -2254,36 +2298,41 @@ void ULoadingFXProtoSubsystem::ClickSectionButton()
 	UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   synthesized a click at (%.0f, %.0f): handled=%d"), Center.X, Center.Y, bHandled ? 1 : 0);
 }
 
-void ULoadingFXProtoSubsystem::RunClickButton(const FString& ButtonName, bool bQuitWhenDone)
+void ULoadingFXProtoSubsystem::RunClickButton(const FString& ButtonNames, float ShotDelay, bool bQuitWhenDone)
 {
 	SequenceSteps.Reset();
 
-	// A second for the level's widgets to be created and laid out (the click needs their geometry).
-	SequenceSteps.Add({ 1.0f, [this, ButtonName]()
+	TArray<FString> Names;
+	ButtonNames.ParseIntoArray(Names, TEXT("+"));
+	for (const FString& ButtonName : Names)
 	{
-		UButton* Button = nullptr;
-		for (TObjectIterator<UButton> It; It; ++It)
+		// A second for the level's widgets to be created and laid out (the click needs their geometry).
+		SequenceSteps.Add({ 1.0f, [this, ButtonName]()
 		{
-			if (It->GetName() == ButtonName && It->GetCachedWidget().IsValid() && It->GetWorld() == GetWorld())
+			UButton* Button = nullptr;
+			for (TObjectIterator<UButton> It; It; ++It)
 			{
-				Button = *It;
-				break;
+				if (It->GetName() == ButtonName && It->GetCachedWidget().IsValid() && It->GetWorld() == GetWorld())
+				{
+					Button = *It;
+					break;
+				}
 			}
-		}
-		if (!Button)
-		{
-			UE_LOG(LogLoadingFXProto, Warning, TEXT("[Click] no button named %s on screen"), *ButtonName);
-			return;
-		}
+			if (!Button)
+			{
+				UE_LOG(LogLoadingFXProto, Warning, TEXT("[Click] no button named %s on screen"), *ButtonName);
+				return;
+			}
 
-		const double StartSeconds = FPlatformTime::Seconds();
-		FVector2D Position;
-		const bool bHandled = LoadingFXProto::SynthesizeClick(*Button->GetCachedWidget(), Position);
-		UE_LOG(LogLoadingFXProto, Display, TEXT("[Click] clicked %s (%s) at (%.0f, %.0f): handled=%d, the click took %.2fs"),
-			*ButtonName, *Button->GetPathName(), Position.X, Position.Y, bHandled ? 1 : 0, FPlatformTime::Seconds() - StartSeconds);
-	} });
+			const double StartSeconds = FPlatformTime::Seconds();
+			FVector2D Position;
+			const bool bHandled = LoadingFXProto::SynthesizeClick(*Button->GetCachedWidget(), Position);
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Click] clicked %s (%s) at (%.0f, %.0f): handled=%d, the click took %.2fs"),
+				*ButtonName, *Button->GetPathName(), Position.X, Position.Y, bHandled ? 1 : 0, FPlatformTime::Seconds() - StartSeconds);
+		} });
+	}
 
-	SequenceSteps.Add({ 1.5f, []()
+	SequenceSteps.Add({ ShotDelay, []()
 	{
 		LoadingFXProto::RequestScreenshot(TEXT("Click"), TEXT("LFXProto_Click.png"));
 	} });
@@ -2364,7 +2413,7 @@ void ULoadingFXProtoSubsystem::LogOverlayStats(const TCHAR* Context, double Elap
 		LoadingScreenOverlay->GetPaintCount(), LoadingScreenOverlay->GetOffGameThreadPaintCount());
 }
 
-void ULoadingFXProtoSubsystem::StartIconFrameProbe()
+void ULoadingFXProtoSubsystem::StartIconFrameProbe(double SaveFrameAtSeconds)
 {
 	StopIconFrameProbe();
 	if (!FSlateApplication::IsInitialized())
@@ -2374,6 +2423,7 @@ void ULoadingFXProtoSubsystem::StartIconFrameProbe()
 
 	// The lambda holds its own reference: the render thread may still be in it when the probe stops.
 	IconFrameProbe = MakeShared<FLoadingFXProtoIconFrameProbe, ESPMode::ThreadSafe>();
+	IconFrameProbe->SaveFrameAtSeconds = SaveFrameAtSeconds;
 	FSlateRenderer::FOnBackBufferReadyToPresent& BackBufferReady = FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent();
 #if ENGINE_MAJOR_VERSION > 5 || ENGINE_MINOR_VERSION >= 8
 	BackBufferReadyHandle = BackBufferReady.AddLambda([Probe = IconFrameProbe](SWindow&, ISlateViewportProvider& Viewport)
