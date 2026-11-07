@@ -114,6 +114,8 @@ The section starts MoviePlayer only if the icon is requested at that moment (acq
 
 Begin and End must run in the same frame. Never put a latent node (*Delay*, the output pins of an async node) between them: it does not block, it lets the frame end. A section still open at the end of its frame is ended there and logs `Blocking section '<Reason>' was not ended in the frame it began`. Loads that do not block (*Load Assets Async*, the engine's *Async Load Asset*) need no section; acquire the icon around them instead.
 
+Do not start blocking work inside the Slate tick, such as a widget's *Event Tick* or anything it calls. MoviePlayer cannot draw there, so a section (and a sync load through the loader) takes nothing over: it logs `BeginBlockingSection '<Reason>': called inside the Slate tick` and the icon freezes until the work is done. Start the work from an actor, a timer or a button's *On Clicked*.
+
 ## Settings (`ULoadingFXSettings`)
 
 **Edit > Project Settings > Plugins > LoadingFX**, saved to the project's `Config/DefaultGame.ini`:
@@ -274,6 +276,7 @@ Never depend on `LoadingFXBridge`; it has no API.
 - **A short wait at startup in uncooked runs** (`-game`, Standalone Game): the engine compiles a material's shaders only when it is first drawn, which a blocked game thread cannot finish, so the icon subsystem compiles the icon material's shaders when it loads it and logs `Compiled the shaders of the loading icon material ... in N ms`. Expect a few tens of ms, or a second or two on the first run after the plugin is added or the material changed. Cooked builds and PIE skip this.
 - **An `Owner` from the level being left** releases the request right after the travel (see *Map travel*).
 - **A blocking section left open** (a branch that skips *End Blocking Section*, or a *Delay* before it) is ended at the end of the frame with a warning; the work after that point is not covered. Fix the graph so that every path reaches End in the same frame.
+- **Blocking work in a widget's *Event Tick*** freezes the icon and logs `called inside the Slate tick`: MoviePlayer cannot draw there (see *Map travel and blocking loads*). Move the work out of the widget's Tick.
 - **`IsIconVisible` is false within the show delay** although the icon is requested; use `GetRequestCount` to know whether it is requested.
 - **A spinner in your own widget freezes during blocking loads**; only the loading icon keeps moving.
 

@@ -10,6 +10,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "Framework/Application/SlateApplication.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformTime.h"
 #include "MaterialDomain.h"
@@ -726,6 +727,14 @@ void ULoadingFXIconSubsystem::BeginBlockingSection(FName Reason)
 	{
 		// A loading screen is already drawing (a sync load inside LoadMap, for example): it covers the section.
 		UE_LOG(LogLoadingFX, Verbose, TEXT("BeginBlockingSection '%s': MoviePlayer is already playing."), *Reason.ToString());
+		return;
+	}
+
+	// The game thread holds Slate's tick lock for all of FSlateApplication::Tick, and the loading thread needs that lock to
+	// draw: MoviePlayer could not draw here, and EndBlockingSection would wait for it forever.
+	if (FSlateApplication::IsInitialized() && FSlateApplication::Get().IsTicking())
+	{
+		UE_LOG(LogLoadingFX, Warning, TEXT("BeginBlockingSection '%s': called inside the Slate tick (a widget's Tick, for example), where MoviePlayer cannot draw, so the loading icon freezes for this section. Start blocking work from an actor, a timer or a button's On Clicked instead."), *Reason.ToString());
 		return;
 	}
 

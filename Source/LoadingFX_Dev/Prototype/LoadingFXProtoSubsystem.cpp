@@ -15,6 +15,7 @@
 
 #include "Algo/Count.h"
 #include "Components/Button.h"
+#include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -52,10 +53,17 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/SLeafWidget.h"
 #include "Widgets/Text/STextBlock.h"
 
 #if ENGINE_MAJOR_VERSION > 5 || ENGINE_MINOR_VERSION >= 8
 #include "Slate/SlateViewportProvider.h"
+#endif
+
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <Windows.h>
+#include "Windows/HideWindowsPlatformTypes.h"
 #endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogLoadingFXProto, Log, All);
@@ -133,6 +141,72 @@ struct FLoadingFXProtoIconFrameProbe
 
 namespace LoadingFXProto
 {
+	/** Runs an action on the next mouse press Slate receives, at the point of a real click's input routing. */
+	class FRunOnMousePress : public IInputProcessor
+	{
+	public:
+		explicit FRunOnMousePress(TFunction<void()> InAction)
+			: Action(MoveTemp(InAction))
+		{
+		}
+
+		virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override
+		{
+		}
+
+		virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
+		{
+			if (Action)
+			{
+				const TFunction<void()> Run = MoveTemp(Action);
+				Action = nullptr;
+				Run();
+				return true;
+			}
+			return false;
+		}
+
+	private:
+		TFunction<void()> Action;
+	};
+
+	/** Runs an action once from its Tick, inside FSlateApplication::Tick, where a UMG widget's Event Tick runs. */
+	class SRunInTick : public SLeafWidget
+	{
+	public:
+		SLATE_BEGIN_ARGS(SRunInTick) {}
+		SLATE_END_ARGS()
+
+		void Construct(const FArguments& InArgs, TFunction<void()> InAction)
+		{
+			Action = MoveTemp(InAction);
+		}
+
+		virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override
+		{
+			if (Action)
+			{
+				const TFunction<void()> Run = MoveTemp(Action);
+				Action = nullptr;
+				Run();
+			}
+		}
+
+		virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
+			FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override
+		{
+			return LayerId;
+		}
+
+		virtual FVector2D ComputeDesiredSize(float LayoutScaleMultiplier) const override
+		{
+			return FVector2D(1.0, 1.0);
+		}
+
+	private:
+		TFunction<void()> Action;
+	};
+
 	struct FMaterialEntry
 	{
 		const TCHAR* Path;
@@ -2102,7 +2176,7 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 
 	SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
 	{
-		StartSectionCase(TEXT("1/7 the Blueprint entry points"));
+		StartSectionCase(TEXT("1/12 the Blueprint entry points"));
 		for (const TCHAR* Name : { TEXT("BeginBlockingSection"), TEXT("EndBlockingSection"), TEXT("IsInBlockingSection") })
 		{
 			const UFunction* Function = IconSubsystem->FindFunction(Name);
@@ -2114,7 +2188,7 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 
 	SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
 	{
-		StartSectionCase(TEXT("2/7 Begin / End in the world tick, icon visible, 1.5 s of blocking work"));
+		StartSectionCase(TEXT("2/12 Begin / End in the world tick, icon visible, 1.5 s of blocking work"));
 		SectionIconHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.BlockingSection"));
 		RunInWorldTick([this]()
 		{
@@ -2128,7 +2202,7 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 
 	SequenceSteps.Add({ 2.5f, [this]()
 	{
-		StartSectionCase(TEXT("3/7 Begin without End in the world tick (a Blueprint path that skips End), 0.5 s of blocking work"));
+		StartSectionCase(TEXT("3/12 Begin without End in the world tick (a Blueprint path that skips End), 0.5 s of blocking work"));
 		RunInWorldTick([this]()
 		{
 			SectionCaseStartFrame = GFrameCounter;
@@ -2144,7 +2218,7 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 
 	SequenceSteps.Add({ 1.5f, [this]()
 	{
-		StartSectionCase(TEXT("4/7 the next section takes over again, 1 s of blocking work"));
+		StartSectionCase(TEXT("4/12 the next section takes over again, 1 s of blocking work"));
 		RunInWorldTick([this]()
 		{
 			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section4"));
@@ -2157,7 +2231,7 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 
 	SequenceSteps.Add({ 2.0f, [this]()
 	{
-		StartSectionCase(TEXT("5/7 Begin without End after the engine tick (a core ticker), 0.3 s of blocking work"));
+		StartSectionCase(TEXT("5/12 Begin without End after the engine tick (a core ticker), 0.3 s of blocking work"));
 		CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section5"));
 		SimulateBlockingWork(0.3f, false);
 		ReportSectionState(TEXT("returning without End"), TEXT("in section=1 MoviePlayer playing=1; the plugin warns and stops MoviePlayer at the end of this frame"));
@@ -2169,7 +2243,7 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 
 	SequenceSteps.Add({ 1.0f, [this, Loader]()
 	{
-		StartSectionCase(TEXT("6/7 a sync load through the loader nested in a section, then an End too many"));
+		StartSectionCase(TEXT("6/12 a sync load through the loader nested in a section, then an End too many"));
 		RunInWorldTick([this, Loader]()
 		{
 			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section6"));
@@ -2188,7 +2262,7 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 
 	SequenceSteps.Add({ 1.5f, [this]()
 	{
-		StartSectionCase(TEXT("7/7 Begin / End inside a button's OnClicked (Slate input routing), 1 s of blocking work"));
+		StartSectionCase(TEXT("7/12 Begin / End inside a button's OnClicked (Slate input routing), 1 s of blocking work"));
 		ShowSectionButton();
 	} });
 	SequenceSteps.Add({ 0.5f, [this]()
@@ -2197,9 +2271,88 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 		ReportSectionState(*FString::Printf(TEXT("after the click (OnClicked ran %d time(s))"), SectionButtonClicks), TEXT("OnClicked ran 1 time; in section=0 MoviePlayer playing=0"));
 	} });
 
+	SequenceSteps.Add({ 1.5f, [this]()
+	{
+		StartSectionCase(TEXT("8/12 Begin / End on a mouse press posted to the Windows message queue, as a real click arrives, 1 s of blocking work"));
+		RunOnPostedMousePress([this]()
+		{
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   on the press: Slate ticking=%d (expect 0)"), FSlateApplication::Get().IsTicking() ? 1 : 0);
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section8"));
+			ReportSectionState(TEXT("on the press, after Begin"), TEXT("in section=1 MoviePlayer playing=1"));
+			SimulateBlockingWork(1.0f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("on the press, after End"), TEXT("in section=0 MoviePlayer playing=0"));
+		});
+	} });
+
+	SequenceSteps.Add({ 2.0f, [this]()
+	{
+		StartSectionCase(TEXT("9/12 Begin / End in a widget's Tick (inside FSlateApplication::Tick), 1 s of blocking work"));
+		RunInWidgetTick([this]()
+		{
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section9"));
+			ReportSectionState(TEXT("in Tick, after Begin"), TEXT("in section=1 MoviePlayer playing=0, with the plugin's warning about the Slate tick"));
+			SimulateBlockingWork(1.0f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("in Tick, after End"), TEXT("in section=0 MoviePlayer playing=0, about 1 s after the case started"));
+		});
+	} });
+
+	SequenceSteps.Add({ 2.0f, [this, Loader]()
+	{
+		StartSectionCase(TEXT("10/12 a sync load with the icon in a widget's Tick"));
+		RunInWidgetTick([this, Loader]()
+		{
+			TArray<UObject*> Loaded;
+			FLoadingFXLoadHandle Handle = Loader->LoadAssetsSync({ LoadingFXProto::LoaderMaterial(TEXT("M_LoadingMorph")) }, TEXT("LFXProto.Section10Load"), nullptr, true, Loaded);
+			ReportSectionState(*FString::Printf(TEXT("after the sync load (%s)"), *LoadingFXProto::DescribeObjects(Loaded)),
+				TEXT("M_LoadingMorph; in section=0 MoviePlayer playing=0, with the plugin's warning about the Slate tick"));
+			Loader->Release(Handle);
+		});
+	} });
+
+	SequenceSteps.Add({ 1.0f, [this]()
+	{
+		StartSectionCase(TEXT("11/12 Begin / End in a Slate post tick callback, 0.5 s of blocking work"));
+		bSectionPostTickDone = false;
+		SectionPostTickHandle = FSlateApplication::Get().OnPostTick().AddWeakLambda(this, [this](float)
+		{
+			if (bSectionPostTickDone)
+			{
+				return;
+			}
+			bSectionPostTickDone = true;
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section11"));
+			ReportSectionState(TEXT("in the callback, after Begin"), TEXT("in section=1 MoviePlayer playing=0, with the plugin's warning about the Slate tick"));
+			SimulateBlockingWork(0.5f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("in the callback, after End"), TEXT("in section=0 MoviePlayer playing=0"));
+		});
+	} });
+
+	SequenceSteps.Add({ 1.5f, [this]()
+	{
+		FSlateApplication::Get().OnPostTick().Remove(SectionPostTickHandle);
+		StartSectionCase(TEXT("12/12 a section outside the Slate tick takes over again, 0.5 s of blocking work"));
+		RunInWorldTick([this]()
+		{
+			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section12"));
+			ReportSectionState(TEXT("after Begin"), TEXT("in section=1 MoviePlayer playing=1"));
+			SimulateBlockingWork(0.5f, false);
+			CallIconFunction(TEXT("EndBlockingSection"));
+			ReportSectionState(TEXT("after End"), TEXT("in section=0 MoviePlayer playing=0"));
+		});
+	} });
+
 	SequenceSteps.Add({ 1.5f, [this, IconSubsystem, bQuitWhenDone]()
 	{
 		HideSectionButton();
+		HideSectionTickWidget();
+		if (SectionMousePress.IsValid())
+		{
+			FSlateApplication::Get().UnregisterInputPreProcessor(SectionMousePress);
+			SectionMousePress.Reset();
+		}
 		IconSubsystem->Release(SectionIconHandle);
 		UE_LOG(LogLoadingFXProto, Display, TEXT("[Section] finished"));
 		if (bQuitWhenDone)
@@ -2233,6 +2386,54 @@ void ULoadingFXProtoSubsystem::RunInWorldTick(TFunction<void()> Action)
 	{
 		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, MoveTemp(Action)));
 	}
+}
+
+void ULoadingFXProtoSubsystem::RunOnPostedMousePress(TFunction<void()> Action)
+{
+#if PLATFORM_WINDOWS
+	UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+	const TSharedPtr<SWindow> Window = ViewportClient ? ViewportClient->GetWindow() : nullptr;
+	if (!Window.IsValid() || !Window->GetNativeWindow().IsValid())
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("[Section]   no game window to post a mouse press to"));
+		return;
+	}
+
+	SectionMousePress = MakeShared<LoadingFXProto::FRunOnMousePress>(MoveTemp(Action));
+	FSlateApplication::Get().RegisterInputPreProcessor(SectionMousePress);
+
+	// Through the queue the engine loop pumps, as a real click comes, without moving the cursor.
+	const HWND WindowHandle = static_cast<HWND>(Window->GetNativeWindow()->GetOSWindowHandle());
+	::PostMessageW(WindowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(10, 10));
+	::PostMessageW(WindowHandle, WM_LBUTTONUP, 0, MAKELPARAM(10, 10));
+#else
+	UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   skipped: posts a Windows message"));
+#endif
+}
+
+void ULoadingFXProtoSubsystem::RunInWidgetTick(TFunction<void()> Action)
+{
+	UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+	if (!ViewportClient)
+	{
+		return;
+	}
+
+	HideSectionTickWidget();
+	SectionTickWidget = SNew(LoadingFXProto::SRunInTick, MoveTemp(Action)).Visibility(EVisibility::HitTestInvisible);
+	ViewportClient->AddViewportWidgetContent(SectionTickWidget.ToSharedRef(), LoadingFXProto::ViewportOverlayZOrder + 2);
+}
+
+void ULoadingFXProtoSubsystem::HideSectionTickWidget()
+{
+	if (SectionTickWidget.IsValid())
+	{
+		if (UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient())
+		{
+			ViewportClient->RemoveViewportWidgetContent(SectionTickWidget.ToSharedRef());
+		}
+	}
+	SectionTickWidget.Reset();
 }
 
 void ULoadingFXProtoSubsystem::CallIconFunction(const TCHAR* Command)

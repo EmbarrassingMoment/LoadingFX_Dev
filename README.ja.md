@@ -172,7 +172,7 @@ Loader->LoadAssetsSync(Paths, TEXT("Portrait"), this, false, Loaded);
 
 自前の処理（*Load Asset Blocking* ノード、ほかのプラグインの同期ロード、重いループなど）でゲームスレッドを止める間もアイコンを回し続けたいときは、その処理をブロッキングセクションで囲みます。
 
-**Blueprint:** *Get LoadingFXIconSubsystem* → **Begin Blocking Section**（`Reason`）→ ブロックするノード → **End Blocking Section** を、一続きの実行の流れでつなぎます。セクションは同じフレームのうちに終えてください。間に *Delay* などの latent ノードを挟むと、そこでブロックせずにフレームが終わります。フレームの終わりにまだ開いているセクションはそこで終了し、ログに警告が出ます。セクションが開いているかは **Is In Blocking Section** でわかります。
+**Blueprint:** *Get LoadingFXIconSubsystem* → **Begin Blocking Section**（`Reason`）→ ブロックするノード → **End Blocking Section** を、一続きの実行の流れでつなぎます。セクションは同じフレームのうちに終えてください。間に *Delay* などの latent ノードを挟むと、そこでブロックせずにフレームが終わります。フレームの終わりにまだ開いているセクションはそこで終了し、ログに警告が出ます。セクションは Slate のティックの外で始めてください。ウィジェットの *Event Tick* の中では MoviePlayer が描画できないので、その間アイコンは止まり、ログに警告が出ます。セクションが開いているかは **Is In Blocking Section** でわかります。
 
 **C++:**
 
