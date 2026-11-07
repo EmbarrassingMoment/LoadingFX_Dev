@@ -172,7 +172,7 @@ Progress is finished assets over requested assets, so a one-asset request jumps 
 
 If you block the game thread with your own work (a *Load Asset Blocking* node, another plugin's synchronous load, a heavy loop) and want the loading icon to keep animating, wrap the work in a blocking section.
 
-**Blueprint:** *Get LoadingFXIconSubsystem* → **Begin Blocking Section** (`Reason`) → the nodes that block → **End Blocking Section**, in one chain of execution. End the section in the same frame: a latent node such as *Delay* in between does not block, it lets the frame end. A section still open at the end of the frame is ended then, with a warning in the log. **Is In Blocking Section** tells whether one is open.
+**Blueprint:** *Get LoadingFXIconSubsystem* → **Begin Blocking Section** (`Reason`) → the nodes that block → **End Blocking Section**, in one chain of execution. End the section in the same frame: a latent node such as *Delay* in between does not block, it lets the frame end. A section still open at the end of the frame is ended then, with a warning in the log. Start it outside the Slate tick: in a widget's *Event Tick*, MoviePlayer cannot draw, so the icon freezes for the section, with a warning. **Is In Blocking Section** tells whether one is open.
 
 **C++:**
 

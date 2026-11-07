@@ -69,8 +69,10 @@ enum class ELoadingFXProtoShowcaseSet : uint8
  *                                 in a fresh process: it expects its materials not to be loaded yet.
  *   LFXProto.BlockingSection [quit]  Check the blocking section through its UFunctions, as Blueprint calls them: Begin / End in
  *                                 the world tick, a Begin without End there and later in the frame (ended at the end of the
- *                                 frame), the next section taking over again, a nested sync load, and Begin / End inside a
- *                                 button's OnClicked (Slate input routing).
+ *                                 frame), the next section taking over again, a nested sync load, Begin / End inside a
+ *                                 button's OnClicked (Slate input routing) and on a mouse press from the Windows message queue,
+ *                                 and inside the Slate tick (a widget's Tick, a sync load there, a post tick callback), where a
+ *                                 section must not take over.
  *   LFXProto.ClickButton Name[+Name...] [ShotDelay] [quit]  Click the UMG buttons named Name (widgets in a Blueprint's widget tree,
  *                                 such as the sample's BlockingTaskButton) through FSlateApplication, one a second, and log how
  *                                 long each OnClicked took. Saves Saved/Screenshots/LFXProto_Click.png ShotDelay seconds after
@@ -158,6 +160,11 @@ private:
 	void ReportSectionState(const TCHAR* Step, const FString& Expect) const;
 	/** Runs Action in the world tick of the next frame, where Blueprint events and timers run. */
 	void RunInWorldTick(TFunction<void()> Action);
+	/** Posts a mouse press to the game window's message queue and runs Action when Slate receives it. */
+	void RunOnPostedMousePress(TFunction<void()> Action);
+	/** Runs Action once in the Tick of a widget in the viewport, inside FSlateApplication::Tick. */
+	void RunInWidgetTick(TFunction<void()> Action);
+	void HideSectionTickWidget();
 	/** Calls a UFUNCTION of the icon subsystem by name through ProcessEvent, as Blueprint does ("Name Arg"). */
 	void CallIconFunction(const TCHAR* Command);
 	/** A button whose OnClicked runs a blocking section, and a click synthesized on it through FSlateApplication. */
@@ -231,6 +238,10 @@ private:
 	TSharedPtr<SWidget> SectionButtonRoot;
 	TSharedPtr<SWidget> SectionButton;
 	int32 SectionButtonClicks = 0;
+	TSharedPtr<class IInputProcessor> SectionMousePress;
+	TSharedPtr<SWidget> SectionTickWidget;
+	FDelegateHandle SectionPostTickHandle;
+	bool bSectionPostTickDone = false;
 
 	TSharedPtr<SWidget> ViewportOverlayRoot;
 	TSharedPtr<SLoadingFXProtoOverlay> ViewportOverlay;

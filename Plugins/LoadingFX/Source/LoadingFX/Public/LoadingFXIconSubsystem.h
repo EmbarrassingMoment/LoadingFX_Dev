@@ -126,7 +126,8 @@ public:
 	 * it on the loading screen color until the matching EndBlockingSection; otherwise nothing changes and the game just
 	 * hitches. Sections nest, and only the outermost one starts and stops MoviePlayer.
 	 * Does nothing where MoviePlayer is unavailable (editor, PIE, -NoLoadingScreen) or while another loading screen is
-	 * set up or playing.
+	 * set up or playing. Inside the Slate tick (a widget's Tick, for example) MoviePlayer cannot draw, so nothing takes
+	 * over there either: the icon freezes for the section, with a warning.
 	 * End the section in the same frame, right after the blocking work: a latent node such as Delay in between does not
 	 * block, it lets the frame end. A section still open at the end of the frame is ended then, with a warning. In C++,
 	 * prefer FLoadingFXBlockingScope, which cannot miss the end.
