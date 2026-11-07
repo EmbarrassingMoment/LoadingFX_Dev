@@ -277,43 +277,28 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 1660, -270)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -3300, -820, 900, 400, C_UV)
+    mat, "(Count - 1) / 2 * Spacing + DotRadiusMax = 0.72 by default: the outer size shared by the square "
+         "layouts. Raise Count only together with a smaller Spacing, or the row leaves the widget.",
+    -3300,  - 490, 650, 520, C_SC)
 smt.create_comment_in_material(
-    mat, "half = (Count - 1) / 2   (Count - 1 also caps id below)\n"
-         "(Count - 1) / 2 * Spacing + DotRadiusMax = 0.72 by default (the material contract's reference square).\n"
-         "Raise Count only together with a smaller Spacing, or the row leaves the widget",
-    -3300, -420, 650, 450, C_SC)
-smt.create_comment_in_material(
-    mat, "id = clamp(round(p.x / Spacing + half), 0, Count - 1)\n"
-         "Nearest dot (0 = leftmost). Pixels beyond the row go to the end dots.\n"
-         "One circle SDF per pixel is enough while DotRadiusMax <= Spacing / 2",
+    mat, "Nearest dot\n"
+         "Pixels beyond the row go to the end dots. One circle per pixel is enough while DotRadiusMax <= "
+         "Spacing / 2.",
     -2500, -320, 1050, 380, C_UV)
 smt.create_comment_in_material(
-    mat, "phase = fract(Time * Speed - id * Stagger)   (Speed in cycles per second; positive runs left to right)\n"
-         "Time ignores pause (real time), so the dots keep pulsing while the game thread is blocked",
-    -3300, 250, 900, 520, C_TM)
+    mat, "Pulse\n"
+         "A dot swells and brightens over the first PulseWidth of its cycle, then rests. A positive Speed runs "
+         "left to right.\n"
+         "Time has Ignore Pause on (real time), so the dots keep pulsing while the game thread is blocked.",
+    -3300, 250, 1950, 520, C_TM)
 smt.create_comment_in_material(
-    mat, "pulse = (1 - cos(TAU * saturate(phase / PulseWidth))) / 2\n"
-         "0 -> 1 -> 0 over the first PulseWidth of the cycle, then 0 (rest) until the cycle ends",
-    -2650, 380, 1300, 330, C_TM)
-smt.create_comment_in_material(
-    mat, "cx = (id - half) * Spacing   (center of dot id);  d = length((p.x - cx, p.y)) - lerp(DotRadiusMin, DotRadiusMax, pulse)\n"
-         "Radii differ per dot, so d jumps at cell borders: AA uses PixelSize, not fwidth(d)",
+    mat, "Anti-aliasing\n"
+         "Radii differ per dot, so d jumps at cell borders: the AA width is PixelSize, not fwidth(d).",
     -1300, -620, 1250, 1000, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = clamp(0.5 - d / aa, 0, 1)   (1px-wide coverage approximation at the edge)",
-    50, -330, 800, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "alpha = lerp(OpacityMin, 1, pulse)   (a dot brightens as it grows)",
-    50, 20, 650, 300, C_TM)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * alpha * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    950, -420, 650, 800, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -354,7 +339,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 9
+comments_ok = len(smt.get_material_comment_texts(mat)) == 4
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

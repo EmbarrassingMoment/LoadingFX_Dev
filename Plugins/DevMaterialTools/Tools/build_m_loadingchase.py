@@ -273,41 +273,31 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, OUT_X + 660, OUT_Y - 120)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "PixelSize is not used: the AA width comes from the screen gradient of d",
-    -3650, -1670, 750, 300, C_UV)
+    mat, "The melted blob reaches 0.8005 by default, about the outer size shared by the ring spinners. Radius "
+         "+ DotRadius = 0.762 while the dots are apart.",
+    -3850,  - 1358, 750, 878, C_SC)
 smt.create_comment_in_material(
-    mat, "Shared parameters -> Named Reroutes. The melted blob reaches 0.8005 with the defaults (the material\n"
-         "contract's reference circle; Radius + DotRadius = 0.762 when the dots are apart).\n"
-         "cutoff = -10 * Count;  k = max(Smoothness, 1e-4);  kInv4 = 0.25 / k",
-    -3850, -1330, 750, 850, C_SC)
-smt.create_comment_in_material(
-    mat, "s = Time * Speed   (laps; Time ignores pause, so the dots keep moving while the game thread is blocked)",
+    mat, "Time has Ignore Pause on (real time), so the dots keep moving while the game thread is blocked.",
     -3850, -520, 750, 300, C_TM)
 smt.create_comment_in_material(
-    mat, "Dot i (0 leads): u = fract(s - i * Stagger);  ang = TAU * u - Easing * sin(TAU * u)   (slowest at 12 o'clock)\n"
-         "len_i = max(length(p - Radius * (sin(ang), cos(ang))), cutoff + 10 * (i + 1))\n"
-         "A dot beyond Count gets a distance of 10 or more and drops out; for a shown dot the right side is 0 or less",
+    mat, "Dots\n"
+         "Each dot slows down at 12 o'clock and speeds through 6 o'clock (Easing). The Sine on u has Period 1: "
+         "it takes turns. A dot beyond Count gets a distance of 10 or more, which drops it out.",
     -3250, -320, 2500, MAX_DOTS * DOT_DY + 100, C_UV)
 smt.create_comment_in_material(
-    mat, "smin(a, b) = min(a, b) - max(k - abs(a - b), 0)^2 * kInv4   (iq's polynomial smooth min), over every dot:\n"
-         "where the dots bunch up, three to five of them are within reach, so the two around the pixel's angle\n"
-         "are not enough (that showed steps in the blob)",
-    SMIN_X - 200, DOT_Y + DOT_DY - 220, 1200, (MAX_DOTS - 1) * DOT_DY + 150, C_SDF)
+    mat, "Melt (iq's polynomial smooth min)\n"
+         "Every dot joins in: three to five are within reach where the dots bunch up, and joining only two "
+         "showed steps in the blob. Smooth min does not change under a shift, so DotRadius comes off once.",
+    SMIN_X, DOT_Y + DOT_DY - 260, 1000, (MAX_DOTS - 1) * DOT_DY + 190, C_SDF)
 smt.create_comment_in_material(
-    mat, "d = smin(...) - DotRadius   (smooth min does not change under a shift, so the radius comes off once)",
-    SMIN_X + 850, DOT_Y + MAX_DOTS * DOT_DY - 250, 600, 400, C_SDF)
-smt.create_comment_in_material(
-    mat, "aa = max(length((ddx(d), ddy(d))), 1e-5): one pixel of d. A smooth-min field is not a true distance;\n"
-         "its gradient drops below 1 in the necks, where PixelSize would blur the edge\n"
-         "mask = saturate(0.5 - d / aa)",
-    AA_X - 50, AA_Y - 270, 900, 650, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    OUT_X - 50, OUT_Y - 270, 650, 680, C_COL)
+    mat, "Anti-aliasing\n"
+         "A smooth-min field is not a true distance: its gradient drops below 1 in the necks, where PixelSize "
+         "would blur the edge. The AA width comes from the screen gradient of d instead.",
+    AA_X - 50, AA_Y - 290, 900, 670, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -350,7 +340,7 @@ expected_params = sorted(["Radius", "DotRadius", "Count", "Smoothness", "Speed",
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 8
+          and len(smt.get_material_comment_texts(mat)) == 5
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

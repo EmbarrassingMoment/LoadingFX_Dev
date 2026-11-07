@@ -209,13 +209,9 @@ f_out = fnode(unreal.MaterialExpressionFunctionOutput, 550, -100, output_name="R
 _connect(seg_len, "", f_out, "")
 
 smt.create_comment_in_function(
-    fn, "Inputs -> Named Reroute (P, A, B)\n"
-        "P = point, A and B = the segment's ends (all vec2)",
-    -1550, -320, 750, 650, C_SC)
-smt.create_comment_in_function(
-    fn, "iq's sdSegment: pa = P - A, ba = B - A;  h = saturate(dot(pa, ba) / dot(ba, ba))\n"
-        "Result = length(pa - ba * h)   (distance to the nearest point of the segment, >= 0)",
-    -1100, -370, 1700, 650, C_SDF)
+    fn, "sdSegment (iq)\n"
+        "Distance from P to the nearest point of the segment from A to B, 0 or more.",
+    -1550, -370, 2150, 740, C_SDF)
 
 mel.update_material_function(fn)
 mf_saved = lib.save_asset(MF_FULL_PATH)
@@ -584,57 +580,45 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3110, -120)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -4350, -870, 900, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "Shared parameters -> Named Reroutes; halfT = Thickness / 2.\n"
-         "HalfHeight + Thickness / 2 = 0.72 at rest (the material contract's reference square)",
+    mat, "HalfHeight + Thickness / 2 = 0.72 at rest: the outer size shared by the square layouts.",
     -4600, -520, 650, 600, C_SC)
 smt.create_comment_in_material(
-    mat, "u = fract(Time * Speed);  flowEnd = 1 - FlipFraction;  flow = saturate(u / flowEnd)\n"
-         "flow = share of the sand already in the bottom bulb. Time ignores pause (real time),\n"
-         "so the sand keeps running while the game thread is blocked",
+    mat, "Flow\n"
+         "flow is the share of the sand already in the bottom bulb.\n"
+         "Time has Ignore Pause on (real time), so the sand keeps running while the game thread is blocked.",
     -4600, 750, 1400, 450, C_TM)
 smt.create_comment_in_material(
-    mat, "turn = smoothstep(flowEnd, 1, u);  c, s = cos / sin(PI * turn)   (half a turn, clockwise)\n"
-         "scale = 1 - FlipShrink * s: smallest sideways. Unshrunk, a cap corner reaches 0.946 along x or y at 45\n"
-         "degrees; FlipShrink 0.3 keeps max(|x|, |y|) of the turning glass at 0.794 (square 0.72, circle 0.8)",
+    mat, "Turn over\n"
+         "The glass makes half a turn clockwise and is smallest sideways. Unshrunk, a cap corner would reach "
+         "0.946 along x or y at 45 degrees; FlipShrink 0.3 keeps it at 0.794.",
     -3850, 1050, 1400, 450, C_TM)
 smt.create_comment_in_material(
-    mat, "q = (c*p.x - s*p.y, s*p.x + c*p.y) / scale   (the glass turns clockwise and shrinks)\n"
-         "aaQ = aa / scale (distances in q are p distances / scale);  f = abs(q): the glass is symmetric in x and y",
+    mat, "Fold\n"
+         "The glass is symmetric in x and y, so abs folds it into one quarter. Distances in q are p distances "
+         "/ scale, so aaQ is aa / scale.",
     -3350, -700, 1750, 800, C_UV)
 smt.create_comment_in_material(
-    mat, "dGlass = min(sdSegment(f, (Neck, 0), (HalfWidth, HalfHeight)),\n"
-         "              sdSegment(f, (0, HalfHeight), (HalfWidth + CapOverhang, HalfHeight))) - Thickness / 2\n"
-         "One slanted side and one cap draw the whole frame after the fold (sdSegment = MF_SdSegment2D)",
+    mat, "Glass\n"
+         "One slanted side and one cap draw the whole frame after the fold.",
     -1550, -1600, 1400, 950, C_SDF)
 smt.create_comment_in_material(
-    mat, "inset = Thickness / 2 + SandGap;  outward = (HalfHeight, Neck - HalfWidth) / length(...)\n"
-         "dChamber = max(dot(f - (Neck, 0), outward), f.y - HalfHeight) + inset\n"
-         "(inside of the glass, SandGap away from the stroke: two half-planes)",
+    mat, "Chamber\n"
+         "The inside of the glass, SandGap away from the stroke: two half-planes.",
     -1700, -720, 1550, 820, C_SDF)
 smt.create_comment_in_material(
-    mat, "level = (HalfHeight - inset) * sqrt(1 - flow): a bulb is nearly a triangle, so the sand below height y\n"
-         "grows with y^2 and the top surface and the bottom surface sit at the same height.\n"
-         "dSand = min(max(dChamber, q.y - level, -q.y), max(dChamber, q.y + level))",
-    -1550, 100, 1900, 500, C_SDF)
+    mat, "Sand\n"
+         "A bulb is nearly a triangle, so the sand below height y grows with y^2, and the top and bottom "
+         "surfaces sit at the same height.",
+    -1550, 72, 830, 528, C_SDF)
 smt.create_comment_in_material(
-    mat, "Falling sand: dStream = sdSegment(q, (0, 0), (0, -level)) - wStream / 2,  wStream = max(StreamWidth, aaQ)\n"
-         "streamFade = (StreamWidth / wStream) * (1 - step(1, flow)): a line thinner than a pixel is drawn one pixel wide\n"
-         "at lower opacity (otherwise it shows at half coverage), and only while sand is left on top",
+    mat, "Falling sand\n"
+         "A stream thinner than a pixel is drawn one pixel wide at lower opacity, because it would otherwise "
+         "show at half coverage. It only runs while sand is left on top.",
     -1550, 750, 1650, 1050, C_SDF)
-smt.create_comment_in_material(
-    mat, "Coverage = saturate(0.5 - d / aaQ) for the glass, the sand and the falling sand (times streamFade);\n"
-         "mask = max of the three (one color)",
-    1150, -1300, 1250, 2700, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    2400, -270, 650, 680, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -665,7 +649,7 @@ print(f"[TEST] {MF_NAME} decls: {f_decls}")
 print(f"[TEST] {MF_NAME} usages: {f_usages}")
 mf_ok = (f_decls == ["A", "B", "P", "ba", "pa"]
          and f_usages == {"A": 2, "B": 1, "P": 1, "ba": 3, "pa": 2}
-         and len(smt.get_function_comment_texts(fn)) == 2
+         and len(smt.get_function_comment_texts(fn)) == 1
          and mf_saved)
 
 m_decls, m_usages, m_params, m_groups, m_calls = audit(smt.get_material_expressions(mat))
@@ -688,7 +672,7 @@ expected_params = sorted(["HalfHeight", "HalfWidth", "Neck", "CapOverhang", "Thi
 mat_ok = (m_decls == expected_decls and m_usages == dict(sorted(expected_usages.items()))
           and m_params == expected_params and m_calls == 4
           and m_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 11
+          and len(smt.get_material_comment_texts(mat)) == 8
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

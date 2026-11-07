@@ -288,47 +288,38 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3960, -220)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "PixelSize is not used: the AA width comes from the screen gradient of d",
-    -3650, -870, 750, 300, C_UV)
-smt.create_comment_in_material(
-    mat, "Shared parameters -> Named Reroutes. Radius + DropletRadius = 0.8 at full spread\n"
-         "(the material contract's reference circle).  k = max(Smoothness, 1e-4);  kInv4 = 0.25 / k",
+    mat, "Radius + DropletRadius = 0.8 at full spread: the outer size shared by the ring spinners.",
     -3850, -520, 750, 500, C_SC)
 smt.create_comment_in_material(
-    mat, "rot = Time * Speed   (turns, clockwise)\n"
-         "dist = Radius * (1 - cos(TAU * Time * SpreadSpeed)) / 2   (0 = melted into the core -> Radius -> 0)\n"
-         "Time ignores pause (real time), so the droplets keep moving while the game thread is blocked",
-    -3850, 200, 1100, 600, C_TM)
+    mat, "Spread\n"
+         "The droplets turn with Speed and drift out to Radius and back with SpreadSpeed. The Cosine here has "
+         "Period 1: it takes cycles.\n"
+         "Time has Ignore Pause on (real time), so the droplets keep moving while the game thread is blocked.",
+    -3850, 160, 1100, 640, C_TM)
 smt.create_comment_in_material(
-    mat, "step = 1 / Count;  a = atan2(p.x, p.y) / TAU   (turns clockwise from 12 o'clock)\n"
-         "k = floor((a - rot) / step);  angA = rot + k * step: the pixel lies between droplets k and k + 1.\n"
-         "Further droplets are a whole step off and are left out (no loop). On a droplet's axis the pairs on both\n"
-         "sides mirror each other, so d stays continuous; the merged blob keeps its size for any Count",
+    mat, "Nearest droplets\n"
+         "The pixel lies between droplets k and k + 1. Further droplets are a whole step off and are left out, "
+         "so there is no loop. On a droplet's axis the pairs on both sides mirror each other, so d stays "
+         "continuous and the merged blob keeps its size for any Count.",
     -3050, -820, 1550, 750, C_UV)
 smt.create_comment_in_material(
-    mat, "dA = length(p - dist * (sin(TAU angA), cos(TAU angA))) - DropletRadius   (Sine / Cosine period 1: turns)",
-    -1500, -800, 1300, 450, C_SDF)
+    mat, "Droplets\n"
+         "Sine and Cosine have Period 1 here: they take turns.",
+    -1650,  - 846, 1450, 1246, C_SDF)
 smt.create_comment_in_material(
-    mat, "dB: the same for angB = angA + step",
-    -1650, -50, 1450, 450, C_SDF)
+    mat, "Melt (iq's polynomial smooth min)\n"
+         "The core and the droplets join with a smooth min: a hard min between the pair showed corners in the "
+         "necks.",
+    -200, -420, 2400, 1070, C_SDF)
 smt.create_comment_in_material(
-    mat, "smin(dA, dB) = min(dA, dB) - max(k - abs(dA - dB), 0)^2 * kInv4   (iq's polynomial smooth min)",
-    -200, -420, 1150, 550, C_SDF)
-smt.create_comment_in_material(
-    mat, "d = smin(length(p) - CoreRadius, smin(dA, dB))   (the core and the droplets melt together)",
-    -200, 230, 2400, 420, C_SDF)
-smt.create_comment_in_material(
-    mat, "aa = max(length((ddx(d), ddy(d))), 1e-5): one pixel of d. A smooth-min field is not a true distance;\n"
-         "its gradient drops below 1 in the necks, where PixelSize would blur the edge. d is continuous\n"
-         "mask = saturate(0.5 - d / aa)",
+    mat, "Anti-aliasing\n"
+         "A smooth-min field is not a true distance: its gradient drops below 1 in the necks, where PixelSize "
+         "would blur the edge. The AA width comes from the screen gradient of d instead.",
     2250, -270, 1000, 700, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    3250, -370, 650, 680, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -370,7 +361,7 @@ expected_params = sorted(["Count", "CoreRadius", "DropletRadius", "Radius", "Smo
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 10
+          and len(smt.get_material_comment_texts(mat)) == 6
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

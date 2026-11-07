@@ -275,43 +275,30 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 2960, -170)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -3300, -820, 900, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "h = fract(Time * Speed)   (head direction, turns clockwise from 12 o'clock)\n"
-         "Time ignores pause (real time), so the spinner keeps turning while the game thread is blocked",
+    mat, "Time has Ignore Pause on (real time), so the comet keeps turning while the game thread is blocked.",
     -3300, 250, 700, 380, C_TM)
 smt.create_comment_in_material(
-    mat, "a = atan2(p.x, p.y) / TAU   (pixel direction, turns clockwise from 12 o'clock)",
-    -2500, -480, 900, 330, C_UV)
-smt.create_comment_in_material(
-    mat, "fade = saturate(1 - fract(h - a)): 1 right behind the head, 0 one full turn behind;\n"
-         "it wraps to 0 just ahead of the head. saturate only catches a NaN from atan2(0, 0) at the center",
+    mat, "Tail fade\n"
+         "1 right behind the head, 0 one full turn behind. saturate only catches a NaN from atan2(0, 0) at the "
+         "center.",
     -1500, -100, 950, 330, C_TM)
 smt.create_comment_in_material(
-    mat, "Radius + Thickness / 2 = 0.8 by default (the material contract's reference circle)\n"
-         "halfT = Thickness / 2 (used by the tail and the head)",
+    mat, "Radius + Thickness / 2 = 0.8 by default: the outer size shared by the ring spinners.",
     -1500, 550, 550, 400, C_SC)
 smt.create_comment_in_material(
-    mat, "dTail = abs(length(p) - Radius) - fade * Thickness / 2\n"
-         "A ring whose half-width shrinks with fade",
-    -500, -580, 950, 600, C_SDF)
+    mat, "Tail and head\n"
+         "The tail is a ring whose half-width shrinks with fade. The round head's diameter lies on the wrap of "
+         "fade, so max(tail, cap) is continuous there.",
+    -500, -580, 1400, 1130, C_SDF)
 smt.create_comment_in_material(
-    mat, "head = Radius * (sin(h * TAU), cos(h * TAU));  dHead = length(p - head) - Thickness / 2\n"
-         "The round cap's diameter lies on the wrap of fade, so max(tail, cap) is continuous there",
-    -500, 100, 1400, 450, C_SDF)
-smt.create_comment_in_material(
-    mat, "tail = clamp(0.5 - dTail / aa, 0, 1) * fade   (the tail also fades in opacity: a thin line keeps 0.5\n"
-         "coverage on its centerline, so without fade a faint full circle would remain)\n"
-         "cap = clamp(0.5 - dHead / aa, 0, 1);  mask = max(tail, cap)",
+    mat, "Coverage\n"
+         "The tail fades in opacity as well as in width: a thin line keeps half coverage on its centerline, so "
+         "a faint full circle would remain.",
     1000, -480, 1300, 820, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    2250, -320, 650, 680, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -352,7 +339,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 9
+comments_ok = len(smt.get_material_comment_texts(mat)) == 5
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

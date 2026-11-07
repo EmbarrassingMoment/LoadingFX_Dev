@@ -303,44 +303,26 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 310, 670)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)\n"
-         "ext.x = MF_SpinnerCoords.Extent.x   (half width in p units: the bar spans the widget)",
-    -3350, -900, 700, 450, C_UV)
+    mat, "Track\n"
+         "Inset by 1 - Thickness / 2 on every side: Thickness 2 fills the widget, 1.6 leaves 0.2 at the ends. "
+         "A square widget gives a circle.",
+    -3350,  - 976, 3100, 856, C_SDF)
 smt.create_comment_in_material(
-    mat, "R = Thickness / 2;  L = max(ext.x - 1, 0);  xEnd = L + R;  xL = -xEnd\n"
-         "The track is inset by (1 - R) on every side: Thickness 1.6 reaches +-0.8 (the contract's reference circle)\n"
-         "and leaves 0.2 at the ends; Thickness 2 fills the widget. A square widget gives a circle (L = 0)",
-    -3350, -420, 1850, 300, C_SDF)
+    mat, "Fill\n"
+         "ULoadingFXProgressBar writes Progress on a dynamic instance. The right edge is flat, because a "
+         "rounded end would shrink to a dot near 0.\n"
+         "A fill thinner than a pixel fades out: anti-aliasing would draw it at half coverage.",
+    -3350, -58, 2250, 908, C_COL)
 smt.create_comment_in_material(
-    mat, "dTrack = length((max(abs(p.x) - L, 0), p.y)) - R   (horizontal capsule, exact distance)\n"
-         "track = saturate(0.5 - dTrack / aa)",
-    -2400, -960, 2150, 300, C_SDF)
-smt.create_comment_in_material(
-    mat, "Progress (0..1) is the material contract's determinate input: ULoadingFXProgressBar writes it on a dynamic instance\n"
-         "xF = lerp(xL, xEnd, saturate(Progress))   (the fill's flat right edge: exactly the track at 1, nothing at 0)",
-    -3350, 0, 900, 300, C_SDF)
-smt.create_comment_in_material(
-    mat, "dFill = max(dTrack, p.x - xF)   (the track cut at xF; still 1-Lipschitz, so AA = aa)\n"
-         "fade = saturate((xF - xL) / aa): a fill thinner than a pixel would keep 0.5 coverage on its line (the Timer lesson)\n"
-         "fill = saturate(0.5 - dFill / aa) * fade",
-    -2500, 100, 1400, 750, C_COL)
-smt.create_comment_in_material(
-    mat, "Sheen: u = fract(Time * Speed);  sx = lerp(xL - SheenWidth, xEnd + SheenWidth, u)   (enters from outside, leaves outside)\n"
-         "s = saturate(1 - abs(p.x - sx) / SheenWidth);  sheen = smoothstep(0, 1, s)\n"
-         "Time ignores pause (real time). Speed 0 turns the sheen off",
-    -3350, 820, 1750, 700, C_TM)
-smt.create_comment_in_material(
-    mat, "rgb = lerp(PrimaryColor.rgb, white, sheen * SheenStrength * fill)   (only the filled part brightens;\n"
-         "invisible while PrimaryColor is white)\n"
-         "mask = max(track * TrackOpacity, fill)",
-    -1500, 820, 900, 700, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    -550, 520, 800, 500, C_COL)
+    mat, "Sheen\n"
+         "A highlight sweeps through the fill, so that coarse loader progress still shows motion. Only the "
+         "filled part brightens, so it does not show while PrimaryColor is white.\n"
+         "Time has Ignore Pause on (real time), so the sheen keeps moving while the game thread is blocked.",
+    -3350, 792, 2750, 728, C_TM)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -379,7 +361,7 @@ expected_params = sorted(["Progress", "Thickness", "Speed", "SheenWidth", "Sheen
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 8
+          and len(smt.get_material_comment_texts(mat)) == 3
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

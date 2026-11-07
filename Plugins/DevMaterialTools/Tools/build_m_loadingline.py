@@ -282,42 +282,19 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3160, -70)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units);  px, py = p.x, p.y",
-    -3050, -1070, 1000, 330, C_UV)
-smt.create_comment_in_material(
-    mat, "HalfWidth = 0.72 across (the material contract's reference square, as Dots and Equalizer)\n"
-         "r = Thickness / 2;  reach = HalfWidth + r   (at x = +-reach the bar's round end touches the track's end from outside)",
+    mat, "HalfWidth = 0.72 by default: the outer size shared by the square layouts. At x = +-reach the bar's "
+         "round end touches the track's end from outside.",
     -3050, -620, 1050, 330, C_SC)
 smt.create_comment_in_material(
-    mat, "dTrack = length((px - clamp(px, r - HalfWidth, HalfWidth - r), py)) - r\n"
-         "(the track: a horizontal capsule, HalfWidth long to the tip of its round end)",
-    -1950, -800, 1450, 450, C_SDF)
-smt.create_comment_in_material(
-    mat, "u = fract(Time * Speed);  dur = 1 - TailDelay\n"
-         "Time ignores pause (real time), so the bar keeps moving while the game thread is blocked",
-    -3050, 130, 1000, 470, C_TM)
-smt.create_comment_in_material(
-    mat, "head = 1 - (1 - saturate(u / dur))^2   (ease-out: enters fast, slows down at the right end)\n"
-         "tail = saturate((u - TailDelay) / dur)^2   (ease-in: starts slowly, leaves fast)\n"
-         "Both cross the track's ends at full speed, so the sliver where the bar touches the track\n"
-         "(half coverage under SDF anti-aliasing) lasts about a frame; head >= tail, so x0 <= x1",
-    -2050, 80, 1100, 600, C_TM)
-smt.create_comment_in_material(
-    mat, "x1 = (2 * head - 1) * reach,  x0 = (2 * tail - 1) * reach   (the bar's centerline ends)",
-    -950, 80, 800, 600, C_UV)
-smt.create_comment_in_material(
-    mat, "dBar = max(length((px - clamp(px, x0, x1), py)) - r, dTrack)   (the bar's capsule, cut to the track)",
-    -150, 180, 1450, 450, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = max(saturate(0.5 - dBar / aa), saturate(0.5 - dTrack / aa) * TrackOpacity)",
-    1300, -680, 1100, 1250, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    2450, -220, 650, 680, C_COL)
+    mat, "Bar motion\n"
+         "The head eases out and the tail eases in. Both cross the track's ends at full speed, so the sliver "
+         "where the bar only touches the track (half coverage under anti-aliasing) lasts about a frame.\n"
+         "Time has Ignore Pause on (real time), so the bar keeps moving while the game thread is blocked.",
+    -3050, 42, 2900, 638, C_TM)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -357,7 +334,7 @@ expected_params = sorted(["HalfWidth", "Thickness", "TrackOpacity", "Speed", "Ta
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 9
+          and len(smt.get_material_comment_texts(mat)) == 2
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

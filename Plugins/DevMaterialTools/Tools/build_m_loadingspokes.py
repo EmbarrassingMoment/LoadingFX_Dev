@@ -322,61 +322,25 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 4210, 30)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "const TAU = 2*PI   (used twice -> Named Reroute)",
-    -4300, -1100, 550, 230, C_SC)
+    mat, "Nearest bar\n"
+         "Turn the nearest bar to 12 o'clock, so one capsule draws every bar. id counts clockwise from 12 "
+         "o'clock, and id = +-Count / 2 is the same bar at 6 o'clock.",
+    -3200, -60, 4050, 560, C_UV)
 smt.create_comment_in_material(
-    mat, "const N -> ScalarParameter Count (used three times -> Named Reroute).\n"
-         "InnerRadius / OuterRadius / Thickness / Speed / OpacityMin / PrimaryColor are wired directly at their single use site",
-    -4300, -840, 650, 260, C_SC)
+    mat, "Anti-aliasing\n"
+         "The AA width is fwidth(d), not PixelSize. That is safe here: every bar has the same shape, so d is "
+         "continuous across cell borders. The epsilon guards pixels on a bar's center line, where ddx and ddy "
+         "are both 0.",
+    2450,  - 440, 1000, 360, C_SDF)
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "PixelSize is not used here: the AA width comes from fwidth(d) instead",
-    -4300, -520, 900, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "a = atan(p.x, p.y) / TAU\n"
-         "Angle from +Y (12 o'clock), clockwise, as a fraction of a turn (-0.5..0.5)",
-    -3200, -20, 850, 420, C_UV)
-smt.create_comment_in_material(
-    mat, "id = floor(a * Count + 0.5)\n"
-         "Index of the nearest bar (0 = 12 o'clock, increases clockwise). id = +-Count/2 is the same bar at 6 o'clock",
-    -2350, 60, 850, 300, C_SC)
-smt.create_comment_in_material(
-    mat, "ang = id / Count * TAU;  c = cos(ang), s = sin(ang)\n"
-         "Sine / Cosine period = 2*PI -> radians",
-    -1500, 0, 1200, 450, C_UV)
-smt.create_comment_in_material(
-    mat, "q = (dot(p, (c, -s)), dot(p, (s, c))) = (c*p.x - s*p.y, s*p.x + c*p.y)\n"
-         "Rotate so that bar `id` points straight up: one capsule SDF then draws every bar",
-    -300, -60, 1150, 560, C_UV)
-smt.create_comment_in_material(
-    mat, "Capsule SDF: q.y -= clamp(q.y, InnerRadius, OuterRadius);  d = length(q) - Thickness / 2\n"
-         "(the GLSL WIDTH is a radius, so Thickness = 2 * WIDTH)",
-    900, -20, 1500, 620, C_SDF)
-smt.create_comment_in_material(
-    mat, "aa = max(fwidth(d), 1e-5) = max(abs(ddx(d)) + abs(ddy(d)), 1e-5)   (one screen pixel of d, per pixel)\n"
-         "Replaces the GLSL aa = 2 / iResolution.y. Safe here: every bar has the same shape, so d is the exact\n"
-         "distance to the nearest bar and continuous across cell borders (unlike M_LoadingDotGrid, where per-cell radii differ).\n"
-         "The epsilon guards pixels on a bar's center line where ddx and ddy are both 0 (d / 0 -> inf / NaN)",
-    2450, -420, 1000, 340, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = clamp(0.5 - d / aa, 0, 1)   (1px-wide coverage approximation at the edge)",
-    2450, 20, 850, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "fade = fract(Time * Speed - id / Count)   (Speed in revolutions per second)\n"
-         "Each bar lags the previous one by 1/Count of a cycle, so the highlight runs clockwise.\n"
-         "Time ignores pause (real time), so the spinner keeps turning while the game thread is blocked",
-    -1500, 560, 800, 520, C_TM)
-smt.create_comment_in_material(
-    mat, "alpha = mix(1, OpacityMin, fade)\n"
-         "Fully bright at fade 0, fades linearly to OpacityMin",
-    -650, 600, 600, 330, C_TM)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * alpha * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)\n"
-         "Background dropped: mix(bg, white, mask * alpha) becomes PrimaryColor with alpha",
-    3450, -120, 700, 800, C_COL)
+    mat, "Fade\n"
+         "Each bar lags the previous one by 1 / Count of a cycle, so the highlight runs clockwise.\n"
+         "Time has Ignore Pause on (real time), so the spinner keeps turning while the game thread is blocked.",
+    -1500, 542, 1450, 538, C_TM)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -417,7 +381,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 13
+comments_ok = len(smt.get_material_comment_texts(mat)) == 3
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

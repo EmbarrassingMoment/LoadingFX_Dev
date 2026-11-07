@@ -209,14 +209,10 @@ f_out = fnode(unreal.MaterialExpressionFunctionOutput, 300, -100, output_name="R
 _connect(res_n, "", f_out, "")
 
 smt.create_comment_in_function(
-    fn, "Inputs -> Named Reroute (P, R)\n"
-        "P = point relative to the ellipse center, R = the two radii (vec2)",
-    -1550, -320, 750, 600, C_SC)
-smt.create_comment_in_function(
-    fn, "iq's ellipse approximation: k0 = length(P / R), k1 = length(P / (R * R))\n"
-        "Result = (k0 - 1) * clamp(k0 / max(k1, 1e-5), min(R.x, R.y), max(R.x, R.y))\n"
-        "k0 / k1 already lies between the radii; the clamp only fixes the exact center (0 / 0)",
-    -1100, -400, 1550, 750, C_SDF)
+    fn, "sdEllipse (iq's approximation)\n"
+        "P is relative to the ellipse's center, R holds the two radii. k0 / k1 already lies between the "
+        "radii; the clamp only fixes the exact center (0 / 0).",
+    -1550, -400, 2000, 750, C_SDF)
 
 mel.update_material_function(fn)
 mf_saved = lib.save_asset(MF_FULL_PATH)
@@ -496,47 +492,28 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 2110, -220)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -3650, -870, 900, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "Shared parameters -> Named Reroutes.\n"
-         "Floor + BounceHeight + 2 * BallRadius = 0.72 at the top of the bounce and\n"
-         "Floor - ShadowGap - ShadowHeight = -0.715: both touch the material contract's reference square",
+    mat, "By default the ball's top reaches 0.72 and the shadow's bottom -0.715: the outer size shared by the "
+         "square layouts.",
     -3850, -520, 600, 600, C_SC)
 smt.create_comment_in_material(
-    mat, "u = fract(Time * Speed)   (u = 0 is the landing);  halfC = ContactFraction / 2\n"
-         "Time ignores pause (real time), so the ball keeps bouncing while the game thread is blocked",
-    -3850, 200, 800, 470, C_TM)
+    mat, "Bounce timing\n"
+         "Each cycle splits into ContactFraction on the floor and the flight. The height is a parabola in "
+         "time, fastest near the floor, and the ball only flattens while it touches the floor.\n"
+         "Time has Ignore Pause on (real time), so the ball keeps bouncing while the game thread is blocked.",
+    -3850, 150, 2450, 800, C_TM)
 smt.create_comment_in_material(
-    mat, "v = saturate((u - halfC) / (1 - ContactFraction))   (flight progress; 0 or 1 while on the floor)\n"
-         "hgt = 1 - (2v - 1)^2   (a parabola in time: fastest near the floor; 0 on the floor)",
-    -3100, 150, 1400, 350, C_TM)
+    mat, "Ball\n"
+         "The bottom of the ball stays on the floor while it is squashed.",
+    -1400, 4, 1450, 966, C_SDF)
 smt.create_comment_in_material(
-    mat, "squash = Squash * (1 + cos(PI * saturate(min(u, 1 - u) / halfC))) / 2\n"
-         "Full at the landing, 0 when the ball leaves the floor: it only flattens while it touches the floor",
-    -3100, 550, 1700, 400, C_TM)
-smt.create_comment_in_material(
-    mat, "ballR = BallRadius * (1 + squash, 1 - squash);  cy = Floor + ballR.y + BounceHeight * hgt\n"
-         "(the bottom of the ball stays on the floor while it is squashed);  dBall = sdEllipse(p - (0, cy), ballR)",
-    -1400, 50, 1450, 900, C_SDF)
-smt.create_comment_in_material(
-    mat, "Shadow: sw = ShadowWidth * (1 - 0.5 * hgt);  sh = max(ShadowHeight, aa / 2)  (at least one pixel thick)\n"
-         "dShadow = sdEllipse(p - (0, Floor - ShadowGap), (sw, sh))",
-    -1400, -850, 1450, 750, C_SDF)
-smt.create_comment_in_material(
-    mat, "shadowFade = ShadowOpacity * (1 - 0.6 * hgt) * (ShadowHeight / sh): fainter when the ball is high;\n"
-         "a shadow thickened to one pixel loses opacity in proportion (a thinner shape would show at half coverage)",
-    -750, -1200, 1000, 500, C_COL)
-smt.create_comment_in_material(
-    mat, "mask = max(saturate(0.5 - dBall / aa), saturate(0.5 - dShadow / aa) * shadowFade)   (one color)",
-    300, -560, 1150, 900, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    1400, -370, 650, 680, C_COL)
+    mat, "Shadow\n"
+         "It shrinks and fades as the ball rises. It stays at least one pixel thick and loses opacity in "
+         "proportion, because a thinner shape would show at half coverage.",
+    -1400, -1228, 1650, 1168, C_SDF)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -568,7 +545,7 @@ print(f"[TEST] {MF_NAME} decls: {f_decls}")
 print(f"[TEST] {MF_NAME} usages: {f_usages}")
 mf_ok = (f_decls == ["P", "R", "k0"]
          and f_usages == {"P": 2, "R": 3, "k0": 2}
-         and len(smt.get_function_comment_texts(fn)) == 2
+         and len(smt.get_function_comment_texts(fn)) == 1
          and mf_saved)
 
 m_decls, m_usages, m_params, m_calls, param_groups = audit(smt.get_material_expressions(mat))
@@ -589,7 +566,7 @@ expected_params = sorted(["BallRadius", "Floor", "BounceHeight", "Squash", "Cont
 mat_ok = (m_decls == expected_decls and m_usages == dict(sorted(expected_usages.items()))
           and m_params == expected_params and m_calls == 3
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 10
+          and len(smt.get_material_comment_texts(mat)) == 4
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

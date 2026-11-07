@@ -243,6 +243,53 @@ FVector4 UDevMaterialTools::GetCommentBounds(UMaterialExpressionComment* Comment
 	                Comment->SizeX, Comment->SizeY);
 }
 
+TArray<UMaterialExpressionComment*> UDevMaterialTools::GetMaterialComments(UMaterial* Material)
+{
+	TArray<UMaterialExpressionComment*> Comments;
+	if (Material)
+	{
+		for (const TObjectPtr<UMaterialExpressionComment>& Comment : Material->GetEditorComments())
+		{
+			if (Comment)
+			{
+				Comments.Add(Comment);
+			}
+		}
+	}
+	return Comments;
+}
+
+TArray<UMaterialExpressionComment*> UDevMaterialTools::GetFunctionComments(UMaterialFunction* MaterialFunction)
+{
+	TArray<UMaterialExpressionComment*> Comments;
+	if (MaterialFunction)
+	{
+		for (const TObjectPtr<UMaterialExpressionComment>& Comment : MaterialFunction->GetEditorComments())
+		{
+			if (Comment)
+			{
+				Comments.Add(Comment);
+			}
+		}
+	}
+	return Comments;
+}
+
+void UDevMaterialTools::SetMaterialRootPosition(UMaterial* Material, int32 X, int32 Y)
+{
+	if (Material)
+	{
+		Material->EditorX = X;
+		Material->EditorY = Y;
+		Material->MarkPackageDirty();
+	}
+}
+
+FIntPoint UDevMaterialTools::GetMaterialRootPosition(UMaterial* Material)
+{
+	return Material ? FIntPoint(Material->EditorX, Material->EditorY) : FIntPoint::ZeroValue;
+}
+
 TArray<UMaterialExpression*> UDevMaterialTools::GetMaterialExpressions(UMaterial* Material)
 {
 	TArray<UMaterialExpression*> Expressions;

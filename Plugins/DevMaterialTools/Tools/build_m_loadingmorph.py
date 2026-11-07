@@ -225,40 +225,28 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 1860, -220)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -2650, -870, 700, 400, C_UV)
+    mat, "HalfSize = 0.72 at rest: the outer size shared by the square layouts. While it turns, the corners "
+         "reach at most 0.786 along x or y with Roundness 1.",
+    -2850,  - 508, 600, 268, C_SC)
 smt.create_comment_in_material(
-    mat, "HalfSize = 0.72 at rest (the material contract's reference square). While it turns the corners\n"
-         "reach at most 0.786 along x or y with Roundness 1 (inside the reference circle)",
-    -2850, -470, 600, 230, C_SC)
-smt.create_comment_in_material(
-    mat, "u = fract(Time * Speed);  e = smoothstep(0, TurnFraction, u)   (turn progress, then a pause)\n"
+    mat, "Turn\n"
          "A square looks the same after a quarter turn, so e alone sets the angle.\n"
-         "Time ignores pause (real time), so the square keeps turning while the game thread is blocked",
-    -2850, 130, 1000, 450, C_TM)
+         "Time has Ignore Pause on (real time), so the square keeps turning while the game thread is blocked.",
+    -2850, 60, 1000, 520, C_TM)
 smt.create_comment_in_material(
-    mat, "c, s = cos / sin(e * 90 degrees)   (Sine / Cosine with period 4: an input of 1 is a quarter turn)",
+    mat, "Sine and Cosine have Period 4 here: an input of 1 is a quarter turn.",
     -1900, -470, 600, 330, C_UV)
 smt.create_comment_in_material(
-    mat, "r = lerp(CornerRadius, HalfSize, Roundness * sin(e * 180 degrees))   (period 2)\n"
-         "Roundest halfway through the turn: a full circle with Roundness 1",
-    -1900, 130, 800, 450, C_SDF)
+    mat, "Roundness\n"
+         "Roundest halfway through the turn: a full circle with Roundness 1. This Sine has Period 2.",
+    -1900, 92, 800, 488, C_SDF)
 smt.create_comment_in_material(
-    mat, "q = (c * p.x - s * p.y, s * p.x + c * p.y): the pixel turns the other way, so the square turns clockwise",
+    mat, "The pixel turns the other way, so the square turns clockwise.",
     -1320, -670, 800, 720, C_UV)
-smt.create_comment_in_material(
-    mat, "d = sdRoundBox(q, (HalfSize, HalfSize), r)   (MF_SdRoundBox2D, exact distance)",
-    -550, -270, 750, 420, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = saturate(0.5 - d / aa)   (1px-wide coverage approximation at the edge)",
-    300, -280, 800, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    1150, -370, 650, 680, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -296,7 +284,7 @@ expected_params = sorted(["HalfSize", "CornerRadius", "Roundness", "Speed", "Tur
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 2
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 9
+          and len(smt.get_material_comment_texts(mat)) == 5
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

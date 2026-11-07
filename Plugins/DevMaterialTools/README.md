@@ -9,6 +9,7 @@ Local-only editor plugin for developing LoadingFX. It is **not** part of the Loa
 - Create Named Reroute Usage nodes linked to a Declaration (in materials and Material Functions)
 - Create, list and delete comment boxes
 - Write and read the parameter group sort order (`UMaterialEditorOnlyData::ParameterGroupData`, which Python cannot reach)
+- Set and read the position of the material's output node (`UMaterial::EditorX` / `EditorY`, which Python cannot reach)
 
 ## Material builder scripts
 
@@ -51,3 +52,5 @@ python <repo>\Tools\ue_exec.py <repo>\Plugins\DevMaterialTools\Tools\build_m_loa
 ```
 
 Each script prints `[TEST] RESULT: PASS` when the graph matches its expected structure.
+
+The builders' coordinates only decide which nodes each comment box holds. After a rebuild, arrange the graphs with `Tools/layout_materials.py` (see "Graph layout" in the repository's `CLAUDE.md`).

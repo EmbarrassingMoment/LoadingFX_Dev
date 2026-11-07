@@ -144,23 +144,14 @@ _connect(aspect, "", ext_out, "")
 
 # ---- Comments (English) ----
 smt.create_comment_in_function(
-    fn, "fw = abs(ddx(uv)) + abs(ddy(uv)) = (1 / width, 1 / height) in pixels\n"
-        "Rotation keeps the ratio: |cos| + |sin| scales both axes alike",
-    -1200, -500, 800, 320, C_SDF)
+    fn, "Widget size\n"
+        "fw is (1 / width, 1 / height) in pixels, so no size parameter is needed. Rotation keeps the ratio: "
+        "|cos| + |sin| scales both axes alike.",
+    -1200, -500, 1500, 320, C_SDF)
 smt.create_comment_in_function(
-    fn, "m = max(fw.x, fw.y) = 1 / shorter side in pixels",
-    -350, -500, 650, 320, C_SDF)
-smt.create_comment_in_function(
-    fn, "P = (2*uv - 1) * (m / fw) * (1,-1)\n"
-        "Centered, y-up, shorter side spans -1..1: round shapes fit inside a non-square widget",
-    -1200, 0, 1450, 400, C_UV)
-smt.create_comment_in_function(
-    fn, "PixelSize = 2 * m   (P spans 2.0 over the shorter side)",
-    130, -280, 520, 220, C_SDF)
-smt.create_comment_in_function(
-    fn, "Extent = m / fw   (half extents in P units: the shorter side is 1, the longer side is the aspect ratio)\n"
-        "Bars span the widget: their ends sit at +-(Extent.x - 1 + Thickness / 2), see the bar materials",
-    130, 420, 900, 200, C_UV)
+    fn, "Aspect correction\n"
+        "The shorter side spans -1..1, so round shapes stay round in a non-square widget.",
+    -1200, 0, 1450, 430, C_UV)
 
 mel.update_material_function(fn)
 saved = lib.save_asset(FULL_PATH)
@@ -183,7 +174,7 @@ print(f"[TEST] {MF_NAME} outputs: {sorted(outputs)}")
 decls_ok = sorted(decl_names) == ["fw", "m", "uv"]
 usages_ok = usage_count == {"uv": 3, "fw": 3, "m": 2}
 outputs_ok = sorted(outputs) == ["Extent", "P", "PixelSize"]
-comments_ok = len(smt.get_function_comment_texts(fn)) == 5
+comments_ok = len(smt.get_function_comment_texts(fn)) == 2
 
 print(f"[TEST] Connections: {sum(results)}/{len(results)} succeeded")
 passed = all(results) and decls_ok and usages_ok and outputs_ok and comments_ok and saved

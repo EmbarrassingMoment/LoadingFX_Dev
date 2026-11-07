@@ -386,51 +386,33 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3510, -370)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -3650, -820, 900, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "Count / Radius / Thickness are used several times -> Named Reroutes.\n"
-         "Radius + Thickness / 2 = 0.8 by default (the material contract's reference circle)",
+    mat, "Radius + Thickness / 2 = 0.8 by default: the outer size shared by the ring spinners.",
     -3800, -400, 550, 550, C_SC)
 smt.create_comment_in_material(
-    mat, "id = clamp(floor(fract(atan2(p.x, p.y) / TAU) * Count), 0, Count - 1)\n"
-         "Segment that owns the pixel (0 at 12 o'clock, clockwise). The clamp also catches a NaN from atan2(0, 0)",
-    -3050, -500, 1350, 450, C_UV)
+    mat, "Own segment\n"
+         "Every segment has the same shape, so each pixel draws only its own. Turn the segment's center to 12 "
+         "o'clock and fold left onto right, so one end cap serves both ends. The clamp also catches a NaN from "
+         "atan2(0, 0).",
+    -3050, -650, 3700, 600, C_UV)
 smt.create_comment_in_material(
-    mat, "ang = (id + 0.5) / Count * TAU   (segment center);  c = cos(ang), s = sin(ang)",
-    -1600, -500, 900, 350, C_UV)
-smt.create_comment_in_material(
-    mat, "q = (abs(c*p.x - s*p.y), s*p.x + c*p.y)\n"
-         "Rotate so that the segment's center points straight up, then fold the left half onto the right",
-    -600, -650, 1250, 560, C_UV)
-smt.create_comment_in_material(
-    mat, "h = max(PI / Count - (Gap + Thickness) / (2 * Radius), 0);  sc = (sin h, cos h)\n"
-         "Half aperture of one segment: the space between rounded ends is Gap, measured along the ring",
+    mat, "The space between rounded ends is Gap, measured along the ring.",
     -750, 30, 1400, 520, C_UV)
 smt.create_comment_in_material(
-    mat, "iq's sdArc: dCap = length(q - sc * Radius), dRing = abs(length(q) - Radius)\n"
-         "cap = step(sc.x * q.y, sc.y * q.x): 1 past the end;  d = lerp(dRing, dCap, cap) - Thickness / 2\n"
-         "Every segment has the same shape, so d is continuous across cell borders",
+    mat, "Segment distance (iq's sdArc)\n"
+         "sc points at the segment's right end. Past it, the distance is to the rounded end; before it, to the "
+         "ring. Every segment has the same shape, so d is continuous across cell borders.",
     650, -780, 1300, 1250, C_SDF)
 smt.create_comment_in_material(
-    mat, "mask = clamp(0.5 - d / aa, 0, 1)   (1px-wide coverage approximation at the edge)",
-    1950, -380, 800, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "k = floor(fract(Time * Speed) * 2 * Count)   (current step: Count steps to fill, Count to drain)\n"
-         "Time ignores pause (real time), so the segments keep stepping while the game thread is blocked",
-    -3800, 650, 1150, 380, C_TM)
-smt.create_comment_in_material(
-    mat, "lit = step(id, k) * step(k - Count + 1, id): the lit segments are the window k - Count + 1 .. k.\n"
-         "While k < Count it is 0..k (filling); after that the first ones go out (draining).\n"
-         "alpha = lerp(OpacityMin, 1, lit)",
-    -2550, 550, 1100, 650, C_TM)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * alpha * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    2800, -520, 650, 800, C_COL)
+    mat, "Fill and drain\n"
+         "Count steps fill the ring and Count steps drain it. The lit segments are the window k - Count + 1 .. "
+         "k: while k < Count it is 0..k, after that the first ones go out.\n"
+         "Time has Ignore Pause on (real time), so the segments keep stepping while the game thread is "
+         "blocked.",
+    -3800, 550, 2350, 650, C_TM)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -472,7 +454,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 11
+comments_ok = len(smt.get_material_comment_texts(mat)) == 5
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

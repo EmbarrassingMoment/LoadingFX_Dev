@@ -306,40 +306,27 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3110, -120)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -3150, -1270, 900, 400, C_UV)
+    mat, "Rotation\n"
+         "The inner pair starts at right angles to the outer one.\n"
+         "Time has Ignore Pause on (real time), so the spinner keeps turning while the game thread is blocked.",
+    -3150,  - 420, 1050, 580, C_TM)
 smt.create_comment_in_material(
-    mat, "rotO = fract(Time * Speed)   (outer pair direction, turns clockwise from 12 o'clock)\n"
-         "rotI = fract(Time * Speed * InnerSpeedRatio + 0.25)   (inner pair; starts at right angles to the outer one)\n"
-         "Time ignores pause (real time), so the spinner keeps turning while the game thread is blocked",
-    -3150, -400, 1050, 560, C_TM)
+    mat, "Outer ring (iq's sdArc)\n"
+         "Turn the pair's center to 12 o'clock and fold both axes, so the opposite arc lands on this one.\n"
+         "sc points at the arc's right end. Past it, the distance is to the rounded end; before it, to the "
+         "ring.\n"
+         "OuterRadius + Thickness / 2 = 0.8 by default: the outer size shared by the ring spinners.",
+    -1700,  - 1090, 2550, 1060, C_SDF)
 smt.create_comment_in_material(
-    mat, "sc = (sin(Arc * PI), cos(Arc * PI))   (direction of an arc's right end, shared by both rings)",
-    -3150, 230, 900, 330, C_UV)
-for tag, label, y0 in (("O", "Outer", -950), ("I", "Inner", 250)):
-    smt.create_comment_in_material(
-        mat, f"{label} ring: c, s = cos(rot{tag} * TAU), sin(rot{tag} * TAU);  q{tag} = abs((c*p.x - s*p.y, s*p.x + c*p.y))\n"
-             "Rotate so that the arc pair's center points up, then fold both axes: the opposite arc lands on this one",
-        -1700, y0 - 80, 1450, 680, C_UV)
-    smt.create_comment_in_material(
-        mat, f"{label} ring, iq's sdArc: dCap = length(q - sc * R), dRing = abs(length(q) - R)\n"
-             "cap = step(sc.x * q.y, sc.y * q.x): 1 past the arc's end;  d = lerp(dRing, dCap, cap)\n"
-             + ("OuterRadius + Thickness / 2 = 0.8 by default (the material contract's reference circle)"
-                if tag == "O" else "Same nodes as the outer ring"),
-        -150, y0 - 130, 1000, 1050, C_SDF)
+    mat, "Inner ring: the same nodes as the outer ring.",
+    -1700, 120, 2550, 1050, C_SDF)
 smt.create_comment_in_material(
-    mat, "d = min(dO, dI) - Thickness / 2   (one color, so the rings merge before anti-aliasing)",
+    mat, "One color, so the rings merge before anti-aliasing.",
     950, -200, 650, 450, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = clamp(0.5 - d / aa, 0, 1)   (1px-wide coverage approximation at the edge)",
-    1600, -150, 800, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    2400, -270, 650, 680, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -382,7 +369,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 10
+comments_ok = len(smt.get_material_comment_texts(mat)) == 4
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

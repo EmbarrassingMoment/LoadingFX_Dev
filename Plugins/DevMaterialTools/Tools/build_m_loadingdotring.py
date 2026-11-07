@@ -289,57 +289,21 @@ _connect(mask_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3810, 30)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "const TAU = 2*PI   (used three times -> Named Reroute)",
-    -4300, -1100, 550, 230, C_SC)
-smt.create_comment_in_material(
-    mat, "const COUNT -> ScalarParameter (used three times -> Named Reroute).\n"
-         "Arc / Radius / DotRadiusMax / DotRadiusMin / Speed / PrimaryColor are wired directly at their single use site",
-    -4300, -840, 650, 260, C_SC)
-smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -4300, -520, 900, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "rot = Time * Speed * TAU   (rotation angle in radians; Speed in revolutions per second)\n"
-         "Time ignores pause (real time), so the spinner keeps turning while the game thread is blocked",
+    mat, "Time has Ignore Pause on (real time), so the spinner keeps turning while the game thread is blocked.",
     -4300, -60, 800, 400, C_TM)
 smt.create_comment_in_material(
-    mat, "stepA = TAU * Arc / Count   (angle taken by one dot)",
-    -3200, -1060, 850, 420, C_SC)
+    mat, "Wedge cells\n"
+         "Each pixel belongs to one wedge of the ring, in a frame that turns with the dots, so one circle per "
+         "pixel draws every dot. id 0 is the leading dot, and the dots shrink from DotRadiusMax to "
+         "DotRadiusMin toward the tail.",
+    -3200, -60, 3950, 1120, C_UV)
 smt.create_comment_in_material(
-    mat, "a = mod(atan(p.y, p.x) + rot, TAU)\n"
-         "Pixel angle in the rotating frame, normalized to 0..TAU (mod via MF_GLSLMod)",
-    -3200, -60, 1100, 520, C_UV)
-smt.create_comment_in_material(
-    mat, "id = floor(a / stepA)\n"
-         "Index of the wedge-shaped cell the pixel is in (0 = leading dot)",
-    -1950, 60, 750, 360, C_SC)
-smt.create_comment_in_material(
-    mat, "ca = (id + 0.5) * stepA - rot\n"
-         "Angle of the cell center, rotated back to the screen frame",
-    -1100, -40, 900, 470, C_UV)
-smt.create_comment_in_material(
-    mat, "c = Radius * vec2(cos(ca), sin(ca))   (dot center on the ring)\n"
-         "Sine / Cosine period = 2*PI -> radians",
-    -200, -40, 950, 500, C_UV)
-smt.create_comment_in_material(
-    mat, "r = mix(DotRadiusMax, DotRadiusMin, id / (Count - 1))\n"
-         "The larger the id, the smaller the dot (leading dot = DotRadiusMax, trailing dot = DotRadiusMin)",
-    -1100, 460, 1100, 600, C_SDF)
-smt.create_comment_in_material(
-    mat, "d = length(p - c) - r   (circle SDF of the dot that owns this cell)",
-    900, 40, 900, 400, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = (1 - smoothstep(-aa, aa, d)) * step(id, Count - 0.5)\n"
-         "Anti-aliased dot. Cells with id >= Count (the remaining 1 - Arc of the circle) are not drawn",
+    mat, "Cells past Count, the remaining 1 - Arc of the circle, are not drawn.",
     1950, -120, 1050, 760, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)\n"
-         "Background dropped: mix(bg, fg, m) becomes PrimaryColor with alpha",
-    3100, -120, 650, 700, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -380,7 +344,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 2
-comments_ok = len(smt.get_material_comment_texts(mat)) == 13
+comments_ok = len(smt.get_material_comment_texts(mat)) == 3
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
