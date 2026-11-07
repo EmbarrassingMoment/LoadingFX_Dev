@@ -237,34 +237,21 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 360, -270)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)\n"
-         "ext.x = MF_SpinnerCoords.Extent.x   (half width in p units: the bar spans the widget)",
-    -3350, -900, 700, 450, C_UV)
+    mat, "Track\n"
+         "Inset by 1 - Thickness / 2 on every side: Thickness 2 fills the widget, 1.6 leaves 0.2 at the ends. "
+         "A square widget gives a circle.",
+    -3350,  - 976, 2800, 856, C_SDF)
 smt.create_comment_in_material(
-    mat, "R = Thickness / 2;  L = max(ext.x - 1, 0)\n"
-         "The track is inset by (1 - R) on every side: Thickness 1.6 reaches +-0.8 (the contract's reference circle)\n"
-         "and leaves 0.2 at the ends; Thickness 2 fills the widget. A square widget gives a circle (L = 0)",
-    -3350, -420, 1000, 300, C_SDF)
-smt.create_comment_in_material(
-    mat, "dTrack = length((max(abs(p.x) - L, 0), p.y)) - R   (horizontal capsule, exact distance)\n"
-         "track = saturate(0.5 - dTrack / aa)",
-    -2400, -960, 1850, 400, C_SDF)
-smt.create_comment_in_material(
-    mat, "t = (p.x - p.y) / Period - Time * Speed   (lines p.x - p.y = const lean like '/'; Speed in stripes per second, positive runs right)\n"
-         "Time ignores pause (real time), so the stripes keep moving while the game thread is blocked",
-    -2850, 50, 1150, 550, C_TM)
-smt.create_comment_in_material(
-    mat, "tc = fract(t) - 0.5;  dt = abs(tc) - Duty / 2   (signed distance to the stripe in t units; a triangle wave, so continuous at the wrap)\n"
-         "aat = aa * sqrt(2) / Period   (one pixel in t units: |grad t| = sqrt(2) / Period)\n"
-         "stripe = saturate(0.5 - dt / aat);  mask = track * lerp(TrackOpacity, 1, stripe)",
-    -2100, 200, 1650, 650, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    -350, -420, 650, 700, C_COL)
+    mat, "Stripes\n"
+         "The stripes lean like / and a positive Speed runs them right. The triangle wave stays continuous at "
+         "the wrap, so there is no seam. One pixel in t is aa * sqrt(2) / Period, because t changes by sqrt(2) "
+         "/ Period per unit of P.\n"
+         "Time has Ignore Pause on (real time), so the stripes keep moving while the game thread is blocked.",
+    -2850, -8, 2400, 858, C_TM)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -302,7 +289,7 @@ expected_params = sorted(["Thickness", "Period", "Speed", "Duty", "TrackOpacity"
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 6
+          and len(smt.get_material_comment_texts(mat)) == 2
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

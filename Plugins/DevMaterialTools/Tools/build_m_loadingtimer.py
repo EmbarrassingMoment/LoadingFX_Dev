@@ -389,52 +389,32 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3560, 230)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -3650, -820, 900, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "u = fract(Time * Speed);  head = smoothstep(0, 0.5, u) (the pie fills);  tail = smoothstep(0.5, 1, u) (it empties)\n"
-         "Edges in turns clockwise from 12 o'clock. Time ignores pause (real time), so the timer keeps running while\n"
-         "the game thread is blocked",
+    mat, "Fill and empty\n"
+         "The head edge fills the pie and the tail edge empties it, both in turns clockwise from 12 o'clock.\n"
+         "Time has Ignore Pause on (real time), so the timer keeps running while the game thread is blocked.",
     -3800, 150, 1300, 450, C_TM)
 smt.create_comment_in_material(
-    mat, "mid = (tail + head) * PI   (pie center, radians);  c = cos(mid), s = sin(mid)",
-    -2500, 50, 800, 330, C_UV)
-smt.create_comment_in_material(
-    mat, "span = head - tail   (pie size, turns);  sc = (sin h, cos h),  h = span * PI   (half aperture)",
-    -2500, 380, 1050, 330, C_UV)
-smt.create_comment_in_material(
-    mat, "q = (abs(c*p.x - s*p.y), s*p.x + c*p.y)\n"
-         "Rotate so that the pie's center points straight up, then fold the left half onto the right",
+    mat, "Fold\n"
+         "Turn the pie's center to 12 o'clock and fold left onto right, so one straight edge serves both "
+         "sides.",
     -1550, -280, 1250, 560, C_UV)
 smt.create_comment_in_material(
-    mat, "PieRadius is used three times -> Named Reroute",
-    -500, 230, 500, 200, C_SC)
+    mat, "Pie distance (iq's sdPie)",
+    -210, -400, 1410, 1200, C_SDF)
 smt.create_comment_in_material(
-    mat, "iq's sdPie: dDisc = length(q) - PieRadius;  dPie = max(dDisc, m * sign(sc.y * q.x - sc.x * q.y)),\n"
-         "m = length(q - sc * clamp(dot(q, sc), 0, PieRadius))   (distance to the straight edge)",
-    -150, -400, 1350, 1200, C_SDF)
+    mat, "Radius + Thickness / 2 = 0.8 by default: the outer size shared by the ring spinners.",
+    450, 656, 1100, 424, C_SDF)
 smt.create_comment_in_material(
-    mat, "dRing = abs(length(p) - Radius) - Thickness / 2\n"
-         "Radius + Thickness / 2 = 0.8 by default (the material contract's reference circle)",
-    450, 700, 1100, 380, C_SDF)
-smt.create_comment_in_material(
-    mat, "pie = lerp(clamp(0.5 - dPie / aa, 0, 1), clamp(0.5 - dDisc / aa, 0, 1), full) * fade\n"
-         "ring = clamp(0.5 - dRing / aa, 0, 1) * RingOpacity;  mask = max(pie, ring)",
-    1350, -500, 1450, 1450, C_COL)
-smt.create_comment_in_material(
-    mat, "rimPx = TAU * PieRadius / aa   (pixels around the pie's rim)\n"
-         "fade = saturate(span * rimPx): a pie thinner than a pixel at the rim fades with its width.\n"
-         "full = saturate(1 - (1 - span) * rimPx): a gap thinner than a pixel at the rim closes toward the disc.\n"
-         "Without them a sub-pixel pie or gap is a zero-distance line drawn at half coverage, and smoothstep lingers\n"
-         "near full and empty, so a hairline at 12 o'clock stayed for over 0.1 s",
-    1350, 1050, 1450, 750, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    2850, 80, 650, 700, C_COL)
+    mat, "Hairline guards\n"
+         "A pie or gap thinner than a pixel is a zero-distance line that anti-aliasing draws at half coverage, "
+         "and smoothstep lingers near full and empty, so a hairline at 12 o'clock would stay for over 0.1 s. "
+         "fade fades a pie that is thinner than a pixel at its rim, and full closes such a gap toward the "
+         "disc.",
+    1350, 1010, 1450, 790, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -476,7 +456,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 11
+comments_ok = len(smt.get_material_comment_texts(mat)) == 5
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

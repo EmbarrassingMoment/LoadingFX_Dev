@@ -279,49 +279,36 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3010, -220)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "rho = length(MF_SpinnerCoords.P)   (P: centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in P units)",
-    -3650, -870, 700, 400, C_UV)
-smt.create_comment_in_material(
-    mat, "Shared parameters -> Named Reroutes.\n"
-         "Radius + Thickness / 2 = 0.8: the material contract's reference circle, reached as a ring vanishes",
+    mat, "Radius + Thickness / 2 = 0.8, reached as a ring vanishes: the outer size shared by the ring "
+         "spinners.",
     -3850, -520, 600, 600, C_SC)
 smt.create_comment_in_material(
-    mat, "s = fract(Time * Speed * Count): ring k = 0 .. Count - 1 has the phase (k + s) / Count\n"
-         "Each ring takes 1 / Speed seconds to spread. Time ignores pause (real time),\n"
-         "so the rings keep spreading while the game thread is blocked",
-    -3850, 200, 900, 400, C_TM)
+    mat, "Ring timing\n"
+         "Ring k has the phase (k + s) / Count, and each ring takes 1 / Speed seconds to spread.\n"
+         "Time has Ignore Pause on (real time), so the rings keep spreading while the game thread is blocked.",
+    -3850, 128, 900, 472, C_TM)
 smt.create_comment_in_material(
-    mat, "th = max(Thickness, aa): never thinner than one pixel\n"
-         "(a thinner ring would show at half coverage; mask loses opacity in proportion instead)",
+    mat, "Never thinner than one pixel: a thinner ring would show at half coverage, so the mask loses opacity "
+         "in proportion instead.",
     -3650, 700, 600, 350, C_SDF)
 smt.create_comment_in_material(
-    mat, "phiIn = 1 - (1 - saturate((rho - (th - aa) / 2) / Radius))^(1 / Easing)\n"
-         "A ring's radius is Radius * g(phi), g(phi) = 1 - (1 - phi)^Easing. Inverting g at the stroke's inner edge\n"
-         "gives the phase of a ring whose solid stroke would just reach this pixel",
-    -3050, -520, 1350, 450, C_TM)
+    mat, "Nearest rings\n"
+         "A ring's radius is Radius * g(phi), g(phi) = 1 - (1 - phi)^Easing. Inverting g at the stroke's inner "
+         "edge finds the innermost ring that reaches the pixel. Rings bunch up near Radius and may overlap, "
+         "and a ring fades as it spreads, so this ring and the one inside it give the max over all rings "
+         "without a loop (exact while neighbors are a pixel apart).",
+    -3050, -520, 2350, 650, C_TM)
 smt.create_comment_in_material(
-    mat, "k0 = floor(phiIn * Count - s);  kIn = clamp(k0, 0, Count - 1);  kOut = clamp(k0 + 1, 0, Count - 1)\n"
-         "kOut is the innermost ring whose stroke reaches the pixel, kIn the one inside it (its AA edge may still).\n"
-         "Rings bunch up near Radius and may overlap; a ring fades as it spreads, so the innermost covering ring is\n"
-         "the brightest: these two give the max over all rings (exact while neighbors are a pixel apart, no loop)",
-    -1850, -420, 1150, 550, C_TM)
-smt.create_comment_in_material(
-    mat, "Ring kIn:  phi = (kIn + s) / Count;  d = abs(rho - Radius * (1 - (1 - phi)^Easing)) - th / 2\n"
-         "ring = saturate(0.5 - d / aa) * (1 - phi) * smoothstep(0, 0.1, phi)   (fades as it spreads; fades in at birth)",
+    mat, "Ring kIn\n"
+         "It fades as it spreads, and fades in at birth.",
     -700, -870, 2350, 650, C_SDF)
 smt.create_comment_in_material(
-    mat, "Ring kOut: the same nodes for kOut",
+    mat, "Ring kOut: the same nodes.",
     -700, 30, 2350, 650, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = max(ringIn, ringOut) * (Thickness / th)   (one color)",
-    1650, -270, 650, 500, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    2300, -370, 650, 680, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -361,7 +348,7 @@ expected_params = sorted(["Radius", "Thickness", "Count", "Easing", "Speed", "Pr
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 10
+          and len(smt.get_material_comment_texts(mat)) == 6
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

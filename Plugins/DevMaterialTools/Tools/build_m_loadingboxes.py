@@ -179,16 +179,10 @@ f_out = fnode(unreal.MaterialExpressionFunctionOutput, 650, -100, output_name="R
 _connect(res_n, "", f_out, "")
 
 smt.create_comment_in_function(
-    fn, "Inputs -> Named Reroute (P, B, R)\n"
-        "P = point relative to the box center, B = half extents, R = corner radius",
-    -1550, -320, 750, 650, C_SC)
-smt.create_comment_in_function(
-    fn, "d = abs(P) - B + R   (box shrunk by R, then inflated back by R below)",
-    -1100, -320, 820, 400, C_SDF)
-smt.create_comment_in_function(
-    fn, "sdRoundBox = length(max(d, 0)) + min(max(d.x, d.y), 0) - R\n"
-        "outside distance + inside distance, minus R rounds the corners",
-    -280, -370, 920, 520, C_SDF)
+    fn, "sdRoundBox\n"
+        "P is relative to the box's center, B holds the half extents, R the corner radius. The box shrinks by "
+        "R and grows back by R, which rounds the corners.",
+    -1550, -370, 2190, 740, C_SDF)
 
 mel.update_material_function(fn)
 mf_saved = lib.save_asset(MF_FULL_PATH)
@@ -366,40 +360,24 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 1160, -530)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "const BOX_SIZE -> ScalarParameter (used twice -> Named Reroute).\n"
-         "BoxGap / BoxRound / Speed / FadeCurve / OpacityMax / OpacityMin / PrimaryColor are wired directly",
-    -3500, -800, 600, 220, C_SC)
+    mat, "Coordinates\n"
+         "P is halved, so BoxSize + BoxGap / 2 = 0.36 reaches 0.72 in full units: the outer size shared by the "
+         "square layouts. The edge is anti-aliased over 1.5 pixels.",
+    -3500,  - 140, 700, 390, C_UV)
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P * 0.5   (centered, y-up, shorter side spans -0.5..0.5: fits a non-square widget)\n"
-         "aa = 1.5 * 0.5 * MF_SpinnerCoords.PixelSize   (1.5 screen pixels in p units)",
-    -3500, -100, 700, 350, C_UV)
-smt.create_comment_in_material(
-    mat, "Quadrant index 0..3 (counter-clockwise from top-right), branch-free\n"
-         "q = step(0, p); idx = 2*(1 - q.y) + abs(q.x - q.y)",
-    -2800, 230, 1450, 520, C_UV)
-smt.create_comment_in_material(
-    mat, "Fold into one quadrant with abs -> one box SDF draws all four boxes\n"
-         "d = sdRoundBox(abs(p) - 0.5*(BoxSize + BoxGap), vec2(0.5*BoxSize), BoxRound)",
+    mat, "Fold\n"
+         "abs folds the four quadrants into one, so one box SDF draws all four boxes.",
     -2850, -560, 1250, 680, C_SDF)
 smt.create_comment_in_material(
-    mat, "mask = 1 - smoothstep(-aa, aa, d)   (anti-aliased mask)",
-    -1550, -1000, 820, 450, C_COL)
-smt.create_comment_in_material(
-    mat, "Each box is a quarter cycle ahead of the previous one\n"
-         "phase = fract(Time * Speed + idx * 0.25)   (Speed in cycles per second)",
-    -1350, 150, 900, 520, C_TM)
-smt.create_comment_in_material(
-    mat, "bright = mix(OpacityMax, OpacityMin, pow(phase, FadeCurve))\n"
-         "Decays MAX -> MIN once per cycle; FadeCurve must be > 0",
-    -420, 30, 850, 560, C_TM)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * bright * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)\n"
-         "Background dropped: mix(BG, color, mask * bright) becomes PrimaryColor with alpha "
-         "(identical over a black background)",
-    400, -680, 700, 660, C_COL)
+    mat, "Fade\n"
+         "The boxes are numbered counter-clockwise from the top right, and each runs a quarter cycle ahead of "
+         "the last, so the highlight moves clockwise. FadeCurve must be above 0.\n"
+         "Time has Ignore Pause on (real time), so the boxes keep fading while the game thread is blocked.",
+    -1350, -10, 1780, 680, C_TM)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -431,7 +409,7 @@ print(f"[TEST] {MF_NAME} decls: {f_decls}")
 print(f"[TEST] {MF_NAME} usages: {f_usages}")
 mf_ok = (f_decls == ["B", "P", "R", "d"]
          and f_usages == {"B": 1, "P": 1, "R": 2, "d": 3}
-         and len(smt.get_function_comment_texts(fn)) == 3
+         and len(smt.get_function_comment_texts(fn)) == 1
          and mf_saved)
 
 m_decls, m_usages, m_params, m_groups, m_calls = audit(smt.get_material_expressions(mat))
@@ -450,7 +428,7 @@ expected_params = sorted(["BoxSize", "BoxGap", "BoxRound", "Speed", "FadeCurve",
 mat_ok = (m_decls == expected_decls and m_usages == dict(sorted(expected_usages.items()))
           and m_params == expected_params and m_calls == 2
           and m_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 8
+          and len(smt.get_material_comment_texts(mat)) == 3
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

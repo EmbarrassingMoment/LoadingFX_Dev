@@ -269,45 +269,31 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 1960, -270)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -3300, -820, 900, 400, C_UV)
+    mat, "By default (Count - 1) / 2 * Spacing + Thickness / 2 = 0.72 across and HeightMax = 0.72 up and down: "
+         "the outer size shared by the square layouts. Raise Count only together with a smaller Spacing.",
+    -3300,  - 490, 650, 520, C_SC)
 smt.create_comment_in_material(
-    mat, "half = (Count - 1) / 2   (Count - 1 also caps id below)\n"
-         "By default (Count - 1) / 2 * Spacing + Thickness / 2 = 0.72 across and HeightMax = 0.72 up and down\n"
-         "(the material contract's reference square). Raise Count only together with a smaller Spacing",
-    -3300, -420, 650, 450, C_SC)
-smt.create_comment_in_material(
-    mat, "id = clamp(round(p.x / Spacing + half), 0, Count - 1)\n"
-         "Nearest bar (0 = leftmost). Pixels beyond the row go to the end bars.\n"
-         "Every bar has the same width, so one capsule SDF per pixel is enough while Thickness < Spacing",
+    mat, "Nearest bar\n"
+         "Pixels beyond the row go to the end bars. Every bar has the same width, so one capsule per pixel is "
+         "enough while Thickness < Spacing.",
     -2500, -320, 1050, 380, C_UV)
 smt.create_comment_in_material(
-    mat, "phase = fract(Time * Speed - id * Stagger)   (Speed in cycles per second; positive runs left to right)\n"
-         "Time ignores pause (real time), so the bars keep moving while the game thread is blocked",
-    -3300, 250, 900, 520, C_TM)
+    mat, "Wave\n"
+         "A bar grows over the first PulseWidth of its cycle, then rests; PulseWidth 1 gives a continuous "
+         "wave. A positive Speed runs left to right.\n"
+         "Time has Ignore Pause on (real time), so the bars keep moving while the game thread is blocked.",
+    -3300, 250, 1950, 520, C_TM)
 smt.create_comment_in_material(
-    mat, "pulse = (1 - cos(TAU * saturate(phase / PulseWidth))) / 2\n"
-         "0 -> 1 -> 0 over the first PulseWidth of the cycle, then 0 (rest); PulseWidth 1 = a continuous wave",
-    -2650, 380, 1300, 330, C_TM)
-smt.create_comment_in_material(
-    mat, "capR = Thickness / 2 (the rounded ends);  seg = max(lerp(HeightMin, HeightMax, pulse) - capR, 0)\n"
-         "HeightMin / HeightMax reach the tip of the rounded end; seg is half the straight part",
+    mat, "HeightMin and HeightMax reach the tip of the rounded end, so seg is half the straight part.",
     -1300, 100, 750, 700, C_SDF)
 smt.create_comment_in_material(
-    mat, "cx = (id - half) * Spacing   (center of bar id)\n"
-         "d = length((p.x - cx, max(abs(p.y) - seg, 0))) - capR   (a vertical capsule around the center line)\n"
-         "Heights differ per bar, so d jumps at cell borders: AA uses PixelSize, not fwidth(d)",
-    -1300, -620, 1650, 680, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = saturate(0.5 - d / aa)   (1px-wide coverage approximation at the edge)",
-    400, -330, 800, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    1250, -420, 650, 700, C_COL)
+    mat, "Anti-aliasing\n"
+         "Heights differ per bar, so d jumps at cell borders: the AA width is PixelSize, not fwidth(d).",
+    -1300, -620, 1650, 720, C_SDF)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -347,7 +333,7 @@ expected_params = sorted(["Count", "Spacing", "Thickness", "HeightMin", "HeightM
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 9
+          and len(smt.get_material_comment_texts(mat)) == 5
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

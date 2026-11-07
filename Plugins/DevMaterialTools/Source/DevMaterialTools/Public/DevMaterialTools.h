@@ -74,6 +74,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
 	static FVector4 GetCommentBounds(UMaterialExpressionComment* Comment);
 
+	/** Returns every comment box in the material (for verification). */
+	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
+	static TArray<UMaterialExpressionComment*> GetMaterialComments(UMaterial* Material);
+
+	/** Returns every comment box in the Material Function (for verification). */
+	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
+	static TArray<UMaterialExpressionComment*> GetFunctionComments(UMaterialFunction* MaterialFunction);
+
+	/** Moves the material's output node. UMaterial::EditorX / EditorY are not exposed to Python,
+	 *  and a material that never sets them draws the node at (0, 0), in the middle of the graph. */
+	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
+	static void SetMaterialRootPosition(UMaterial* Material, int32 X, int32 Y);
+
+	/** Returns the position of the material's output node as (X, Y) (for verification). */
+	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
+	static FIntPoint GetMaterialRootPosition(UMaterial* Material);
+
 	/** Returns the text of every comment in the Material Function (for verification). */
 	UFUNCTION(BlueprintCallable, Category = "Dev|MaterialTools")
 	static TArray<FString> GetFunctionCommentTexts(UMaterialFunction* MaterialFunction);

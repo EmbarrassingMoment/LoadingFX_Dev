@@ -346,55 +346,28 @@ _connect(mask_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 3310, 150)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "const SPACING -> ScalarParameter (used twice -> Named Reroute; ATTACK and DotRadiusMin likewise).\n"
-         "DotRadiusMax / Speed / Trail / PrimaryColor are wired directly at their single use site",
-    -4350, -400, 650, 250, C_SC)
+    mat, "Cells\n"
+         "Pixels outside the 3x3 grid snap to the outer ring, so one circle per pixel draws all eight dots. "
+         "The center cell has no dot, and isCenter keeps atan(0, 0) out of it. Dots are numbered clockwise "
+         "from 12 o'clock.",
+    -3550, -100, 2450, 970, C_UV)
 smt.create_comment_in_material(
-    mat, "uv = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in uv units)",
-    -4350, -100, 850, 400, C_UV)
+    mat, "Pulse\n"
+         "A dot swells quickly just before the pulse head arrives (Attack) and leaves a slow afterglow behind "
+         "it (Trail). Keep Attack + Trail at 8 or less for a seamless wrap.",
+    -1150, 700, 2500, 580, C_TM)
 smt.create_comment_in_material(
-    mat, "1. cell = clamp(round(uv / Spacing), -1, 1)\n"
-         "3x3 grid cell (-1, 0, 1); pixels outside the grid snap to the outer ring",
-    -3550, -100, 850, 300, C_UV)
-smt.create_comment_in_material(
-    mat, "isCenter = step(dot(cell, cell), 0.5)   (center cell has no ball)",
-    -2750, 200, 700, 200, C_SC)
-smt.create_comment_in_material(
-    mat, "2. a = atan(cell.x, cell.y + isCenter)\n"
-         "Angle from +Y (12 o'clock), clockwise. isCenter avoids atan(0, 0) in the center cell",
-    -2750, 420, 850, 450, C_SC)
-smt.create_comment_in_material(
-    mat, "idx = mod(round(a * 4/PI), 8)   (ball index 0..7, mod via MF_GLSLMod)",
-    -1950, 480, 850, 350, C_SC)
-smt.create_comment_in_material(
-    mat, "3. head = fract(Time * Speed) * 8   (pulse head position, 0..8)",
+    mat, "Time has Ignore Pause on (real time), so the pulse keeps running while the game thread is blocked.",
     -1950, 820, 850, 300, C_TM)
 smt.create_comment_in_material(
-    mat, "age = mod(head - idx + Attack, 8)\n"
-         "0 = the ball starts to swell, Attack = pulse head on the ball (peak), after that the trail",
-    -1150, 720, 800, 500, C_TM)
-smt.create_comment_in_material(
-    mat, "rise = smoothstep(0, Attack, age)   (quick swell just before the head arrives)\n"
-         "fall = 1 - smoothstep(0, Trail, age - Attack)   (slow afterglow behind the head)\n"
-         "pulse = rise * fall; r = DotRadiusMin + (DotRadiusMax - DotRadiusMin) * pulse   (keep Attack + Trail <= 8 for a seamless wrap)",
-    -300, 700, 1650, 580, C_TM)
-smt.create_comment_in_material(
-    mat, "4. sdCircle expanded inline: d = length(uv - cell*Spacing) - r\n"
-         "d += isCenter * 1e5   (center cell is never drawn)",
-    550, 180, 1250, 480, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = clamp(0.5 - d/aa, 0, 1)   (1px-wide coverage approximation at the edge)\n"
-         "aa is the pixel size of uv, not fwidth(d): d is discontinuous at cell borders (would draw seams).\n"
-         "The circle SDF has unit gradient, so the pixel size of uv equals the pixel size of d",
-    1850, 200, 800, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)\n"
-         "Background dropped: mix(BG, color, mask) becomes PrimaryColor with alpha",
-    2650, 0, 600, 700, C_COL)
+    mat, "Anti-aliasing\n"
+         "aa is the pixel size of uv, not fwidth(d): d jumps at cell borders, which would draw seams. A "
+         "circle's distance has unit gradient, so the two are equal.",
+    1850, 160, 800, 340, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -435,7 +408,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == ["Attack", "DotRadiusMax", "DotRadiusMin", "PrimaryColor", "Spacing", "Speed", "Trail"]
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 3
-comments_ok = len(smt.get_material_comment_texts(mat)) == 12
+comments_ok = len(smt.get_material_comment_texts(mat)) == 4
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 

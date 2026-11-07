@@ -282,39 +282,24 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 1260, -270)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)\n"
-         "ext.x = MF_SpinnerCoords.Extent.x   (half width in p units: the bar spans the widget)",
-    -3350, -900, 700, 450, C_UV)
+    mat, "Track\n"
+         "Inset by 1 - Thickness / 2 on every side: Thickness 2 fills the widget, 1.6 leaves 0.2 at the ends. "
+         "A square widget gives a circle.",
+    -3350,  - 976, 3100, 856, C_SDF)
 smt.create_comment_in_material(
-    mat, "R = Thickness / 2;  L = max(ext.x - 1, 0);  xEnd = L + R\n"
-         "The track is inset by (1 - R) on every side: Thickness 1.6 reaches +-0.8 (the contract's reference circle)\n"
-         "and leaves 0.2 at the ends; Thickness 2 fills the widget. A square widget gives a circle (L = 0)",
-    -3350, -420, 1400, 300, C_SDF)
+    mat, "Sweep\n"
+         "The tail follows the head on the same ease, TailDelay later, so the segment opens and closes. A "
+         "larger TailDelay gives a longer segment: 0.5 fills the track halfway through, 0 shows nothing.\n"
+         "Time has Ignore Pause on (real time), so the bar keeps moving while the game thread is blocked.",
+    -3350, 50, 2050, 650, C_TM)
 smt.create_comment_in_material(
-    mat, "dTrack = length((max(abs(p.x) - L, 0), p.y)) - R   (horizontal capsule, exact distance)\n"
-         "track = saturate(0.5 - dTrack / aa)",
-    -2400, -960, 2150, 300, C_SDF)
-smt.create_comment_in_material(
-    mat, "u = fract(Time * Speed)   (Speed in sweeps per second; positive runs left to right)\n"
-         "Time ignores pause (real time), so the bar keeps moving while the game thread is blocked",
-    -3350, 100, 700, 300, C_TM)
-smt.create_comment_in_material(
-    mat, "head = smoothstep(0, 1 - TailDelay, u);  tail = smoothstep(TailDelay, 1, u)   (Arc's trick: two shifted ramps)\n"
-         "xB = lerp(-xEnd, xEnd, head);  xA = lerp(-xEnd, xEnd, tail)   (the segment is xA..xB)\n"
-         "Larger TailDelay = a longer segment: 0.5 fills the track halfway through, 0 shows nothing",
-    -2700, 50, 1400, 650, C_TM)
-smt.create_comment_in_material(
-    mat, "dSeg = max(dTrack, max(xA - p.x, p.x - xB))   (the track cut to xA..xB; still 1-Lipschitz, so AA = aa)\n"
-         "fade = saturate((xB - xA) / aa): a zero-width segment at the wrap would keep 0.5 coverage on its line\n"
-         "seg = saturate(0.5 - dSeg / aa) * fade;  mask = max(track * TrackOpacity, seg)",
+    mat, "Segment\n"
+         "A zero-width segment at the wrap fades out: anti-aliasing would draw it at half coverage.",
     -1300, 100, 1750, 800, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    550, -420, 650, 700, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -353,7 +338,7 @@ expected_params = sorted(["Thickness", "Speed", "TailDelay", "TrackOpacity", "Pr
 mat_ok = (decl_names == expected_decls and usage_count == dict(sorted(expected_usages.items()))
           and params == expected_params and mf_calls == 1
           and param_groups == PARAM_GROUPS and group_prios == expected_prios
-          and len(smt.get_material_comment_texts(mat)) == 7
+          and len(smt.get_material_comment_texts(mat)) == 3
           and mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
           and mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
           and saved)

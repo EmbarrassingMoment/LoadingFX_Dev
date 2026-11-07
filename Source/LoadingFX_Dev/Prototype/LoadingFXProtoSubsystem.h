@@ -35,12 +35,13 @@ enum class ELoadingFXProtoShowcaseSet : uint8
  *   LFXProto.RunAll [quit]        Run every case in order (e.g. -ExecCmds="LFXProto.RunAll quit").
  *   LFXProto.Gallery [shot] [quit]  Toggle the material contract gallery (non-square sizes, tint). 'shot' saves two
  *                                 screenshots to Saved/Screenshots/LFXProto_Gallery_*.png, 'quit' exits afterwards.
- *   LFXProto.IconTravel [Map] [Sec] [cold] [bg] [quit]  Exercise ULoadingFXIconSubsystem: acquire, owner auto-release, OpenLevel under the icon, release.
+ *   LFXProto.IconTravel [Map] [Sec] [cold] [bg] [shot] [quit]  Exercise ULoadingFXIconSubsystem: acquire, owner auto-release, OpenLevel under the icon, release.
  *                                 'cold' acquires in the same frame as OpenLevel instead, with the project's show delay, so the
  *                                 icon is first drawn on MoviePlayer's loading thread (issue #5), and logs how many frames
  *                                 showed it and the loading screen's background, read back from the back buffer (screenshots
  *                                 cannot see MoviePlayer frames). 'bg' sets LoadingScreenBackgroundColor to sRGB (40, 70, 140)
- *                                 for the run.
+ *                                 for the run. 'shot' with 'cold' reads back one whole frame 0.75 s after the show delay and
+ *                                 saves it to Saved/Screenshots/LFXProto_LoadingScreen.png.
  *   LFXProto.UmgSpinner [shot] [quit]  Show a row of ULoadingFXSpinner UMG widgets (project default, tint, dynamic parameters, opacity, non-square).
  *   LFXProto.ProgressBar [shot] [quit]  Show ULoadingFXProgressBar UMG widgets: one driven by a real Load Assets Async of the
  *                                 prototype's material list (run it in a fresh process to see the steps), scripted increases
@@ -70,10 +71,10 @@ enum class ELoadingFXProtoShowcaseSet : uint8
  *                                 the world tick, a Begin without End there and later in the frame (ended at the end of the
  *                                 frame), the next section taking over again, a nested sync load, and Begin / End inside a
  *                                 button's OnClicked (Slate input routing).
- *   LFXProto.ClickButton Name [quit]  Click the UMG button named Name (a widget in a Blueprint's widget tree, such as the
- *                                 sample's BlockingTaskButton) through FSlateApplication one second later, and log how long
- *                                 its OnClicked took. Saves Saved/Screenshots/LFXProto_Click.png 1.5 s after the click; 'quit'
- *                                 exits 3 s after it.
+ *   LFXProto.ClickButton Name[+Name...] [ShotDelay] [quit]  Click the UMG buttons named Name (widgets in a Blueprint's widget tree,
+ *                                 such as the sample's BlockingTaskButton) through FSlateApplication, one a second, and log how
+ *                                 long each OnClicked took. Saves Saved/Screenshots/LFXProto_Click.png ShotDelay seconds after
+ *                                 the last click (default 1.5); 'quit' exits 1.5 s after that.
  *
  * The prototype loads its own material list on first use, so that it does not hide the icon material preload.
  * MoviePlayer is disabled in the editor and PIE: run with -game or a packaged build.
@@ -93,7 +94,7 @@ public:
 	void RunTravelTest(const FString& MapName, float ExtraLoadSeconds);
 	void RunAll(bool bQuitWhenDone);
 	void RunGallery(bool bTakeScreenshots, bool bQuitWhenDone);
-	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bTestBackground, bool bQuitWhenDone);
+	void RunIconTravelTest(const FString& MapName, float ExtraLoadSeconds, bool bCold, bool bTestBackground, bool bSaveLoadingScreenFrame, bool bQuitWhenDone);
 	void RunUmgSpinnerTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunProgressBarTest(bool bTakeScreenshot, bool bQuitWhenDone);
 	void RunShowcase(float TileSize, bool bShowReference, ELoadingFXProtoShowcaseSet Set, bool bTakeScreenshot, bool bQuitWhenDone);
@@ -102,7 +103,7 @@ public:
 	void RunShowDelayTest(bool bQuitWhenDone);
 	void RunLoaderTest(bool bQuitWhenDone);
 	void RunBlockingSectionTest(bool bQuitWhenDone);
-	void RunClickButton(const FString& ButtonName, bool bQuitWhenDone);
+	void RunClickButton(const FString& ButtonNames, float ShotDelay, bool bQuitWhenDone);
 
 private:
 	/** LFXProto.Loader: the outputs of the Load Assets Async actions it starts. */
@@ -167,9 +168,10 @@ private:
 	/**
 	 * LFXProto.IconTravel cold: reads the icon's corner of the back buffer on every presented frame, MoviePlayer's
 	 * included (screenshots only see game frames), and logs in which phase of the travel the icon was drawn and
-	 * whether the loading screen's background matched LoadingScreenBackgroundColor.
+	 * whether the loading screen's background matched LoadingScreenBackgroundColor. A SaveFrameAtSeconds above 0 also
+	 * keeps the first whole frame presented from then on.
 	 */
-	void StartIconFrameProbe();
+	void StartIconFrameProbe(double SaveFrameAtSeconds = 0.0);
 	void StopIconFrameProbe();
 	void ReportIconFrameProbe() const;
 

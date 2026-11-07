@@ -362,57 +362,31 @@ _connect(cov_a, "", opacity, "A")
 _connect(vcolor, "A", opacity, "B")
 results.append(mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY))
 
+smt.set_material_root_position(mat, 4060, -70)
+
 # ---- Comments (English) ----
 smt.create_comment_in_material(
-    mat, "p = MF_SpinnerCoords.P   (centered, y-up, shorter side spans -1..1: fits a non-square widget)\n"
-         "aa = MF_SpinnerCoords.PixelSize   (one screen pixel in p units)",
-    -4300, -520, 900, 400, C_UV)
+    mat, "Stretch cycle\n"
+         "The head stretches in the first half of each cycle, and the tail catches up in the second.\n"
+         "Time has Ignore Pause on (real time), so the arc keeps turning while the game thread is blocked.",
+    -4300, 500, 2050, 870, C_TM)
 smt.create_comment_in_material(
-    mat, "rot = Time * Speed (steady rotation, turns);  cyc = Time * StretchSpeed;  k = floor(cyc), u = fract(cyc)\n"
-         "Time ignores pause (real time), so the spinner keeps turning while the game thread is blocked",
-    -4300, 500, 700, 520, C_TM)
+    mat, "Arc direction\n"
+         "Each cycle the tail lands ext further on, so the stretching itself carries the arc around.\n"
+         "fract keeps the angle small, so Cosine and Sine stay accurate as Time grows.",
+    -2200, 520, 2150, 670, C_UV)
 smt.create_comment_in_material(
-    mat, "grow = smoothstep(0, 0.5, u): the head stretches in the first half\n"
-         "shrink = smoothstep(0.5, 1, u): the tail catches up in the second half",
-    -3550, 650, 550, 380, C_TM)
-smt.create_comment_in_material(
-    mat, "ext = ArcMax - ArcMin   (arc lengths in turns; ArcMin is used twice -> Named Reroute)",
-    -3550, 1050, 900, 300, C_SC)
-smt.create_comment_in_material(
-    mat, "len = ArcMin + ext * (grow - shrink)   (current arc length in turns)",
-    -3050, 720, 800, 380, C_TM)
-smt.create_comment_in_material(
-    mat, "mid = (k + shrink) * ext + len / 2 + rot   (arc center, turns clockwise from 12 o'clock)\n"
-         "tail = (k + shrink) * ext + rot, head = tail + len: the tail advances by ext every cycle.\n"
-         "ang = fract(mid) * TAU keeps the angle small",
-    -2200, 560, 1250, 560, C_UV)
-smt.create_comment_in_material(
-    mat, "c = cos(ang), s = sin(ang)   (Sine / Cosine period = 2*PI -> radians)",
-    -900, 560, 550, 330, C_UV)
-smt.create_comment_in_material(
-    mat, "sc = (sin(len * PI), cos(len * PI))\n"
-         "Direction of the arc's right end; len * PI is the half aperture",
-    -900, 910, 850, 280, C_UV)
-smt.create_comment_in_material(
-    mat, "q = (abs(c*p.x - s*p.y), s*p.x + c*p.y)\n"
-         "Rotate so that the arc center points straight up, then fold the left half onto the right (iq's sdArc)",
+    mat, "Fold\n"
+         "Turn the arc's center to 12 o'clock and fold left onto right, so one end cap serves both ends.",
     -150, -230, 1250, 560, C_UV)
 smt.create_comment_in_material(
-    mat, "Radius + Thickness / 2 = 0.8 by default (the material contract's reference circle)",
-    850, 380, 550, 200, C_SC)
+    mat, "Radius + Thickness / 2 = 0.8 by default: the outer size shared by the ring spinners.",
+    480, 380, 620, 200, C_SC)
 smt.create_comment_in_material(
-    mat, "dCap = length(q - sc * Radius)   (distance to the rounded end)\n"
-         "dRing = abs(length(q) - Radius)   (distance to the full circle)\n"
-         "cap = step(sc.x * q.y, sc.y * q.x): 1 when the pixel's angle is past the end\n"
-         "d = lerp(dRing, dCap, cap) - Thickness / 2   (branch-free select)",
+    mat, "Arc distance (iq's sdArc)\n"
+         "sc points at the arc's right end. Past it, the distance is to the rounded end; before it, to the "
+         "ring.",
     1000, -430, 1500, 1120, C_SDF)
-smt.create_comment_in_material(
-    mat, "mask = clamp(0.5 - d / aa, 0, 1)   (1px-wide coverage approximation at the edge)",
-    2500, -80, 850, 300, C_COL)
-smt.create_comment_in_material(
-    mat, "Output (UI domain): FinalColor = PrimaryColor.rgb * VertexColor.rgb\n"
-         "Opacity = mask * PrimaryColor.a * VertexColor.a   (UMG ColorAndOpacity / RenderOpacity / fades)",
-    3350, -220, 650, 680, C_COL)
 
 used_groups = [g for g in GROUP_ORDER if g in PARAM_GROUPS.values()]
 smt.set_parameter_group_sort_priorities(mat, used_groups, list(range(len(used_groups))))
@@ -454,7 +428,7 @@ usages_ok = usage_count == expected_usages
 params_ok = sorted(param_names) == expected_params
 groups_ok = param_groups == PARAM_GROUPS and group_prios == expected_prios
 mf_ok = mf_calls == 1
-comments_ok = len(smt.get_material_comment_texts(mat)) == 13
+comments_ok = len(smt.get_material_comment_texts(mat)) == 5
 domain_ok = mat.get_editor_property("material_domain") == unreal.MaterialDomain.MD_UI
 blend_ok = mat.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
 
