@@ -5,7 +5,7 @@ This file is for AI coding agents (Claude Code, Codex, Cursor, Copilot, Gemini C
 - Plugin version: see `VersionName` in `LoadingFX.uplugin`
 - Engine: Unreal Engine 5.5 – 5.8. Platforms: **Win64** (tested) and **Linux** (compiles, not yet run)
 - Works in Blueprint-only and C++ projects; no C++ is needed for standard use
-- Full docs: https://github.com/EmbarrassingMoment/LoadingFX_Dev (README in English and Japanese). The public headers under `Source/*/Public` are commented and are the reference for details.
+- Full docs: https://github.com/EmbarrassingMoment/LoadingFX_Dev (README and FAQ in English and Japanese; the FAQ is `Docs/FAQ_EN.md`). The public headers under `Source/*/Public` are commented and are the reference for details.
 
 ## What the plugin does
 
@@ -283,6 +283,7 @@ Never depend on `LoadingFXBridge`; it has no API.
 ## Limitations
 
 - Win64 and Linux only (`PlatformAllowList` of each module); Linux is compile-checked, not yet run. On a platform where the modules are not built, Blueprints that use the plugin fail to cook. To try another platform, add it to each module's allow list in `LoadingFX.uplugin`.
+- Not compatible with UEFN (Unreal Editor for Fortnite): UEFN loads no C++ plugins, and the plugin is built on GameInstance subsystems, MoviePlayer and Slate widgets in the game viewport.
 - No progress for map travel or blocking loads: the engine reports none, and nothing can update a widget while the game thread is blocked. Use a spinner or an indeterminate bar there; the progress bar is for asset loads started with the loader.
 - One project-wide loading icon material; no per-request override.
 - The MoviePlayer loading screen behind the icon is one opaque color (`LoadingScreenBackgroundColor`); there is no background image and no fade in or out yet.

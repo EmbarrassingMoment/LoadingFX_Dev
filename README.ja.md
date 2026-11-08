@@ -248,6 +248,14 @@ Do not edit assets inside the plugin folder; make material instances in the proj
 - ローディングアイコンのマテリアルは**プロジェクトで 1 つ**です。要求ごとの切り替えはありません。
 - プラグインの `PlatformAllowList` は **Win64 と Linux** だけで、Linux はコンパイル確認のみです。それ以外のプラットフォームではモジュールがビルドされず、プラグインを使う Blueprint はそのプラットフォーム向けの cook に失敗します。試す場合は `LoadingFX.uplugin` の各モジュールの `PlatformAllowList` にプラットフォームを足してください。プラットフォーム固有のコードはありません。
 
+## FAQ
+
+### Q: LoadingFX は UEFN（Unreal Editor for Fortnite）で動作しますか？
+
+いいえ。LoadingFX は UEFN が制限しているランタイム機能に依存しています。具体的には、C++ プラグインのロード、GameInstance サブシステム、エンジンの MoviePlayer によるローディング画面とマップロードのフック（`PreLoadMap`、`OnPrepareLoadingScreen`）、ゲームビューポートへの Slate ウィジェットの直接追加（`AddViewportWidgetContent`）が挙げられます。これらはアーキテクチャ上の根本的な依存関係であり、軽微な非互換性ではないため、ビルドフラグや条件付きコンパイルで解決できるものではありません。Epic Games が将来的に UEFN のランタイム機能を拡張した場合には、サポートの可能性を改めて検討します。
+
+よくある質問とトラブルシューティングについては [FAQ](Docs/FAQ_JP.md) を参照してください。
+
 ## リポジトリ構成
 
 | パス | 内容 |
@@ -258,7 +266,7 @@ Do not edit assets inside the plugin folder; make material instances in the proj
 | `Plugins/DevSampleTools/` | Blueprint サンプルをテキストから生成するローカルのエディタツール（配布しません） |
 | `Source/LoadingFX_Dev/` | サンプルプロジェクトのモジュール。`LFXProto.*` の検証コマンドを含む |
 | `Content/Sample/` | Blueprint のサンプルマップとウィジェット |
-| `Docs/` | この README の画像 |
+| `Docs/` | FAQ（英語と日本語）と、この README の画像 |
 
 ## 謝辞
 
