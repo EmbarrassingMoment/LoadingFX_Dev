@@ -248,6 +248,14 @@ The guide is in English only; agents read it fine whatever language you prompt i
 - The loading icon uses **one project-wide material**; there is no per-request override.
 - **Win64 and Linux** are the only platforms in the plugin's `PlatformAllowList`, and Linux is compile-checked but not yet run. On any other platform the modules are not built, and Blueprints that use the plugin fail to cook for it. To try another platform, add it to the `PlatformAllowList` of each module in `LoadingFX.uplugin`; the code has no platform-specific parts.
 
+## FAQ
+
+### Q: Does LoadingFX work with UEFN (Unreal Editor for Fortnite)?
+
+No. LoadingFX relies on runtime features that UEFN restricts, including C++ plugin loading, GameInstance Subsystems, the engine's MoviePlayer loading screen and its map-load hooks (`PreLoadMap`, `OnPrepareLoadingScreen`), and Slate widgets added directly to the game viewport (`AddViewportWidgetContent`). These are fundamental architectural dependencies, not minor incompatibilities, so a simple build flag or conditional compilation cannot resolve them. If Epic Games expands UEFN's runtime capabilities in the future, we will re-evaluate support.
+
+For common questions and troubleshooting, see the [FAQ](Docs/FAQ_EN.md).
+
 ## Repository layout
 
 | Path | Contents |
@@ -258,7 +266,7 @@ The guide is in English only; agents read it fine whatever language you prompt i
 | `Plugins/DevSampleTools/` | Local editor tooling that builds the Blueprint sample from text (not distributed) |
 | `Source/LoadingFX_Dev/` | The sample project module, with the `LFXProto.*` verification commands |
 | `Content/Sample/` | The Blueprint sample maps and widgets |
-| `Docs/` | Images for this README |
+| `Docs/` | The FAQ (English and Japanese) and the images for this README |
 
 ## Acknowledgements
 

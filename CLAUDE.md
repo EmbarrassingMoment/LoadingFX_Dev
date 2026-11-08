@@ -13,6 +13,7 @@ LoadingFX is an Unreal Engine 5 plugin: a library of material-based loading spin
 - **Target engines:** UE 5.5 – 5.8 (one Fab package per version).
 - **Authoring engine: UE 5.5.** Content (`.uasset` / `.umap`) must stay loadable in 5.5, so never open or save this checkout's content with a newer engine. Use 5.6 – 5.8 for compile checks of the plugin (RunUAT `BuildPlugin`), and 5.8 for the MCP workbench, a separate worktree whose content is never committed (see UE 5.8 workbench below).
 - **Platform:** Win64 (tested) and Linux (compile-checked on 5.5 and 5.8 on 2026-11-01, not run). Both are in every module's `PlatformAllowList`; Fab requires an allow or deny list per module, so the list stays. Other platforms after 1.0.
+- **Not compatible with UEFN** (Unreal Editor for Fortnite). The README's FAQ section answers that question, in the same words as TransitionFX's with LoadingFX's own dependencies; `Docs/FAQ_EN.md` and `Docs/FAQ_JP.md` (same structure as TransitionFX's `docs/FAQ_*.md`) hold the other questions. Update both FAQs with any change to the behavior, settings or names they describe, as with `AGENTS.md`.
 
 ## Build & Setup
 
