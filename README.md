@@ -270,7 +270,7 @@ For common questions and troubleshooting, see the [FAQ](Docs/FAQ_EN.md).
 
 ## Acknowledgements
 
-The spinner shapes are built from 2D signed distance functions published by [Inigo Quilez](https://iquilezles.org/) (MIT): [`sdArc`, `sdPie`, `sdSegment`, `sdEllipse` and `sdRoundBox`](https://iquilezles.org/articles/distfunctions2d/), and the [polynomial smooth minimum](https://iquilezles.org/articles/smin/) that melts the Gooey and Chase dots together.
+The spinner shapes are built from code snippets published by [Inigo Quilez](https://iquilezles.org/) under the MIT license: [`sdArc`, `sdPie` and `sdSegment`](https://iquilezles.org/articles/distfunctions2d/), [`sdRoundBox` and the `sdEllipsoid` bound](https://iquilezles.org/articles/distfunctions/) (used in 2D), and the [polynomial smooth minimum](https://iquilezles.org/articles/smin/) that melts the Gooey and Chase dots together. The plugin carries the original code and its license in `Source/ThirdParty/InigoQuilez`, with a list of the assets that use each function.
 
 ## License
 

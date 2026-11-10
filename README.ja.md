@@ -270,7 +270,7 @@ Do not edit assets inside the plugin folder; make material instances in the proj
 
 ## 謝辞
 
-スピナーの形状は [Inigo Quilez](https://iquilezles.org/) 氏が公開している 2D 符号付き距離関数(MIT)をもとにしています。[`sdArc`、`sdPie`、`sdSegment`、`sdEllipse`、`sdRoundBox`](https://iquilezles.org/articles/distfunctions2d/) と、Gooey / Chase の点を溶け合わせる [多項式 smooth minimum](https://iquilezles.org/articles/smin/) です。
+スピナーの形状は [Inigo Quilez](https://iquilezles.org/) 氏が MIT ライセンスで公開しているコードをもとにしています。[`sdArc`、`sdPie`、`sdSegment`](https://iquilezles.org/articles/distfunctions2d/)、2D で使っている [`sdRoundBox` と `sdEllipsoid` の下限距離](https://iquilezles.org/articles/distfunctions/)、Gooey / Chase の点を溶け合わせる [多項式 smooth minimum](https://iquilezles.org/articles/smin/) です。元のコードとライセンスは、関数ごとに使っているアセットの一覧と一緒にプラグインの `Source/ThirdParty/InigoQuilez` に入っています。
 
 ## ライセンス
 
