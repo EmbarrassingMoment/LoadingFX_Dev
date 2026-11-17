@@ -3,6 +3,7 @@
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.5%20--%205.8-black?style=flat&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Win64%20%7C%20Linux-blue?style=flat)](#動作環境)
+[![Fab](https://img.shields.io/badge/Fab-Free-2a2a2a?style=flat&logo=epicgames&logoColor=white)](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032)
 
 > English version → [README.md](README.md)
 
@@ -27,7 +28,7 @@ LoadingFX は Unreal Engine 5 向けのローディング表示プラグイン�
 
 ## インストール
 
-**Fab から:** LoadingFX をライブラリに追加し、Epic Games Launcher からエンジンにインストールします。その後プロジェクトの *Edit > Plugins > User Interface > LoadingFX* を有効にしてエディタを再起動してください。
+**Fab から:** [LoadingFX](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032)（無料）をライブラリに追加し、Epic Games Launcher からエンジンにインストールします。その後プロジェクトの *Edit > Plugins > User Interface > LoadingFX* を有効にしてエディタを再起動してください。
 
 **このリポジトリから:** `Plugins/LoadingFX` をプロジェクトの `Plugins` フォルダにコピーし、同じように有効にします。C++ プロジェクトではプロジェクトと一緒にビルドされます。Blueprint のみのプロジェクトでは、そのエンジンバージョン用のビルド済みバイナリが必要です（Fab のパッケージには同梱されています）。
 
@@ -260,7 +261,7 @@ Do not edit assets inside the plugin folder; make material instances in the proj
 
 | パス | 内容 |
 |---|---|
-| `Plugins/LoadingFX/` | プラグイン本体（Fab で配布するもの） |
+| `Plugins/LoadingFX/` | プラグイン本体（[Fab](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032) で配布するもの） |
 | `Plugins/LoadingFX/AGENTS.md` | AI コーディングエージェント向けの使い方ガイド（プラグインに同梱） |
 | `Plugins/DevMaterialTools/` | マテリアルアセットを Python スクリプトから生成するローカルのエディタツール（配布しません） |
 | `Plugins/DevSampleTools/` | Blueprint サンプルをテキストから生成するローカルのエディタツール（配布しません） |

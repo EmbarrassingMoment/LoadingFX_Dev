@@ -9,7 +9,7 @@
 	"CreatedByURL": "https://github.com/EmbarrassingMoment",
 	"DocsURL": "https://github.com/EmbarrassingMoment/LoadingFX_Dev",
 	"MarketplaceURL": "",
-	"FabURL": "",
+	"FabURL": "com.epicgames.launcher://ue/Fab/product/8907b7ec-4db6-4bd4-9f98-2052f3f23032",
 	"SupportURL": "https://github.com/EmbarrassingMoment/LoadingFX_Dev/issues",
 	"CanContainContent": true,
 	"IsBetaVersion": false,

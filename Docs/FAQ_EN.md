@@ -62,7 +62,7 @@ That is normal in uncooked runs (*Standalone Game*, `-game`). The engine compile
 
 ### Q: Can I use LoadingFX in a commercial project?
 
-Yes. LoadingFX is released under the **MIT License**, which permits commercial use, modification, and distribution with no restrictions beyond including the license notice. See the `LICENSE` file in the repository root. The Fab package is free.
+Yes. LoadingFX is released under the **MIT License**, which permits commercial use, modification, and distribution with no restrictions beyond including the license notice. See the `LICENSE` file in the repository root. The [Fab package](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032) is free.
 
 ### Q: Do I need C++?
 

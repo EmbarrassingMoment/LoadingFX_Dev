@@ -3,6 +3,7 @@
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.5%20--%205.8-black?style=flat&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Win64%20%7C%20Linux-blue?style=flat)](#requirements)
+[![Fab](https://img.shields.io/badge/Fab-Free-2a2a2a?style=flat&logo=epicgames&logoColor=white)](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032)
 
 > 日本語版はこちら → [README.ja.md](README.ja.md)
 
@@ -27,7 +28,7 @@ LoadingFX is a loading indicator plugin for Unreal Engine 5: a library of proced
 
 ## Installation
 
-**From Fab:** add LoadingFX to your library and install it to the engine from the Epic Games Launcher. Then enable it in your project under *Edit > Plugins > User Interface > LoadingFX* and restart the editor.
+**From Fab:** add [LoadingFX](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032) (free) to your library and install it to the engine from the Epic Games Launcher. Then enable it in your project under *Edit > Plugins > User Interface > LoadingFX* and restart the editor.
 
 **From this repository:** copy `Plugins/LoadingFX` into your project's `Plugins` folder and enable it the same way. C++ projects rebuild it with the project; Blueprint-only projects need the prebuilt binaries for their engine version (the Fab package ships them).
 
@@ -260,7 +261,7 @@ For common questions and troubleshooting, see the [FAQ](Docs/FAQ_EN.md).
 
 | Path | Contents |
 |---|---|
-| `Plugins/LoadingFX/` | The plugin (what is distributed on Fab) |
+| `Plugins/LoadingFX/` | The plugin (what is distributed on [Fab](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032)) |
 | `Plugins/LoadingFX/AGENTS.md` | The usage guide for AI coding agents, shipped with the plugin |
 | `Plugins/DevMaterialTools/` | Local editor tooling that builds the material assets from Python scripts (not distributed) |
 | `Plugins/DevSampleTools/` | Local editor tooling that builds the Blueprint sample from text (not distributed) |
