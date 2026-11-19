@@ -1,9 +1,11 @@
 # LoadingFX
 
+[![Available on Fab](https://img.shields.io/badge/Fab-Available-0096FF?style=flat&logo=epicgames&logoColor=white)](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032)
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.5%20--%205.8-black?style=flat&logo=unrealengine&logoColor=white)](https://www.unrealengine.com/)
+[![Version](https://img.shields.io/badge/Version-1.0.0-brightgreen?style=flat)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Win64%20%7C%20Linux-blue?style=flat)](#動作環境)
-[![Fab](https://img.shields.io/badge/Fab-Free-2a2a2a?style=flat&logo=epicgames&logoColor=white)](https://www.fab.com/listings/8907b7ec-4db6-4bd4-9f98-2052f3f23032)
+[![Platform](https://img.shields.io/badge/Platform-Win64%20%7C%20Linux-blue?style=flat)](Plugins/LoadingFX/LoadingFX.uplugin)
+[![Sponsor](https://img.shields.io/badge/Sponsor-EmbarrassingMoment-ff69b4?style=flat&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/EmbarrassingMoment)
 
 > English version → [README.md](README.md)
 
