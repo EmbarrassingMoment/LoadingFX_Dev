@@ -238,6 +238,9 @@ namespace LoadingFXProto
 		{ TEXT("/LoadingFX/Materials/M_LoadingBarFill.M_LoadingBarFill"), TEXT("BarFill (RealTime, Progress 0.65)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingLine.M_LoadingLine"), TEXT("Line (RealTime)") },
 		{ TEXT("/LoadingFX/Materials/M_LoadingChase.M_LoadingChase"), TEXT("Chase (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingHeartbeat.M_LoadingHeartbeat"), TEXT("Heartbeat (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingRadar.M_LoadingRadar"), TEXT("Radar (RealTime)") },
+		{ TEXT("/LoadingFX/Materials/M_LoadingDotWave.M_LoadingDotWave"), TEXT("DotWave (RealTime)") },
 	};
 
 	/** The bar materials span the widget, so the showcase and the progress bar test draw them wide. */

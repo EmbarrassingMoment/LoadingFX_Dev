@@ -13,7 +13,7 @@ LoadingFX is a loading indicator plugin for Unreal Engine 5: a library of proced
 
 ## Features
 
-- **18 spinners and 3 loading bars**, all procedural (SDF) materials with no textures. They stay sharp at any size, and every one is tinted and timed by the same parameters (`PrimaryColor`, `Speed`, `Thickness`, ...).
+- **21 spinners and 3 loading bars**, all procedural (SDF) materials with no textures. They stay sharp at any size, and every one is tinted and timed by the same parameters (`PrimaryColor`, `Speed`, `Thickness`, ...).
 - **Loading icon subsystem**: `Acquire` / `Release` from Blueprint or C++. Requests are reference counted, so several systems can ask for the icon at the same time; a request can be tied to an owner object and released automatically when that object is destroyed. The icon survives map travel.
 - **Keeps spinning during blocking loads**: while the game thread is blocked (`OpenLevel`, a synchronous load), the icon is rendered through the engine's MoviePlayer, so it keeps animating.
 - **Show delay and minimum display time**, so a short load shows nothing at all and a load that just crossed the delay does not flicker.
@@ -103,6 +103,9 @@ They keep their look at any aspect ratio (the shape stays round and centered in 
 | `M_LoadingMorph` | <img src="Docs/images/materials/M_LoadingMorph.gif" width="80" height="80" alt="M_LoadingMorph"><br>A rounded square that turns a quarter, rounding into a circle halfway, then pauses. |
 | `M_LoadingLine` | <img src="Docs/images/materials/M_LoadingLine.gif" width="80" height="80" alt="M_LoadingLine"><br>A thin indeterminate line: a bar grows from the left of a faint track and leaves at the right. Keeps the same size as the spinners, so it fits where they fit. |
 | `M_LoadingChase` | <img src="Docs/images/materials/M_LoadingChase.gif" width="80" height="80" alt="M_LoadingChase"><br>Dots that chase each other around a ring, bunching up and melting into one blob at the top, then pulling apart. |
+| `M_LoadingHeartbeat` | <img src="Docs/images/materials/M_LoadingHeartbeat.gif" width="80" height="80" alt="M_LoadingHeartbeat"><br>A heart monitor: a bright dot draws an ECG trace from left to right, and the trace fades out behind it. |
+| `M_LoadingRadar` | <img src="Docs/images/materials/M_LoadingRadar.gif" width="80" height="80" alt="M_LoadingRadar"><br>A radar screen: a sweep turns with a fading wedge behind it, and blips light up as it passes over them. |
+| `M_LoadingDotWave` | <img src="Docs/images/materials/M_LoadingDotWave.gif" width="80" height="80" alt="M_LoadingDotWave"><br>A row of dots riding a wave from left to right, brighter at the crest. |
 
 ### Parameters
 
@@ -197,7 +200,7 @@ This repository is the development project; open `LoadingFX_Dev.uproject` with U
 **Blueprint sample (`Content/Sample`).** Two levels, all logic in Blueprint; the editor opens `L_LFXSample_Hub`. Play it with *Standalone Game*: in the editor viewport MoviePlayer is unavailable, so the icon freezes while a level loads.
 
 - `L_LFXSample_Hub`: the *Loading Icon* page requests the icon for 0.3 s, 0.8 s or 3 s and logs when it really appears and hides, so the show delay and the minimum display time can be seen at work. Its *2 s blocking work* button acquires the icon and blocks the game thread for 2 s between *Begin Blocking Section* and *End Blocking Section* (a debug hitch stands in for a *Load Asset Blocking* node or another plugin's synchronous load), so the icon keeps turning on the loading screen. The *Asset Loader* page loads the bundled materials with *Load Assets Async* into a *LoadingFX Progress Bar*, with Cancel and Release. *Open the Gallery level* acquires the icon, owned by the player controller so that the travel releases it, and opens the Gallery.
-- `L_LFXSample_Gallery` simulates a heavy level (the game thread sleeps for 2 s inside the level load, so the icon keeps spinning on the loading screen), then loads its materials with *Load Assets Async* and *Show Loading Icon* and shows all 21 in *LoadingFX Spinner* widgets. Pick one to change its `PrimaryColor` and `Speed` through *Get Dynamic Material*.
+- `L_LFXSample_Gallery` simulates a heavy level (the game thread sleeps for 2 s inside the level load, so the icon keeps spinning on the loading screen), then loads its materials with *Load Assets Async* and *Show Loading Icon* and shows all 24 in *LoadingFX Spinner* widgets. Pick one to change its `PrimaryColor` and `Speed` through *Get Dynamic Material*.
 
 **Console commands (prototype).** The `LFXProto.*` commands in `Source/LoadingFX_Dev/Prototype` show every material and exercise the plugin. Run the project outside the editor and pass a command:
 

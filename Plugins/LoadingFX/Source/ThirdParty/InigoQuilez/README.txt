@@ -17,6 +17,8 @@ sdArc                               Materials/M_LoadingArc
 sdPie                               Materials/M_LoadingTimer
 sdSegment                           MaterialFunctions/MF_SdSegment2D
                                       (used by Materials/M_LoadingHourglass)
+                                    Materials/M_LoadingHeartbeat
+                                    Materials/M_LoadingRadar
 sdRoundBox (in 2D)                  MaterialFunctions/MF_SdRoundBox2D
                                       (used by Materials/M_LoadingBoxes and
                                        Materials/M_LoadingMorph)

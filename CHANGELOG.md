@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `M_LoadingHeartbeat`: a heart monitor. A bright dot draws an ECG trace from left to right, and the trace fades out behind it; past the right end the dot starts again at the left while the old trace is still fading. `HalfWidth` and `HalfHeight` set its size, `TrailFraction` how long the trace stays.
+- `M_LoadingRadar`: a radar screen. A sweep turns clockwise with a fading wedge behind it over a faint grid, and three blips light up as it passes over them, then fade over the turn that follows. `GridOpacity`, `TrailOpacity` and `BlipOpacity` fade or hide each part.
+- `M_LoadingDotWave`: a row of dots (five by default) riding a wave from left to right, brighter at the crest. `WaveHeight` sets how far the dots rise and sink; it shares `Count`, `Spacing` and `Stagger` with `M_LoadingDotRow`.
+
 ## [1.0.0] - 2026-11-17
 
 First release.

@@ -67,7 +67,7 @@ Begin Object Class=/Script/UMG.TextBlock Name="Title" ExportPath="/Script/UMG.Te
    DisplayLabel="Title"
 End Object
 Begin Object Class=/Script/UMG.TextBlock Name="GalleryInfo" ExportPath="/Script/UMG.TextBlock'/Game/Sample/UI/WBP_LFXSample_Gallery.WBP_LFXSample_Gallery:WidgetTree.GalleryInfo'"
-   Text=NSLOCTEXT("", "39C451584B873ABB811145B811AA7F26", "The 18 spinners and 3 bars, loaded with Load Assets Async while this level started. Pick one to try two of its parameters through Get Dynamic Material.")
+   Text=NSLOCTEXT("", "39C451584B873ABB811145B811AA7F26", "The 21 spinners and 3 bars, loaded with Load Assets Async while this level started. Pick one to try two of its parameters through Get Dynamic Material.")
    Font=(TypefaceFontName="Regular",Size=14.000000)
    WrapTextAt=1100.000000
    DisplayLabel="GalleryInfo"

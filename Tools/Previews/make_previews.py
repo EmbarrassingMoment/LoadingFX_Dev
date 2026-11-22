@@ -42,6 +42,9 @@ SPINNERS = [
     ("M_LoadingMorph", 1 / 0.5, 0.0),
     ("M_LoadingLine", 1 / 0.6, 0.0),
     ("M_LoadingChase", 1 / 0.55, 0.0),
+    ("M_LoadingHeartbeat", 1 / 0.5, 0.0),
+    ("M_LoadingRadar", 1 / 0.5, 0.0),
+    ("M_LoadingDotWave", 1.0, 0.0),
 ]
 BARS = [
     ("M_LoadingBarSlide", 1 / 0.6, 0.0),

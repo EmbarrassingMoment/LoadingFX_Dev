@@ -38,6 +38,9 @@ SCRIPTS = [
     "build_m_loadingbarfill.py",
     "build_m_loadingline.py",
     "build_m_loadingchase.py",
+    "build_m_loadingheartbeat.py",
+    "build_m_loadingradar.py",
+    "build_m_loadingdotwave.py",
 ]
 
 for name in SCRIPTS:

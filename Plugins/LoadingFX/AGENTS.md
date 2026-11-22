@@ -35,7 +35,7 @@ LoadAssetsAsync / LoadAssetsSync (bShowLoadingIcon) ──► ULoadingFXLoaderSu
 ## Rules for agents
 
 1. **Never edit assets under this plugin folder** (`Content/`). To change colors or timing, make a Material Instance of a bundled material in the project's own `Content/`, or change parameters at runtime through `Get Dynamic Material`. Plugin assets are overwritten on update.
-2. **Prefer the bundled materials.** `/LoadingFX/Materials` has 18 spinners and 3 bars. Write a new material only when the developer asks for a custom look, and then follow the material contract below.
+2. **Prefer the bundled materials.** `/LoadingFX/Materials` has 21 spinners and 3 bars. Write a new material only when the developer asks for a custom look, and then follow the material contract below.
 3. **Release every handle you acquire**, or give the request an `Owner` whose lifetime matches. A forgotten handle keeps the icon on screen forever (recover with `ReleaseAll`, or `LoadingFX.Icon.Hide all` in the console).
 4. **For map travel, keep the icon handle somewhere that survives the travel** (the GameInstance, or a GameInstance subsystem), not in a Level Blueprint or an actor of the level being left. See the pattern below.
 5. **Do not assume the plugin is in the project folder.** Installed from Fab it may live under the engine's `Plugins/Marketplace` folder. Check that `LoadingFX` is enabled in the project's `.uproject` or the Plugins window before debugging missing nodes or classes.
@@ -160,13 +160,16 @@ All are UI-domain, procedural (no textures), anti-aliased at any size, keep thei
 | `M_LoadingMorph` | Rounded square turning a quarter, rounding into a circle | `HalfSize` 0.72, `CornerRadius` 0.13, `Roundness` 1 · `Speed` 0.5, `TurnFraction` 0.6 |
 | `M_LoadingLine` | Thin indeterminate line at spinner size | `HalfWidth` 0.72, `Thickness` 0.1 · `Speed` 0.6, `TailDelay` 0.35; `TrackOpacity` 0.2 |
 | `M_LoadingChase` | Dots chasing around a ring, melting into a blob at the top | `Count` 5 (1–8), `Radius` 0.672, `DotRadius` 0.09, `Smoothness` 0.12 · `Speed` 0.55, `Stagger` 0.075, `Easing` 0.85 |
+| `M_LoadingHeartbeat` | ECG trace drawn left to right by a bright head, fading behind it | `HalfWidth` 0.72, `HalfHeight` 0.5, `Thickness` 0.06, `DotRadius` 0.055 · `Speed` 0.5, `TrailFraction` 0.6 |
+| `M_LoadingRadar` | Radar sweep with a fading wedge; three blips light up as it passes | `Radius` 0.775, `Thickness` 0.05, `GridThickness` 0.02, `SweepThickness` 0.03, `DotRadius` 0.05 · `Speed` 0.5, `TrailFraction` 0.3; `GridOpacity` 0.22, `TrailOpacity` 0.55, `BlipOpacity` 1 |
+| `M_LoadingDotWave` | Row of dots riding a wave left to right, brighter at the crest | `Count` 5, `Spacing` 0.31, `DotRadius` 0.1, `WaveHeight` 0.32 · `Speed` 1, `Stagger` 0.12; `OpacityMin` 0.4 |
 | `M_LoadingBarSlide` | **Bar**, indeterminate: a segment slides across | `Thickness` 1.6 · `Speed` 0.6, `TailDelay` 0.35; `TrackOpacity` 0.25 |
 | `M_LoadingBarStripes` | **Bar**, indeterminate: diagonal stripes running right | `Thickness` 1.6, `Period` 1.6, `Duty` 0.5 · `Speed` 1; `TrackOpacity` 0.25 |
 | `M_LoadingBarFill` | **Bar**, determinate: fills to `Progress` with a sheen | `Progress` 0.65 in the asset (Input) · `Thickness` 1.6 · `Speed` 0.5, `SheenWidth` 1.5, `SheenStrength` 0.5; `TrackOpacity` 0.25 |
 
 - Units: `P` space, where 1.0 is the edge of the widget's **shorter** side (so `Radius` 0.5 is half way to the edge). `Speed` is cycles per second (revolutions per second for anything that turns); positive is clockwise, negative reverses.
 - Parameter groups in the material instance editor: **Input** (`Progress`), **Appearance** (`PrimaryColor`, every `*Opacity`, `OpacityMin` / `OpacityMax`), **Shape** (layout and sizes), **Motion** (`Speed` and timing).
-- Raising `Count` on a row (`M_LoadingDotRow`, `M_LoadingEqualizer`) needs a smaller `Spacing`, or the row leaves the widget.
+- Raising `Count` on a row (`M_LoadingDotRow`, `M_LoadingEqualizer`, `M_LoadingDotWave`) needs a smaller `Spacing`, or the row leaves the widget.
 - Bars span the widget: draw them in something wide such as 320 × 16 (a square widget gives a circle). `Thickness` 2 fills the widget's height. `M_LoadingBarFill`'s sheen is invisible while `PrimaryColor` is white.
 - Material functions in `/LoadingFX/MaterialFunctions` (`MF_SpinnerCoords`, `MF_Sd*2D`, `MF_GLSLMod`) are building blocks for custom spinners.
 

@@ -13,7 +13,7 @@ LoadingFX は Unreal Engine 5 向けのローディング表示プラグイン�
 
 ## 特徴
 
-- **スピナー 18 種とローディングバー 3 種**。すべてテクスチャを使わないプロシージャル（SDF）マテリアルで、どんな大きさでもにじみません。色や速さは共通のパラメータ（`PrimaryColor`、`Speed`、`Thickness` など）で揃えて変えられます。
+- **スピナー 21 種とローディングバー 3 種**。すべてテクスチャを使わないプロシージャル（SDF）マテリアルで、どんな大きさでもにじみません。色や速さは共通のパラメータ（`PrimaryColor`、`Speed`、`Thickness` など）で揃えて変えられます。
 - **ローディングアイコン Subsystem**: Blueprint / C++ から `Acquire` / `Release` で表示・非表示。表示要求は参照カウントで管理するので、複数のシステムが同時に要求しても安全です。要求にオーナーを付けておけば、そのオブジェクトが破棄されたときに自動で解除されます。マップ遷移をまたいでも消えません。
 - **ブロッキングロード中も回り続ける**: `OpenLevel` や同期ロードでゲームスレッドが止まっている間は、エンジンの MoviePlayer を通してアイコンを描画するので、アニメーションが止まりません。
 - **表示までの遅延と最低表示時間**: 短いロードでは何も出さず、遅延を少し越えただけのロードでもチラつきません。
@@ -103,6 +103,9 @@ Icon->Release(Handle);
 | `M_LoadingMorph` | <img src="Docs/images/materials/M_LoadingMorph.gif" width="80" height="80" alt="M_LoadingMorph"><br>角丸の四角が 4 分の 1 回転し、途中で円になり、止まる。 |
 | `M_LoadingLine` | <img src="Docs/images/materials/M_LoadingLine.gif" width="80" height="80" alt="M_LoadingLine"><br>細い不定ライン。薄いトラックの左から棒が伸びて右へ抜ける。スピナーと同じ大きさなので、同じ場所に置けます。 |
 | `M_LoadingChase` | <img src="Docs/images/materials/M_LoadingChase.gif" width="80" height="80" alt="M_LoadingChase"><br>点が輪の上で追いかけ合い、上で固まって一つに溶け、また離れる。 |
+| `M_LoadingHeartbeat` | <img src="Docs/images/materials/M_LoadingHeartbeat.gif" width="80" height="80" alt="M_LoadingHeartbeat"><br>心電図モニター。明るい点が波形を左から右へ描き、描いた波形は後ろで薄れて消える。 |
+| `M_LoadingRadar` | <img src="Docs/images/materials/M_LoadingRadar.gif" width="80" height="80" alt="M_LoadingRadar"><br>レーダー画面。針が扇形の残像を引いて回り、針が通ると点が光る。 |
+| `M_LoadingDotWave` | <img src="Docs/images/materials/M_LoadingDotWave.gif" width="80" height="80" alt="M_LoadingDotWave"><br>横に並んだ点が左から右へ進む波に乗って上下し、山にある点ほど明るい。 |
 
 ### パラメータ
 
@@ -197,7 +200,7 @@ Loader->LoadAssetsSync(Paths, TEXT("Portrait"), this, false, Loaded);
 **Blueprint サンプル（`Content/Sample`）。** レベル 2 つで、処理はすべて Blueprint です。エディタを開くと `L_LFXSample_Hub` が開きます。*Standalone Game* で再生してください（エディタのビューポート内では MoviePlayer が使えないので、レベルの読み込み中はアイコンが止まります）。
 
 - `L_LFXSample_Hub`: *Loading Icon* ページでは、アイコンを 0.3 秒・0.8 秒・3 秒のあいだ要求し、実際に表示された時刻と消えた時刻をログに出します。表示遅延と最低表示時間の働きが見られます。同じページの *2 s blocking work* ボタンは、アイコンを要求してから *Begin Blocking Section* と *End Blocking Section* のあいだでゲームスレッドを 2 秒止めます（*Load Asset Blocking* ノードやほかのプラグインの同期ロードの代わりに debug hitch を使っています）。そのあいだもアイコンはローディング画面で回り続けます。*Asset Loader* ページでは、同梱のマテリアルを *Load Assets Async* で読み込んで *LoadingFX Progress Bar* に進捗を出します（Cancel と Release 付き）。*Open the Gallery level* はアイコンを要求して Gallery を開きます。要求の Owner は PlayerController なので、遷移で自動的に解除されます。
-- `L_LFXSample_Gallery`: 重いレベルを模して、レベルの読み込み中にゲームスレッドを 2 秒止めます（その間もロード画面でアイコンが回ります）。続いて *Show Loading Icon* 付きの *Load Assets Async* で自分のマテリアルを読み込み、21 種すべてを *LoadingFX Spinner* で並べます。1 つ選ぶと、*Get Dynamic Material* で `PrimaryColor` と `Speed` を変えられます。
+- `L_LFXSample_Gallery`: 重いレベルを模して、レベルの読み込み中にゲームスレッドを 2 秒止めます（その間もロード画面でアイコンが回ります）。続いて *Show Loading Icon* 付きの *Load Assets Async* で自分のマテリアルを読み込み、24 種すべてを *LoadingFX Spinner* で並べます。1 つ選ぶと、*Get Dynamic Material* で `PrimaryColor` と `Speed` を変えられます。
 
 **コンソールコマンド（プロトタイプ）。** `Source/LoadingFX_Dev/Prototype` の `LFXProto.*` コマンドで、全マテリアルの表示とプラグインの動作確認ができます。エディタの外でプロジェクトを起動し、コマンドを渡します。
 

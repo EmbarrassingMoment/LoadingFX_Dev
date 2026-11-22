@@ -37,6 +37,9 @@ Local-only editor plugin for developing LoadingFX. It is **not** part of the Loa
 | `build_m_loadingmorph.py` | `/LoadingFX/Materials/M_LoadingMorph` (a rounded square that turns a quarter and rounds into a circle on the way) |
 | `build_m_loadingline.py` | `/LoadingFX/Materials/M_LoadingLine` (a line that grows from the left of a thin track and leaves to the right) |
 | `build_m_loadingchase.py` | `/LoadingFX/Materials/M_LoadingChase` (dots that chase each other around a ring and melt together where they bunch up) |
+| `build_m_loadingheartbeat.py` | `/LoadingFX/Materials/M_LoadingHeartbeat` (an ECG trace drawn by a bright head and fading behind it) |
+| `build_m_loadingradar.py` | `/LoadingFX/Materials/M_LoadingRadar` (a radar sweep with a fading wedge and blips that light up as it passes) |
+| `build_m_loadingdotwave.py` | `/LoadingFX/Materials/M_LoadingDotWave` (a row of dots riding a wave, brighter at the crest) |
 | `build_all.py` | Runs all of the above in dependency order |
 
 Run them with **UE 5.5** so the saved assets stay loadable in 5.5:
