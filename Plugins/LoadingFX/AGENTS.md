@@ -77,7 +77,7 @@ Requests are reference counted: the icon stays while any request is active, so i
 
 ### Map travel and blocking loads
 
-The icon is added with `UGameViewportClient::AddViewportWidgetContent`, not `AddToViewport`, so it survives map travel. If the icon is visible or requested (also within the show delay) when a blocking map load starts, the plugin takes over the engine's MoviePlayer loading screen and draws the icon there, so it keeps animating while the game thread is blocked. The screen behind it is one opaque color for the whole block, `LoadingScreenBackgroundColor` (**black** by default; the last game frame is not kept, so it cannot be translucent). The switch to it and back is instant; there are no fades. If the icon is not requested, nothing changes and the game simply hitches. If another loading screen is already set up (the project's own MoviePlayer screen, for example), the plugin leaves it alone.
+The icon is added with `UGameViewportClient::AddViewportWidgetContent`, not `AddToViewport`, so it survives map travel. The *Remove All Widgets* node clears viewport content as well; the plugin adds the icon again at the end of that frame while it is requested (the log says so), so the node is safe to use. If the icon is visible or requested (also within the show delay) when a blocking map load starts, the plugin takes over the engine's MoviePlayer loading screen and draws the icon there, so it keeps animating while the game thread is blocked. The screen behind it is one opaque color for the whole block, `LoadingScreenBackgroundColor` (**black** by default; the last game frame is not kept, so it cannot be translucent). The switch to it and back is instant; there are no fades. If the icon is not requested, nothing changes and the game simply hitches. If another loading screen is already set up (the project's own MoviePlayer screen, for example), the plugin leaves it alone.
 
 The plugin does **not** show the icon by itself for travel and does not decide when travel is over:
 
@@ -110,7 +110,7 @@ The plugin does **not** show the icon by itself for travel and does not decide w
 }
 ```
 
-The section starts MoviePlayer only if the icon is requested at that moment (acquire first), and does nothing where MoviePlayer is unavailable (editor, PIE, `-NoLoadingScreen`) or while another loading screen is set up or playing. The screen turns to `LoadingScreenBackgroundColor` (black by default) as soon as the section starts, even for very short work.
+The section starts MoviePlayer only if the icon is requested at that moment (acquire first), and does nothing where MoviePlayer is unavailable (editor, PIE, `-NoLoadingScreen`) or while another loading screen is set up or playing. The screen turns to `LoadingScreenBackgroundColor` (black by default) as soon as the section starts, even for very short work. When the section ends, the widget that had the keyboard or gamepad focus (the menu button that started the work, for example) has it again; nothing needs to be focused by hand.
 
 Begin and End must run in the same frame. Never put a latent node (*Delay*, the output pins of an async node) between them: it does not block, it lets the frame end. A section still open at the end of its frame is ended there and logs `Blocking section '<Reason>' was not ended in the frame it began`. Loads that do not block (*Load Assets Async*, the engine's *Async Load Asset*) need no section; acquire the icon around them instead.
 

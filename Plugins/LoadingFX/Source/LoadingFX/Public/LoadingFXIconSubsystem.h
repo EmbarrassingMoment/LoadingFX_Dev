@@ -135,7 +135,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "LoadingFX")
 	void BeginBlockingSection(FName Reason);
 
-	/** Ends the section started by the matching BeginBlockingSection. The outermost one waits for MoviePlayer to finish. */
+	/**
+	 * Ends the section started by the matching BeginBlockingSection. The outermost one waits for MoviePlayer to finish, puts
+	 * the game viewport back and returns the focus to the widget that had it (a menu button that started the work, for
+	 * example), which MoviePlayer would otherwise leave on the game viewport.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "LoadingFX")
 	void EndBlockingSection();
 
@@ -204,6 +208,8 @@ private:
 	void ShowViewportIcon();
 	void HideViewportIcon();
 	void HandleViewportCreated();
+	/** Puts the icon back if something cleared the viewport's widgets (the Remove All Widgets node, for example). */
+	bool TickViewportIconWatch(float DeltaTime);
 
 	void HandlePrepareLoadingScreen();
 
@@ -242,9 +248,13 @@ private:
 	FTSTicker::FDelegateHandle PendingHideTickerHandle;
 	double PendingHideAtSeconds = 0.0;
 
-	/** The icon shown as viewport content, and the viewport client it was added to. */
+	/** The icon shown as viewport content, the viewport client it was added to, and the widget that holds it there. */
 	TSharedPtr<SWidget> ViewportIconRoot;
 	TWeakObjectPtr<UGameViewportClient> ViewportIconClient;
+	TWeakPtr<SWidget> ViewportIconParent;
+
+	/** Registered only while the icon is viewport content. */
+	FTSTicker::FDelegateHandle ViewportIconWatchTickerHandle;
 
 	FDelegateHandle ViewportCreatedHandle;
 	FDelegateHandle PrepareLoadingScreenHandle;

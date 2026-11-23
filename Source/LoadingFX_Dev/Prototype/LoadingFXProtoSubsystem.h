@@ -72,7 +72,9 @@ enum class ELoadingFXProtoShowcaseSet : uint8
  *                                 frame), the next section taking over again, a nested sync load, Begin / End inside a
  *                                 button's OnClicked (Slate input routing) and on a mouse press from the Windows message queue,
  *                                 and inside the Slate tick (a widget's Tick, a sync load there, a post tick callback), where a
- *                                 section must not take over.
+ *                                 section must not take over. The OnClicked case also checks that the button keeps the focus.
+ *   LFXProto.RemoveAllWidgets [quit]  Check that the loading icon comes back after the Remove All Widgets node clears the
+ *                                 viewport while the icon is shown, and that it still hides and shows afterwards.
  *   LFXProto.ClickButton Name[+Name...] [ShotDelay] [quit]  Click the UMG buttons named Name (widgets in a Blueprint's widget tree,
  *                                 such as the sample's BlockingTaskButton) through FSlateApplication, one a second, and log how
  *                                 long each OnClicked took. Saves Saved/Screenshots/LFXProto_Click.png ShotDelay seconds after
@@ -105,6 +107,7 @@ public:
 	void RunShowDelayTest(bool bQuitWhenDone);
 	void RunLoaderTest(bool bQuitWhenDone);
 	void RunBlockingSectionTest(bool bQuitWhenDone);
+	void RunRemoveAllWidgetsTest(bool bQuitWhenDone);
 	void RunClickButton(const FString& ButtonNames, float ShotDelay, bool bQuitWhenDone);
 
 private:

@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `M_LoadingRadar`: a radar screen. A sweep turns clockwise with a fading wedge behind it over a faint grid, and three blips light up as it passes over them, then fade over the turn that follows. `GridOpacity`, `TrailOpacity` and `BlipOpacity` fade or hide each part.
 - `M_LoadingDotWave`: a row of dots (five by default) riding a wave from left to right, brighter at the crest. `WaveHeight` sets how far the dots rise and sink; it shares `Count`, `Spacing` and `Stagger` with `M_LoadingDotRow`.
 
+### Fixed
+
+- The loading icon stayed away after the *Remove All Widgets* node (or `UGameViewportClient::RemoveAllViewportWidgets`), which clears every viewport widget and not only UMG ones: its requests were still active, but nothing was drawn until the icon was hidden and shown again. The icon is now added again at the end of that frame, with a line in the log.
+- After a blocking section that MoviePlayer took over (*Begin* / *End Blocking Section*, or a sync load from the loader while the icon is requested), the keyboard and gamepad focus was left on the game viewport, so a menu that had started the work could no longer be navigated without a click. *End Blocking Section* now puts the game viewport back into the window at once and returns the focus to the widget that had it; code that runs right after the section can also set the focus itself again, which found no widget before.
+- `OnVisibilityChanged` could fire `false` twice in a row when a listener acquired and released the icon from inside its `true` event.
+- A load with *Show Loading Icon* that ended after *Release All Loading Icon Requests* logged a warning about a handle released twice.
+
 ## [1.0.0] - 2026-11-17
 
 First release.

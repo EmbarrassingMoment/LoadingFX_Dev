@@ -14,6 +14,7 @@
 #include "LoadingFXSpinner.h"
 
 #include "Algo/Count.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/Button.h"
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
@@ -54,6 +55,7 @@
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SLeafWidget.h"
+#include "Widgets/SWindow.h"
 #include "Widgets/Text/STextBlock.h"
 
 #if ENGINE_MAJOR_VERSION > 5 || ENGINE_MINOR_VERSION >= 8
@@ -361,11 +363,19 @@ namespace LoadingFXProto
 	/**
 	 * Clicks the middle of Widget through FSlateApplication, the same route as a real click from the hit test on, and returns
 	 * whether the down and up events were handled. The game viewport captures the mouse in game input mode, which would take
-	 * the events instead, so that is released first. SButton clicks only while hovered, which a mouse move over it sets.
+	 * the events instead, so that is released first. SButton clicks only while hovered, which a mouse move over it sets, and
+	 * only with the mouse capture its press asked for, which Slate ignores while the application is not the active one (a
+	 * game started from a script often opens behind the active window): device input is allowed for the click.
 	 */
 	bool SynthesizeClick(const SWidget& Widget, FVector2D& OutPosition)
 	{
 		FSlateApplication& Slate = FSlateApplication::Get();
+		const bool bHandledInputWhenNotActive = Slate.GetHandleDeviceInputWhenApplicationNotActive();
+		Slate.SetHandleDeviceInputWhenApplicationNotActive(true);
+		ON_SCOPE_EXIT
+		{
+			Slate.SetHandleDeviceInputWhenApplicationNotActive(bHandledInputWhenNotActive);
+		};
 		OutPosition = FVector2D(Widget.GetTickSpaceGeometry().GetAbsolutePositionAtCoordinates(FVector2D(0.5, 0.5)));
 		Slate.ReleaseAllPointerCapture();
 		const FPointerEvent Move(Slate.GetUserIndexForMouse(), FSlateApplication::CursorPointerIndex, OutPosition, OutPosition - FVector2D(1.0, 1.0),
@@ -378,6 +388,31 @@ namespace LoadingFXProto
 		const bool bDownHandled = Slate.ProcessMouseButtonDownEvent(nullptr, Down);
 		const bool bUpHandled = Slate.ProcessMouseButtonUpEvent(Up);
 		return bDownHandled && bUpHandled;
+	}
+
+	/** The type of the widget that has the keyboard user's focus, marked when it is Expected. */
+	FString DescribeFocus(const TSharedPtr<SWidget>& Expected)
+	{
+		const TSharedPtr<SWidget> Focused = FSlateApplication::Get().GetKeyboardFocusedWidget();
+		if (!Focused.IsValid())
+		{
+			return TEXT("nothing");
+		}
+		return Focused->GetTypeAsString() + (Focused == Expected ? TEXT(" (the button)") : TEXT(""));
+	}
+
+	/** Number of widgets of the given type (the name SNew was given) in Root's tree, Root included. */
+	int32 CountWidgetsOfType(const TSharedRef<SWidget>& Root, FName Type)
+	{
+		int32 Count = Root->GetType() == Type ? 1 : 0;
+		if (FChildren* Children = Root->GetAllChildren())
+		{
+			for (int32 Index = 0; Index < Children->Num(); ++Index)
+			{
+				Count += CountWidgetsOfType(Children->GetChildAt(Index), Type);
+			}
+		}
+		return Count;
 	}
 
 	ULoadingFXProtoSubsystem* FindSubsystem(const UWorld* World)
@@ -573,6 +608,17 @@ namespace LoadingFXProto
 			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
 			{
 				Subsystem->RunBlockingSectionTest(Args.Contains(TEXT("quit")));
+			}
+		}));
+
+	static FAutoConsoleCommandWithWorldAndArgs RemoveAllWidgetsCommand(
+		TEXT("LFXProto.RemoveAllWidgets"),
+		TEXT("Verification prototype: check that the loading icon comes back after the Remove All Widgets node clears the viewport. Args: [quit]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (ULoadingFXProtoSubsystem* Subsystem = FindSubsystem(World))
+			{
+				Subsystem->RunRemoveAllWidgetsTest(Args.Contains(TEXT("quit")));
 			}
 		}));
 
@@ -2273,6 +2319,12 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 		ClickSectionButton();
 		ReportSectionState(*FString::Printf(TEXT("after the click (OnClicked ran %d time(s))"), SectionButtonClicks), TEXT("OnClicked ran 1 time; in section=0 MoviePlayer playing=0"));
 	} });
+	SequenceSteps.Add({ 0.5f, [this]()
+	{
+		// MoviePlayer hands every user's focus to its own screen when it stops, and the engine then focuses the game viewport.
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   0.5 s after the click: focus on %s (expect SButton (the button): the section gave the focus back)"),
+			*LoadingFXProto::DescribeFocus(SectionButton));
+	} });
 
 	SequenceSteps.Add({ 1.5f, [this]()
 	{
@@ -2361,6 +2413,79 @@ void ULoadingFXProtoSubsystem::RunBlockingSectionTest(bool bQuitWhenDone)
 		if (bQuitWhenDone)
 		{
 			FPlatformMisc::RequestExit(false, TEXT("[Section]"));
+		}
+	} });
+
+	StartSequence();
+}
+
+void ULoadingFXProtoSubsystem::RunRemoveAllWidgetsTest(bool bQuitWhenDone)
+{
+	static const TCHAR* const Tag = TEXT("[RemoveAll]");
+
+	ULoadingFXIconSubsystem* IconSubsystem = GetGameInstance()->GetSubsystem<ULoadingFXIconSubsystem>();
+	if (!IconSubsystem || !GetWorld())
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s ULoadingFXIconSubsystem or the world not found"), Tag);
+		return;
+	}
+	if (IconSubsystem->IsIconVisible() || IconSubsystem->GetRequestCount() > 0)
+	{
+		UE_LOG(LogLoadingFXProto, Warning, TEXT("%s the loading icon is in use: release its requests first (LoadingFX.Icon.Hide all)"), Tag);
+		return;
+	}
+
+	// The icon's widgets in the game window's tree: the only way to see from outside whether it is in the viewport.
+	const auto Report = [this, IconSubsystem](const TCHAR* Step, const TCHAR* Expect)
+	{
+		UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+		const TSharedPtr<SWindow> Window = ViewportClient ? ViewportClient->GetWindow() : nullptr;
+		const int32 IconWidgets = Window.IsValid() ? LoadingFXProto::CountWidgetsOfType(Window.ToSharedRef(), TEXT("SLoadingFXSpinner")) : -1;
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[RemoveAll]   %s: icon widgets in the game window=%d, IsIconVisible=%d, requests=%d (expect %s)"),
+			Step, IconWidgets, IconSubsystem->IsIconVisible() ? 1 : 0, IconSubsystem->GetRequestCount(), Expect);
+	};
+
+	SequenceSteps.Reset();
+
+	SequenceSteps.Add({ 0.5f, [this, IconSubsystem]()
+	{
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[RemoveAll] the Remove All Widgets node while the loading icon is shown"));
+		IconTestHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.RemoveAllWidgets"));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Report]()
+	{
+		Report(TEXT("after Acquire"), TEXT("1, 1, 1"));
+		UWidgetLayoutLibrary::RemoveAllWidgets(GetWorld());
+		Report(TEXT("right after Remove All Widgets"), TEXT("0, 1, 1: the node clears every viewport widget"));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, Report]()
+	{
+		Report(TEXT("0.5 s later"), TEXT("1, 1, 1: the icon is back, as its request is still active"));
+		UWidgetLayoutLibrary::RemoveAllWidgets(GetWorld());
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, IconSubsystem, Report]()
+	{
+		Report(TEXT("0.5 s after a second Remove All Widgets"), TEXT("1, 1, 1"));
+		IconSubsystem->Release(IconTestHandle);
+	} });
+
+	SequenceSteps.Add({ 1.5f, [this, IconSubsystem, Report]()
+	{
+		Report(TEXT("after the release and the minimum display time"), TEXT("0, 0, 0"));
+		IconTestHandle = LoadingFXProto::AcquireWithoutShowDelay(*IconSubsystem, TEXT("LFXProto.RemoveAllWidgets"));
+	} });
+
+	SequenceSteps.Add({ 0.5f, [this, IconSubsystem, Report, bQuitWhenDone]()
+	{
+		Report(TEXT("after the next Acquire"), TEXT("1, 1, 1"));
+		IconSubsystem->Release(IconTestHandle);
+		UE_LOG(LogLoadingFXProto, Display, TEXT("[RemoveAll] finished"));
+		if (bQuitWhenDone)
+		{
+			FPlatformMisc::RequestExit(false, TEXT("[RemoveAll]"));
 		}
 	} });
 
@@ -2463,11 +2588,17 @@ void ULoadingFXProtoSubsystem::ShowSectionButton()
 		.OnClicked_Lambda([this]()
 		{
 			++SectionButtonClicks;
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   in OnClicked: focus on %s (expect SButton (the button))"), *LoadingFXProto::DescribeFocus(SectionButton));
 			CallIconFunction(TEXT("BeginBlockingSection LFXProto.Section7"));
 			ReportSectionState(TEXT("in OnClicked, after Begin"), TEXT("in section=1 MoviePlayer playing=1"));
 			SimulateBlockingWork(1.0f, false);
 			CallIconFunction(TEXT("EndBlockingSection"));
 			ReportSectionState(TEXT("in OnClicked, after End"), TEXT("in section=0 MoviePlayer playing=0"));
+			UGameViewportClient* ViewportClient = GetGameInstance()->GetGameViewportClient();
+			const TSharedPtr<SWindow> Window = ViewportClient ? ViewportClient->GetWindow() : nullptr;
+			UE_LOG(LogLoadingFXProto, Display, TEXT("[Section]   in OnClicked, after End: focus on %s, the button is in the game window=%d (expect SButton (the button), 1)"),
+				*LoadingFXProto::DescribeFocus(SectionButton),
+				Window.IsValid() && SectionButton.IsValid() && LoadingFXProto::CountWidgetsOfType(Window.ToSharedRef(), SectionButton->GetType()) > 0 ? 1 : 0);
 			return FReply::Handled();
 		})
 		[
@@ -2496,6 +2627,9 @@ void ULoadingFXProtoSubsystem::ClickSectionButton()
 		UE_LOG(LogLoadingFXProto, Warning, TEXT("[Section]   no button to click"));
 		return;
 	}
+
+	// As a menu that is driven by keyboard or gamepad has it: the focus on the button that starts the work.
+	FSlateApplication::Get().SetAllUserFocus(SectionButton, EFocusCause::SetDirectly);
 
 	FVector2D Center;
 	const bool bHandled = LoadingFXProto::SynthesizeClick(*SectionButton, Center);

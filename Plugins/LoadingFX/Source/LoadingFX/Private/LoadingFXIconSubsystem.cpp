@@ -7,10 +7,12 @@
 #include "SLoadingFXSpinner.h"
 
 #include "Engine/Engine.h"
+#include "Engine/GameEngine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Framework/Application/SlateUser.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformTime.h"
 #include "MaterialDomain.h"
@@ -25,6 +27,64 @@
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SOverlay.h"
+#include "Widgets/SViewport.h"
+
+namespace LoadingFXIconPrivate
+{
+	/** A Slate user and the widget that has its focus. */
+	using FUserFocus = TPair<int32, TWeakPtr<SWidget>>;
+
+	/** What every Slate user has focused, leaving out the game viewport: the engine focuses that after a loading screen anyway. */
+	static TArray<FUserFocus> GetUserFocus()
+	{
+		TArray<FUserFocus> Focus;
+		if (FSlateApplication::IsInitialized())
+		{
+			FSlateApplication& SlateApplication = FSlateApplication::Get();
+			const TSharedPtr<SWidget> GameViewport = SlateApplication.GetGameViewport();
+			SlateApplication.ForEachUser([&Focus, &GameViewport](FSlateUser& User)
+			{
+				const TSharedPtr<SWidget> Focused = User.GetFocusedWidget();
+				if (Focused.IsValid() && Focused != GameViewport)
+				{
+					Focus.Emplace(User.GetUserIndex(), Focused);
+				}
+			});
+		}
+		return Focus;
+	}
+
+	/**
+	 * After a blocking section's MoviePlayer has stopped: puts the game viewport back into the game window and gives the
+	 * focus back to the widgets that had it before.
+	 * When it stops, MoviePlayer leaves its own (now empty) screen in the game window and moves every user's focus there.
+	 * The engine loop puts the game viewport back after the engine tick and focuses that, so a menu that started the
+	 * blocking work would lose its keyboard and gamepad focus, and until then the game's widgets are in no window: code
+	 * that runs right after the section could not focus one either.
+	 */
+	static void ReturnToGameViewport(const TArray<FUserFocus>& FocusBefore)
+	{
+		if (!FSlateApplication::IsInitialized() || IsEngineExitRequested())
+		{
+			return;
+		}
+
+		// What the engine loop does once it finds that no movie is playing; it then finds nothing left to switch.
+		if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
+		{
+			GameEngine->SwitchGameWindowToUseGameViewport();
+		}
+
+		// A widget that left the window meanwhile is not found, and the focus stays on the game viewport.
+		for (const FUserFocus& Focus : FocusBefore)
+		{
+			if (const TSharedPtr<SWidget> Widget = Focus.Value.Pin())
+			{
+				FSlateApplication::Get().SetUserFocus(Focus.Key, Widget, EFocusCause::SetDirectly);
+			}
+		}
+	}
+}
 
 #if !UE_BUILD_SHIPPING
 namespace LoadingFXIconConsole
@@ -378,6 +438,12 @@ bool ULoadingFXIconSubsystem::TickPendingShow(float /*DeltaTime*/)
 
 void ULoadingFXIconSubsystem::HideAfterMinimumDisplayTime()
 {
+	if (!bIconVisible)
+	{
+		// Already hidden by a listener of OnVisibilityChanged that acquired and released while the icon was being shown.
+		return;
+	}
+
 	// Read at every release, so a value changed in the editor applies to the next one.
 	const double MinimumDisplayTime = FMath::Max(GetDefault<ULoadingFXSettings>()->IconMinimumDisplayTime, 0.0f);
 	PendingHideAtSeconds = IconShownAtSeconds + MinimumDisplayTime;
@@ -622,10 +688,22 @@ void ULoadingFXIconSubsystem::ShowViewportIcon()
 	ViewportIconRoot = MakeIconWidget();
 	ViewportClient->AddViewportWidgetContent(ViewportIconRoot.ToSharedRef(), GetDefault<ULoadingFXSettings>()->IconZOrder);
 	ViewportIconClient = ViewportClient;
+	ViewportIconParent = ViewportIconRoot->GetParentWidget();
+
+	if (!ViewportIconWatchTickerHandle.IsValid())
+	{
+		ViewportIconWatchTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &ThisClass::TickViewportIconWatch));
+	}
 }
 
 void ULoadingFXIconSubsystem::HideViewportIcon()
 {
+	if (ViewportIconWatchTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(ViewportIconWatchTickerHandle);
+		ViewportIconWatchTickerHandle.Reset();
+	}
+
 	if (ViewportIconRoot.IsValid())
 	{
 		if (UGameViewportClient* ViewportClient = ViewportIconClient.Get())
@@ -635,6 +713,43 @@ void ULoadingFXIconSubsystem::HideViewportIcon()
 	}
 	ViewportIconRoot.Reset();
 	ViewportIconClient.Reset();
+	ViewportIconParent.Reset();
+}
+
+bool ULoadingFXIconSubsystem::TickViewportIconWatch(float /*DeltaTime*/)
+{
+	if (!ViewportIconRoot.IsValid())
+	{
+		ViewportIconWatchTickerHandle.Reset();
+		return false;
+	}
+	if (ViewportIconRoot->IsParentValid())
+	{
+		return true;
+	}
+
+	// The icon is no longer in the viewport, although nobody hid it. The Remove All Widgets node (and
+	// UGameViewportClient::RemoveAllViewportWidgets behind it) clears every viewport widget, not only UMG ones, and tells
+	// nobody. The icon stays until its requests are released, so it goes back in.
+	UGameViewportClient* ViewportClient = ViewportIconClient.Get();
+	if (ViewportClient && ViewportIconParent.IsValid())
+	{
+		ViewportClient->AddViewportWidgetContent(ViewportIconRoot.ToSharedRef(), GetDefault<ULoadingFXSettings>()->IconZOrder);
+		if (ViewportIconRoot->IsParentValid())
+		{
+			ViewportIconParent = ViewportIconRoot->GetParentWidget();
+			UE_LOG(LogLoadingFX, Log, TEXT("The loading icon was removed from the viewport while it is shown (Remove All Widgets clears every viewport widget): added it again."));
+			return true;
+		}
+	}
+
+	// The viewport's widget layer itself is gone (or was not there yet when the icon was added): HandleViewportCreated
+	// shows the icon in the next one.
+	ViewportIconRoot.Reset();
+	ViewportIconClient.Reset();
+	ViewportIconParent.Reset();
+	ViewportIconWatchTickerHandle.Reset();
+	return false;
 }
 
 void ULoadingFXIconSubsystem::HandleViewportCreated()
@@ -777,8 +892,14 @@ void ULoadingFXIconSubsystem::EndBlockingSection()
 		bBlockingSectionPlaysMovie = false;
 		if (IGameMoviePlayer* MoviePlayer = GetMoviePlayer())
 		{
-			// Returns once the loading thread has stopped drawing; the game viewport draws again from the next frame.
+			// Still playing, unless the engine loop stopped it already (a section left open until the end of its frame).
+			const bool bStillPlaying = MoviePlayer->IsMovieCurrentlyPlaying();
+			const TArray<LoadingFXIconPrivate::FUserFocus> FocusBefore = bStillPlaying ? LoadingFXIconPrivate::GetUserFocus() : TArray<LoadingFXIconPrivate::FUserFocus>();
+
+			// Returns once the loading thread has stopped drawing.
 			MoviePlayer->WaitForMovieToFinish();
+
+			LoadingFXIconPrivate::ReturnToGameViewport(FocusBefore);
 		}
 		UE_LOG(LogLoadingFX, Log, TEXT("Blocking section '%s' ended after %.2fs: MoviePlayer stopped."),
 			*BlockingSectionReason.ToString(), FPlatformTime::Seconds() - BlockingSectionStartSeconds);
