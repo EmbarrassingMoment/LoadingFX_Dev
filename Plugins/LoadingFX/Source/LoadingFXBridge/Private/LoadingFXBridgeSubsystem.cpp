@@ -90,7 +90,9 @@ void ULoadingFXBridgeSubsystem::HandleLoadEnded(const FLoadingFXLoadInfo& Info)
 	{
 		FLoadingFXIconHandle IconHandle = IconRequests[Index].Value;
 		IconRequests.RemoveAtSwap(Index);
-		if (Icon)
+
+		// Gone already after ReleaseAll on the icon, which is no reason for the icon's warning about a handle released twice.
+		if (Icon && Icon->IsHandleActive(IconHandle))
 		{
 			Icon->Release(IconHandle);
 		}
